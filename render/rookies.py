@@ -7,6 +7,7 @@ is the NFL's order, and every page and email says so: this is not a ranking.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -16,7 +17,8 @@ from zoneinfo import ZoneInfo
 from engine.rookies import GOOD_GAME, POSITIONS, build, load_players
 from engine.scoring import preset
 from render.email import BASE, SMALL
-from render.report import (FAVICON_LINK, NFLVERSE_LINE, PAGE_META, SITE_BAR_CSS, SITE_FOOTER_CSS,
+from render.live_sample import with_via_carry
+from render.report import (CHECK_LABEL, FAVICON_LINK, NFLVERSE_LINE, PAGE_META, SITE_BAR_CSS, SITE_FOOTER_CSS,
                            SITE_ORIGIN, SOCIAL_IMAGE_TAGS, esc, font_preloads, sample_cta,
                            seat_stop_href, site_bar, site_footer, with_counter)
 from render.sender import sender_line
@@ -37,6 +39,12 @@ HISTORY_NOTE = ("Rookies drafted since 2014, under full PPR. A \"good pace\" is 
                 "game for a QB, {rb}+ for an RB or WR and {te}+ for a TE, over at least 6 games. "
                 "This is what happened to past classes, not a forecast for this one.")
 STOP = "Don't want these? Reply with the word stop."
+ASK_HEAD = "Not a member?"
+ASK_BODY = ("Get the next rookie report by email. One email after the NFL Draft, and nothing "
+            "else unless you ask.")
+ASK_BUTTON = "Send me the next one"
+PITCH = "In season, one email decides your lineup every Wednesday."
+FORM_SCRIPT = '<script src="/rookie-form.js" defer></script>\n'
 
 
 def class_year(today: date) -> int:
@@ -139,7 +147,7 @@ def _history_rows(report: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def rookie_email(report: Mapping[str, Any], near: Sequence[Mapping[str, Any]], email: str,
-                 key: str, page_url: str | None = None) -> Message:
+                 key: str, page_url: str | None = None, join_url: str | None = None) -> Message:
     """One subscriber's copy: the rookies beside their players first, then the
     first four rounds. The whole class is on the page."""
     year = report["year"]
@@ -171,6 +179,9 @@ def rookie_email(report: Mapping[str, Any], near: Sequence[Mapping[str, Any]], e
     if page_url:
         body += (f'<p style="{BASE}margin:0 0 12px 0;">The whole class, and how past rookies '
                  f'scored by round: <a href="{esc(page_url)}">{esc(page_url)}</a></p>')
+    if join_url:
+        body += (f'<p style="{BASE}margin:0 0 12px 0;">{esc(PITCH)} '
+                 f'<a href="{esc(join_url)}">{esc(CHECK_LABEL)}</a></p>')
     sender = sender_line()
     body += (f'<p style="{SMALL}margin:0;">{esc(STOP)}</p>'
              + (f'<p style="{SMALL}margin:8px 0 0 0;">{esc(sender)}</p>' if sender else ""))
@@ -180,6 +191,8 @@ def rookie_email(report: Mapping[str, Any], near: Sequence[Mapping[str, Any]], e
         text += [head.upper(), *lines, ""]
     if page_url:
         text += [f"The whole class, and how past rookies scored by round: {page_url}", ""]
+    if join_url:
+        text += [f"{PITCH} {CHECK_LABEL}: {join_url}", ""]
     text += [STOP, *([sender] if sender else []), NFLVERSE_LINE, ""]
     return Message(to=email, subject=subject, html=html, text="\n".join(text), key=key,
                    unsubscribe=seat_stop_href())
@@ -206,13 +219,43 @@ STYLE = """
   .ask{margin:26px 0 0;}
   .btn{display:inline-block;padding:12px 20px;border-radius:6px;font-weight:700;text-decoration:none;}
   .btn.gold{background:#F0B62A;color:#101E33;}
+  .ask-form{margin:18px 0 0;padding:14px;background:#fff;border:1px solid #D8D3C6;border-radius:12px;}
+  .ask-form label{display:block;font-size:15px;margin-bottom:10px;}
+  .ask-row{display:flex;flex-wrap:wrap;gap:8px;}
+  .ask-row[hidden]{display:none;}
+  .ask-row input{flex:1 1 200px;min-width:0;padding:11px 12px;border:1px solid #D8D3C6;border-radius:6px;font:inherit;}
+  .ask-row button{border:0;cursor:pointer;font:inherit;}
+  .ask-msg{margin:8px 0 0;font-size:14px;}
+  .ask-msg:empty{display:none;}
   footer{background:#101E33;color:#C9D4E2;font-size:13px;padding:24px 0;}
   footer a{color:#C9D4E2;}
 """
 
 
-def rookie_page(report: Mapping[str, Any]) -> str:
+def _ask_form(endpoint: str) -> str:
+    """The box for anyone who isn't a member. Nothing renders until the form
+    Worker exists: a box that saves nothing is worse than no box."""
+    if not endpoint:
+        return ""
+    return (f'<form class="ask-form" id="rookie-ask" data-endpoint="{esc(endpoint)}" novalidate>'
+            f'<label for="rookie-email"><b>{esc(ASK_HEAD)}</b> {esc(ASK_BODY)}</label>'
+            f'<div class="ask-row"><input type="email" id="rookie-email" autocomplete="email" '
+            f'placeholder="you@example.com"><button type="submit" class="btn gold">'
+            f'{esc(ASK_BUTTON)}</button></div>'
+            f'<p class="ask-msg" id="rookie-msg" role="status" aria-live="polite"></p></form>')
+
+
+def join_endpoint(join: Path | None = None) -> str:
+    """Where the site's forms post: the join page's FORM_ENDPOINT, empty until
+    the Worker is deployed. One setting, so this page can't drift from it."""
+    text = Path(join or SITE / "join" / "index.html").read_text(encoding="utf-8")
+    found = re.search(r'^const FORM_ENDPOINT = "([^"]*)";', text, re.M)
+    return found.group(1) if found else ""
+
+
+def rookie_page(report: Mapping[str, Any], endpoint: str | None = None) -> str:
     year = report["year"]
+    endpoint = join_endpoint() if endpoint is None else endpoint
     title = f"{year} NFL rookie report for dynasty and keeper leagues — Beat Your League"
     desc = (f"The {year} rookie class in draft order: where each player landed, how much of "
             f"his position's usage left that team, and how past rookies scored by round.")
@@ -238,7 +281,7 @@ def rookie_page(report: Mapping[str, Any]) -> str:
         classes += (f'<h2>{esc(POSITION_NAMES[position])}</h2><div class="scroll"><table>'
                     f'<thead><tr><th class="n">Pick</th><th>Player</th><th>The room</th></tr>'
                     f'</thead><tbody>{rows}</tbody></table></div>')
-    return with_counter(f"""<!DOCTYPE html>
+    return with_counter(with_via_carry(f"""<!DOCTYPE html>
 <!-- GENERATED by `make rookies` (render/rookies.py). Do not edit by hand. -->
 <html lang="en">
 <head>
@@ -267,6 +310,7 @@ def rookie_page(report: Mapping[str, Any]) -> str:
   <p class="note">{esc(ORDER_NOTE)} Data as of {esc(report.get("as_of") or "")}.{esc(through)}</p>
   <p class="note">Plan members can ask for it by email after each NFL Draft, with the rookies who
   landed beside their own players at the top.</p>
+  {_ask_form(endpoint)}
   <h2>How past rookies scored</h2>
   <p class="note">{esc(_pace_note())}</p>
   <div class="scroll"><table><thead><tr><th>Position, round</th><th class="n">Drafted</th>
@@ -277,9 +321,9 @@ def rookie_page(report: Mapping[str, Any]) -> str:
 </div></main>
 <footer><div class="wrap">{site_footer("")}
   <b>Beat Your League</b> — analysis, not betting picks. {esc(NFLVERSE_LINE)}</div></footer>
-</body>
+{FORM_SCRIPT if endpoint else ""}</body>
 </html>
-""")
+"""))
 
 
 def data_date(path: Path) -> str:

@@ -73,7 +73,7 @@ def test_the_map_names_the_sites_routes_and_they_exist() -> None:
     assert heads == ["Product", "Free tools", "Your league", "About"]
     labels = [label for _href, label in re.findall(r'<a href="([^"]+)"[^>]*>([^<]+)</a>', block)]
     assert labels == ["How it works", "Sample report", "This week&#x27;s report", "League Pass",
-                      "Check my team", "Bye planner", "ESPN", "Yahoo", "Sleeper", "CBS", "Dynasty",
+                      "Check my team", "Bye planner", "Rookie report", "ESPN", "Yahoo", "Sleeper", "CBS", "Dynasty",
                       "Terms &amp; refunds", "Privacy", "Contact"]
     for href in re.findall(r'<a href="([^"]+)"', block):
         if href.startswith("mailto:"):

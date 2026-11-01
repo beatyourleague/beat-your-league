@@ -6,6 +6,7 @@ from __future__ import annotations
 import html
 import json
 import re
+import shutil
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from render.rookies import (ROOKIE_SAMPLE, _base_rate, _beside, _bio, _season, _
                             rookie_email, rookie_page)
 from render.season_review import REVIEW_SAMPLE, review_message
 from run import plans, season_review
+from run import rookies as rookie_runner
 from run.season_review import HoldEntry, append_holds, hold_code, is_due, load_holds, new_holds
 from run.updates import confirm_code, seat_code
 
@@ -413,7 +415,7 @@ def test_the_email_puts_their_players_first_and_says_it_is_not_a_ranking() -> No
 
 
 def test_the_runner_sends_nothing_outside_its_window(capsys, monkeypatch) -> None:
-    from run import rookies as runner
+    runner = rookie_runner
     assert runner.is_due(date(2027, 5, 1)) and not runner.is_due(date(2027, 4, 30))
     assert not runner.is_due(date(2027, 9, 1))
 
@@ -436,6 +438,91 @@ def test_the_published_page_is_facts_and_names_its_source() -> None:
 
 def test_the_page_builds_from_a_report() -> None:
     assert "Fernando Mendoza" in rookie_page({**ROOKIE_SAMPLE, "history": []})
+
+
+# --------------------------------------------------------------------- #
+# the box on the page
+# --------------------------------------------------------------------- #
+
+FORM = "https://forms.example/rows"
+
+
+def test_no_box_until_the_form_worker_exists() -> None:
+    """A box that saves nothing is worse than no box."""
+    page = rookie_page({**ROOKIE_SAMPLE, "history": []}, endpoint="")
+    assert "rookie-ask" not in page and "rookie-form.js" not in page
+
+
+def test_the_box_says_exactly_what_it_will_do() -> None:
+    page = html.unescape(rookie_page({**ROOKIE_SAMPLE, "history": []}, endpoint=FORM))
+    assert f'data-endpoint="{FORM}"' in page and 'src="/rookie-form.js"' in page
+    assert "One email after the NFL Draft, and nothing else unless you ask." in page
+
+
+def test_the_page_reads_the_join_pages_address(tmp_path) -> None:
+    join = tmp_path / "index.html"
+    join.write_text(f'x\nconst FORM_ENDPOINT = "{FORM}";\ny', encoding="utf-8")
+    assert render_rookies.join_endpoint(join) == FORM
+
+
+def test_the_published_page_matches_the_join_page() -> None:
+    page = (ROOT / "site" / "rookie-report.html").read_text(encoding="utf-8")
+    assert ("rookie-ask" in page) is bool(render_rookies.join_endpoint())
+
+
+def _ask(email: str, at: str) -> dict:
+    return {"kind": "rookie_ask", "email": email, "received_at": at}
+
+
+def test_a_request_counts_for_one_class_only() -> None:
+    """The page promises one email. A row lives about 13 months, so one from
+    April 2027 would otherwise still be there for the 2028 report."""
+    rows = [_ask("old@b.co", "2026-08-30T00:00:00Z"), _ask("now@b.co", "2026-11-02T00:00:00Z"),
+            _ask("late@b.co", "2027-06-02T00:00:00Z")]
+    assert rookie_runner.asked_for(rows, 2027) == ["now@b.co", "late@b.co"]
+    assert rookie_runner.asked_for(rows, 2028) == []
+
+
+def test_a_junk_address_is_not_an_address() -> None:
+    assert rookie_runner.asked_for([_ask("nope", "2026-11-02T00:00:00Z")], 2027) == []
+
+
+def test_members_come_first_and_one_mailbox_gets_one() -> None:
+    out = rookie_runner.merged(["m@gmail.com"], ["a@b.co", "m+tag@gmail.com", "m.@gmail.com"])
+    assert out[:2] == ["m@gmail.com", "a@b.co"] and len(out) <= 3
+    assert "m+tag@gmail.com" not in out
+
+
+def test_an_alias_cannot_collect_a_second_copy(monkeypatch) -> None:
+    monkeypatch.setenv("LOG_SECRET", "x" * 32)
+    assert rookie_runner.rookie_key(2027, "m+tag@gmail.com") == rookie_runner.rookie_key(2027, "m@gmail.com")
+
+
+def test_the_email_points_a_stranger_at_the_product_once() -> None:
+    message = rookie_email(ROOKIE_SAMPLE, [], "a@b.co", "k", join_url="https://x.test/join/")
+    assert "https://x.test/join/" in message.text and message.text.count("https://x.test/join/") == 1
+    assert "https://x.test/join/" not in rookie_email(ROOKIE_SAMPLE, [], "a@b.co", "k").text
+
+
+def test_the_box_writes_text_never_markup() -> None:
+    script = (ROOT / "site" / "rookie-form.js").read_text(encoding="utf-8")
+    assert "innerHTML" not in script and "textContent" in script and "response.ok" in script
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="node is not installed")
+def test_the_worker_takes_a_request_and_keeps_it_for_months() -> None:
+    from test_teams import _worker
+    row = _worker('{kind:"rookie_ask",email:"a@b.co",ref:"x",extra:"y",via:"reddit"}')
+    assert row == {"kind": "rookie_ask", "email": "a@b.co", "via": "reddit"}
+    source = (ROOT / "infra" / "form-worker.js").read_text(encoding="utf-8")
+    assert 'const LONG_ROWS = ["waitlist", "rookie_ask"];' in source
+    assert 'const ONE_A_DAY = ["trial", "waitlist", "rookie_ask"];' in source
+
+
+def test_the_daily_step_can_read_the_requests() -> None:
+    flow = (ROOT / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
+    step = flow[flow.index("name: Send the rookie report"):flow.index("run: .venv/bin/python -m run.rookies")]
+    assert "FORM_ENDPOINT:" in step and "FORM_API_KEY:" in step and "EMAIL_DAILY_HEADROOM:" in step
 
 
 def test_the_workflows_carry_both() -> None:

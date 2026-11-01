@@ -74,6 +74,8 @@
  *                                nothing until the inbox on file confirms it)
  *   POST JSON  {kind:"trade_check", email, ref, owner?}  (the Trade Check; the
  *                                answer goes only to an address on a plan)
+ *   POST JSON  {kind:"rookie_ask", email}  (the rookie report page's box: one
+ *                                email after the next NFL Draft, run/rookies.py)
  *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code —
  *                                for a roster request OR a seat claim; the
  *                                intake knows which by recomputing both)
@@ -182,9 +184,12 @@ const ROW_TTL_SECONDS = 400 * 24 * 60 * 60;
 const SHORT_ROW_TTL_SECONDS = 30 * 24 * 60 * 60;
 // Every kind a row may be. Anything else is refused: an unknown kind used to
 // be stored as a seat.
-const KINDS = ["seat", "update", "update_request", "team_add", "trade_check", "confirm", "trial", "waitlist"];
-// One row per (kind, mailbox, UTC day) for these two — see the header.
-const ONE_A_DAY = ["trial", "waitlist"];
+const KINDS = ["seat", "update", "update_request", "team_add", "trade_check", "confirm", "trial", "waitlist",
+               "rookie_ask"];
+// Rows that wait months for their one email, so they keep the long life.
+const LONG_ROWS = ["waitlist", "rookie_ask"];
+// One row per (kind, mailbox, UTC day) for these — see the header.
+const ONE_A_DAY = ["trial", "waitlist", "rookie_ask"];
 // Where a POST may come from, besides the site's own SITE_ORIGIN.
 const HOME_ORIGIN = "https://beatyourleague.com";
 const encoder = new TextEncoder();
@@ -270,6 +275,9 @@ function sanitizeKind(body) {
     const owner = String(body.owner || "").trim().toLowerCase();
     return { kind, email, ref,
              ...(ORIGIN_TAG.test(owner) ? { owner } : {}), ...teamName(body) };
+  }
+  if (kind === "rookie_ask") {
+    return { kind, email };
   }
   if (kind === "trade_check") {
     const owner = String(body.owner || "").trim().toLowerCase();
@@ -524,7 +532,7 @@ export default {
       if (bytes(JSON.stringify(stored)) > MAX_ROW_BYTES) {
         return json({ error: "too large" }, 413);
       }
-      const options = row.kind === "waitlist"
+      const options = LONG_ROWS.includes(row.kind)
         ? { metadata: stored, expirationTtl: ROW_TTL_SECONDS }
         : { metadata: stored, expirationTtl: SHORT_ROW_TTL_SECONDS };
       try {

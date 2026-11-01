@@ -52,6 +52,7 @@ from typing import Iterable, Mapping
 
 FORM_KINDS = (("waitlist", "Waitlist sign-ups"),
               ("team_add", "Extra teams asked for"),
+              ("rookie_ask", "Rookie report requests"),
               ("trial", "Free-report requests"),
               ("update_request", "Roster-update requests"),
               ("confirm", "Roster-update confirmations"),

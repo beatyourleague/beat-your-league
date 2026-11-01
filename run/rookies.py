@@ -9,10 +9,19 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
+from typing import Iterable, Mapping
 
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # run/rosters.py's rule (D14)
+# Requests read from the Worker per run, once members have theirs. The day's
+# allowance for optional mail (run/intake.py DAY_HEADROOM) binds as well.
+MAX_ASKS_PER_RUN = 50
+ASK_KINDS = ("rookie_ask",)
 
 
 def is_due(today: date) -> bool:
@@ -22,7 +31,35 @@ def is_due(today: date) -> bool:
 
 def rookie_key(year: int, email: str) -> str:
     from run.digest import address
-    return f"rookies-{year}-{address(email.lower(), 10)}"
+    from run.trials import canonical_email
+    return f"rookies-{year}-{address(canonical_email(email), 10)}"
+
+
+def asked_for(rows: Iterable[Mapping], year: int) -> list[str]:
+    """The addresses that asked on the page for THIS year's report, oldest first.
+    The page promises one email, so a request counts for one class: from the
+    day last year's sending closed to the day this year's does. A row lives
+    about 13 months, and without this window it could reach a second one."""
+    opened, closed = f"{year - 1}-09-01", f"{year}-09-01"
+    out: list[str] = []
+    for row in sorted(rows, key=lambda r: str(r.get("received_at") or "")):
+        email = str(row.get("email") or "").strip().lower()
+        if EMAIL_RE.match(email) and opened <= str(row.get("received_at") or "") < closed:
+            out.append(email)
+    return out
+
+
+def merged(held: Iterable[str], asked: Iterable[str]) -> list[str]:
+    """Members first, one entry per mailbox (Gmail dots and +tags fold)."""
+    from run.trials import canonical_email
+    seen: set[str] = set()
+    out: list[str] = []
+    for email in [*held, *asked]:
+        box = canonical_email(email)
+        if box not in seen:
+            seen.add(box)
+            out.append(email)
+    return out
 
 
 
@@ -49,19 +86,31 @@ def main(argv: list[str] | None = None) -> int:
     path = Path(args.registry or DEFAULT_ROSTERS)
     held = sorted({e.email for e in load_holds(path.parent / HOLD_LOG_NAME)
                    if e.season == str(year - 1)})
-    if not held:
+    asked: list[str] = []
+    endpoint = os.environ.get("FORM_ENDPOINT", "")
+    read_failed = False
+    if endpoint:
+        from run.intake import IntakeError, fetch_seats
+        try:
+            asked = asked_for(fetch_seats(endpoint, os.environ.get("FORM_API_KEY"),
+                                          kinds=ASK_KINDS), year)
+        except IntakeError as exc:
+            # Members still get theirs; the run goes red so this is seen.
+            print(f"Rookie report: could not read the form backend ({exc}).", file=sys.stderr)
+            read_failed = True
+    if not held and not asked:
         print("Rookie report: nobody asked for it.")
-        return 0
+        return 1 if read_failed else 0
     try:
         log_secret()
     except DigestError as exc:
         print(f"Rookie report: {exc}", file=sys.stderr)
         return 1
     sent = load_sent()
-    todo = [email for email in held if rookie_key(year, email) not in sent]
+    todo = [email for email in merged(held, asked) if rookie_key(year, email) not in sent]
     if not todo:
         print("Rookie report: everyone who asked has it.")
-        return 0
+        return 1 if read_failed else 0
     players = load_players(fetch("players", "players.csv", CACHE_DIR, live=True))
     if picks_in(players, year) < MIN_PICKS:
         print(f"Rookie report: the {year} class isn't in the data yet "
@@ -88,8 +137,20 @@ def main(argv: list[str] | None = None) -> int:
 
     site = os.environ.get("SITE_URL", "").rstrip("/")
     page_url = f"{site}/{PAGE}" if site.startswith("https://") else None
+    join_url = f"{site}/join/" if site.startswith("https://") else None
+    # Members first, always. Strangers' addresses wait for the allowance.
+    from run.delivery import sent_entries
+    from run.intake import day_headroom, sent_on
+    members = [email for email in todo if email in held]
+    others = [email for email in todo if email not in held]
+    room = max(0, min(MAX_ASKS_PER_RUN,
+                      day_headroom() - sent_on(sent_entries(), datetime.now(timezone.utc))
+                      - len(members)))
+    if len(others) > room:
+        print(f"Rookie report: {len(others) - room} request(s) wait for a later run.")
     messages = [rookie_email(report, near_your_players(report["rookies"], roster_of(email)),
-                             email, rookie_key(year, email), page_url) for email in todo]
+                             email, rookie_key(year, email), page_url, join_url)
+                for email in [*members, *others[:room]]]
     if args.dry_run:
         print(f"Rookie report: {len(messages)} would be sent (dry run).")
         return 0
@@ -104,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     failures = [r for r in sends if not r.ok]
     print(f"Rookie report via {provider.name}: "
           f"{sum(r.ok and not r.skipped for r in sends)} sent, {len(failures)} failed")
-    return 1 if failures else 0
+    return 1 if failures or read_failed else 0
 
 
 if __name__ == "__main__":

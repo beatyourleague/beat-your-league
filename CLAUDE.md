@@ -1470,7 +1470,10 @@ or records anything, and both state only what happened.
   rookies who joined a team and position they already hold at the top, each with that player's
   share of last season's usage there and how much of the room has left. `site/rookie-report.html`
   is the public copy, dated from the players file and rebuilt every Wednesday (`render.rookies
-  --live`, `weekly.yml`); a failed read or a class not yet in the data keeps the last page up. Selling it is a decision not yet taken:
+  --live`, `weekly.yml`); a failed read or a class not yet in the data keeps the last page up. The page's email box (`rookie_ask`, `site/rookie-form.js`, its address read from join's
+  `FORM_ENDPOINT` and absent until the Worker is live) lets a non-member ask: one email after the
+  next draft, members first, inside the day's allowance for optional mail, and a request counts for
+  one class only (`asked_for`). Selling it is a decision not yet taken:
   it needs a price and a terms change. February to April and June to August are still empty, so
   `bills_all_year()` stays False.
 

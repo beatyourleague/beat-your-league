@@ -512,6 +512,13 @@ def check_funnel_config() -> list[Gate]:
                        len(set(endpoints.values())) <= 1,
                        "; ".join(f"{k}={v}" for k, v in endpoints.items()),
                        next(iter(endpoints.values()), "none set yet")))
+    rookie_page = (SITE / "rookie-report.html").read_text(encoding="utf-8")
+    found = re.search(r'data-endpoint="([^"]*)"', rookie_page)
+    gates.append(_gate("Funnel", "The rookie report's box posts where the join page does",
+                       not form or (found is not None and found.group(1) == form),
+                       "join/index.html has FORM_ENDPOINT set and the rookie page has "
+                       f"{found.group(1) if found else 'no box'}: run `make rookies`",
+                       form or "none set yet"))
     gates.append(_gate("Funnel", "The confirm page posts where the join page does",
                        not form or confirm.get("FORM_ENDPOINT", "") == form,
                        "join/index.html has FORM_ENDPOINT set and join/confirm.html "
