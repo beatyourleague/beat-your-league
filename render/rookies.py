@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
-from engine.rookies import POSITIONS, build, load_players
+from engine.rookies import GOOD_GAME, POSITIONS, build, load_players
 from engine.scoring import preset
 from render.email import BASE, SMALL
 from render.report import (FAVICON_LINK, NFLVERSE_LINE, PAGE_META, SITE_BAR_CSS, SITE_FOOTER_CSS,
@@ -52,10 +52,12 @@ ROOKIE_SAMPLE = {
                  "height": "6'5\"", "weight": 225,
                  "room": {"left_share": 96, "lead": "Aidan O'Connell",
                           "arrived": ["Kirk Cousins"]},
-                 "season": {"games": 7, "per_game": 14.2, "recent": [12.1, 16.4, 13.0]}}],
+                 "season": {"games": 7, "per_game": 14.2, "recent": [12.1, 16.4, 13.0]},
+                 "base_rate": {"round": "Round 1", "drafted": 40, "rookie_hits": 13}}],
     "history": [],
     "near": [{"rookie": "Fernando Mendoza", "position": "QB", "team": "LV", "round": 1, "pick": 1,
-              "yours": ["Aidan O'Connell"]}]}
+              "left_share": 96, "yours": ["Aidan O'Connell"],
+              "usage": [{"name": "Aidan O'Connell", "share": 4}]}]}
 EMAIL_ROUNDS = 4
 
 
@@ -99,6 +101,38 @@ def _bio(rookie: Mapping[str, Any]) -> str:
     return " · ".join(x for x in (rookie.get("college"), age, size, rookie.get("status")) if x)
 
 
+def _base_rate(rookie: Mapping[str, Any]) -> str:
+    """The history table's row, on the rookie it describes. A record of past
+    classes, and it says so."""
+    rate = rookie.get("base_rate")
+    if not rate:
+        return ""
+    return (f"Past {rookie['position']}s taken in {rate['round']}: {rate['rookie_hits']} of "
+            f"{rate['drafted']} reached a good pace as rookies.")
+
+
+def _pace_note() -> str:
+    return HISTORY_NOTE.format(qb=int(GOOD_GAME["QB"]), rb=int(GOOD_GAME["RB"]),
+                               te=int(GOOD_GAME["TE"]))
+
+
+def _beside(near: Mapping[str, Any], year: int, repeat: bool = False) -> str:
+    """One rookie beside a subscriber's players, and where that leaves them.
+    ``repeat``: the line above already gave this room's figures."""
+    if repeat:
+        return (f"{near['rookie']} ({near['position']}, {near['team']}, round {near['round']}, "
+                f"pick {near['pick']}) joins the same room.")
+    noun = "pass attempts" if near["position"] == "QB" else "targets and carries"
+    usage = near.get("usage") or [{"name": name, "share": None} for name in near["yours"]]
+    uses = [(f"{u['name']} had {u['share']}% of the team's {year - 1} {near['position']} {noun}."
+             if u.get("share") is not None
+             else f"{u['name']} had none of that usage here in {year - 1}.") for u in usage]
+    left = (f" {near['left_share']}% of that room has left."
+            if near.get("left_share") is not None else "")
+    return (f"{near['rookie']} ({near['position']}, {near['team']}, round {near['round']}, "
+            f"pick {near['pick']}) joins your {', '.join(near['yours'])}. {' '.join(uses)}{left}")
+
+
 def _history_rows(report: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [{**row, "position_round": f"{row['position']}, {row['round']}"}
             for row in report["history"]]
@@ -114,18 +148,21 @@ def rookie_email(report: Mapping[str, Any], near: Sequence[Mapping[str, Any]], e
     blocks: list[tuple[str, list[str]]] = []
     if near:
         blocks.append(("Landed beside your players", [
-            f"{n['rookie']} ({n['position']}, {n['team']}, round {n['round']}, pick {n['pick']}) "
-            f"joins your {', '.join(n['yours'])}." for n in near]))
+            _beside(n, year, i > 0 and (n["team"], n["position"]) ==
+                    (near[i - 1]["team"], near[i - 1]["position"]))
+            for i, n in enumerate(near)]))
     for position in POSITIONS:
         rows = [r for r in report["rookies"]
                 if r["position"] == position and (r["round"] or 9) <= EMAIL_ROUNDS]
         if rows:
             blocks.append((POSITION_NAMES[position], [
                 f"{r['pick']}. {r['name']}, {_where(r)} ({_bio(r)}). {_room(r, year)}"
+                + (f" {_base_rate(r)}" if _base_rate(r) else "")
                 + (f" {_season(r, year)}" if played else "")
                 for r in rows]))
     dated = f"Data as of {report['as_of']}." if report.get("as_of") else ""
-    body = (f'<p style="{BASE}margin:0 0 14px 0;">{esc(ORDER_NOTE)} {esc(dated)}</p>'
+    pace = _pace_note() if any(r.get("base_rate") for r in report["rookies"]) else ""
+    body = (f'<p style="{BASE}margin:0 0 14px 0;">{esc(ORDER_NOTE)} {esc(dated)} {esc(pace)}</p>'
             + "".join(f'<p style="{BASE}margin:0 0 6px 0;"><b>{esc(head)}</b></p>'
                       + "".join(f'<p style="{BASE}margin:0 0 6px 0;">{esc(line)}</p>'
                                 for line in lines)
@@ -138,7 +175,7 @@ def rookie_email(report: Mapping[str, Any], near: Sequence[Mapping[str, Any]], e
     body += (f'<p style="{SMALL}margin:0;">{esc(STOP)}</p>'
              + (f'<p style="{SMALL}margin:8px 0 0 0;">{esc(sender)}</p>' if sender else ""))
     html = _shell(subject, "Where the new class landed, and who joined your players.", body)
-    text: list[str] = [subject.upper(), "", f"{ORDER_NOTE} {dated}".strip(), ""]
+    text: list[str] = [subject.upper(), "", " ".join(x for x in (ORDER_NOTE, dated, pace) if x), ""]
     for head, lines in blocks:
         text += [head.upper(), *lines, ""]
     if page_url:
@@ -179,7 +216,6 @@ def rookie_page(report: Mapping[str, Any]) -> str:
     title = f"{year} NFL rookie report for dynasty and keeper leagues — Beat Your League"
     desc = (f"The {year} rookie class in draft order: where each player landed, how much of "
             f"his position's usage left that team, and how past rookies scored by round.")
-    good = {r["position"]: int(r["line"]) for r in report["history"]}
     played = bool(report.get("through_week"))
     through = (f" {year} games are through Week {report['through_week']}, in full PPR."
                if played else "")
@@ -195,7 +231,9 @@ def rookie_page(report: Mapping[str, Any]) -> str:
             f'<span class="sub">{esc(_where(r))}</span><br>'
             f'<span class="sub">{esc(_bio(r))}</span>'
             + (f'<br><span class="played">{esc(_season(r, year))}</span>' if played else "")
-            + f'</td><td>{esc(_room(r, year))}</td></tr>'
+            + f'</td><td>{esc(_room(r, year))}'
+            + (f'<br><span class="sub">{esc(_base_rate(r))}</span>' if _base_rate(r) else "")
+            + '</td></tr>'
             for r in report["rookies"] if r["position"] == position)
         classes += (f'<h2>{esc(POSITION_NAMES[position])}</h2><div class="scroll"><table>'
                     f'<thead><tr><th class="n">Pick</th><th>Player</th><th>The room</th></tr>'
@@ -230,7 +268,7 @@ def rookie_page(report: Mapping[str, Any]) -> str:
   <p class="note">Plan members can ask for it by email after each NFL Draft, with the rookies who
   landed beside their own players at the top.</p>
   <h2>How past rookies scored</h2>
-  <p class="note">{esc(HISTORY_NOTE.format(qb=good.get("QB", 15), rb=good.get("RB", 10), te=good.get("TE", 8)))}</p>
+  <p class="note">{esc(_pace_note())}</p>
   <div class="scroll"><table><thead><tr><th>Position, round</th><th class="n">Drafted</th>
   <th class="n">Good pace, Year 1</th><th class="n">Within 3 years</th></tr></thead>
   <tbody>{history}</tbody></table></div>

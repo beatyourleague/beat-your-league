@@ -27,6 +27,8 @@ from run.updates import CONFIRM_CODE_LENGTH
 HOLD_LOG_NAME = "hold-log.jsonl"
 # How long after the last game a review can still go out.
 WINDOW_DAYS = 21
+# A rookie matters beyond this season only where a roster carries over.
+ROOKIE_LEAGUES = ("keeper", "dynasty")
 
 
 @dataclass(frozen=True)
@@ -121,8 +123,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     now = datetime.now(timezone.utc)
 
-    from engine.season_review import review_team
-    from ingest.nflverse import season_rows
+    from engine.rookies import load_players
+    from engine.season_review import review_team, rookies_on_team
+    from ingest.nflverse import NflverseError, fetch, season_rows
     from render.season_review import review_message
     from render.sender import sender_line
     from run.delivery import DRY_PROVIDER, build_provider, load_sent, send_all
@@ -158,6 +161,13 @@ def main(argv: list[str] | None = None) -> int:
     entitled = paid_subscribers(subscribers, DEFAULT_EXPORT)
     if entitled is None:
         return 1
+    try:
+        directory = {p.get("gsis_id"): p
+                     for p in load_players(fetch("players", "players.csv", CACHE_DIR, live=True))}
+    except NflverseError as exc:
+        # The review stands without its rookie lines; it isn't worth losing.
+        print(f"Season review: no rookie lines this run ({exc}).", file=sys.stderr)
+        directory = {}
     sent = load_sent()
     plans_dir = args.plans_dir or PLANS_DIR
     first_plans = first_plans_dir(path)
@@ -176,6 +186,9 @@ def main(argv: list[str] | None = None) -> int:
             plans = load_plans(plans_dir, season, subscriber.slug, also=first_plans)
             team = review_team(plans, weekly, subscriber.spec().rule)
             if team is not None:
+                if subscriber.league_type in ROOKIE_LEAGUES:
+                    team["rookies"] = rookies_on_team(subscriber.player_ids, directory, weekly,
+                                                      subscriber.spec().rule, season)
                 teams.append((team_label(subscriber, plans), team))
         if teams:
             url = hold_url(site, hold_code(email, season, secret)) if secret else None

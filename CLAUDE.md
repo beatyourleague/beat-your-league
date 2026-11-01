@@ -1448,7 +1448,8 @@ or records anything, and both state only what happened.
   one section per team, in the first Wednesday run after the last game, once its box scores are in
   (`weekly.yml`, because that job holds the sent lineups). The calls its reports printed, graded by
   `engine.own_record.graded_calls` (one copy of the rules), by odds band; the best call and the
-  biggest miss side by side; the top scorers in the lineups we set. A plan we stopped is entitled
+  biggest miss side by side; the top scorers in the lineups we set; and on a keeper or dynasty team,
+  how each rookie on the roster scored (`rookies_on_team`, undrafted ones included). A plan we stopped is entitled
   (`SEASON_STOP_GRACE_DAYS` is 28 so the earliest stop still reaches it); a plan its buyer cancelled
   is not. A defense is never scored as a player.
 - **Consent.** The review's one button, `hold_code`, is `join/confirm.html?k=hold`. There is no plan
@@ -1459,13 +1460,15 @@ or records anything, and both state only what happened.
   moved, and a status line such as the reserve list), the room (share of last season's position
   usage that has left, who arrived from another team, and who is still there: a vacancy with no
   arrivals in it overstated the opening, as Mendoza's did with Kirk Cousins beside him), this
-  season's games once the class has played, and what past rookies did by position and round since 2014, under PPR. **Draft
+  season's games once the class has played, the base rate on each row (the history table's line for
+  his position and round, in the words of a past record), and what past rookies did by position and round since 2014, under PPR. **Draft
   order is the NFL's, never a ranking of ours, and no page may imply otherwise:** there is no grade,
   projection or probability, because none could be checked. **RULE N2 applies:** nflverse's
   `draft_picks` release is Pro-Football-Reference data, so only `players.csv` is read, which carries
   round, pick and team. A class counts toward the three-season figure only once it has had three
   seasons. May to August, once 200+ picks are in the file, the daily run mails those who asked, with
-  rookies who joined a team and position they already hold at the top. `site/rookie-report.html`
+  rookies who joined a team and position they already hold at the top, each with that player's
+  share of last season's usage there and how much of the room has left. `site/rookie-report.html`
   is the public copy, dated from the players file and rebuilt every Wednesday (`render.rookies
   --live`, `weekly.yml`); a failed read or a class not yet in the data keeps the last page up. Selling it is a decision not yet taken:
   it needs a price and a terms change. February to April and June to August are still empty, so

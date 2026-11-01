@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
             for pid in team.player_ids:
                 player = now_on.get(pid)
                 if player:
-                    rows.append({"name": player.get("display_name"),
+                    rows.append({"player_id": pid, "name": player.get("display_name"),
                                  "position": player.get("position"),
                                  "team": player.get("latest_team")})
         return rows

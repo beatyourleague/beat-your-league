@@ -156,7 +156,8 @@ def team_rooms(players: Iterable[Mapping[str, str]],
         rooms[(team, position)] = {
             "left_share": round(100 * (total - sum(stayed.values())) / total),
             "lead": (now[lead].get("display_name") if lead else None),
-            "arrived": [name for _count, _pid, name in arrived]}
+            "arrived": [name for _count, _pid, name in arrived],
+            "shares": {pid: round(100 * n / total) for pid, n in touches.items()}}
     return rooms
 
 
@@ -213,18 +214,35 @@ def history(players: Sequence[Mapping[str, str]],
 
 def near_your_players(rookies: Sequence[Mapping[str, Any]],
                       roster: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """Rookies who landed on a team and position a subscriber already holds.
-    ``roster`` rows carry name, position and team."""
+    """Rookies who landed on a team and position a subscriber already holds,
+    with what each of their players did in that room last season. ``roster``
+    rows carry player_id, name, position and team. One player on two of a
+    subscriber's teams is one line, and a rookie is not beside himself."""
     out = []
     for rookie in rookies:
-        mates = sorted(r["name"] for r in roster
-                       if r.get("team") == rookie["team"]
-                       and r.get("position") == rookie["position"])
+        room = rookie.get("room") or {}
+        shares = room.get("shares") or {}
+        mates = {r["player_id"]: r["name"] for r in roster
+                 if r.get("team") == rookie["team"] and r.get("position") == rookie["position"]
+                 and r.get("player_id") != rookie.get("player_id")}
         if mates:
+            ordered = sorted(mates.items(), key=lambda kv: (-shares.get(kv[0], -1), kv[1]))
             out.append({"rookie": rookie["name"], "position": rookie["position"],
                         "team": rookie["team"], "round": rookie["round"],
-                        "pick": rookie["pick"], "yours": mates})
+                        "pick": rookie["pick"], "left_share": room.get("left_share"),
+                        "yours": [name for _pid, name in ordered],
+                        "usage": [{"name": name, "share": shares.get(pid)}
+                                  for pid, name in ordered]})
     return out
+
+
+def base_rate(rows: Sequence[Mapping[str, Any]], position: str,
+              draft_round: int | None) -> dict[str, Any] | None:
+    """The history row a rookie belongs to: his position, his round."""
+    label = next((name for name, low, high in ROUNDS if low <= (draft_round or 0) <= high), None)
+    row = next((r for r in rows if r["position"] == position and r["round"] == label), None)
+    return ({"round": label, "drafted": row["drafted"], "rookie_hits": row["rookie_hits"]}
+            if row else None)
 
 
 def build(players: Sequence[Mapping[str, str]], last_season: Mapping[int, Mapping[str, Mapping]],
@@ -237,9 +255,10 @@ def build(players: Sequence[Mapping[str, str]], last_season: Mapping[int, Mappin
     rooms = team_rooms(players, last_season)
     rookies = draft_class(players, year)
     current = current or {}
+    rows = history(players, seasons, rule, year)
     for rookie in rookies:
         rookie["room"] = rooms.get((rookie["team"], rookie["position"]))
         rookie["season"] = this_season(rookie["player_id"], current, rule)
+        rookie["base_rate"] = base_rate(rows, rookie["position"], rookie["round"])
     return {"year": year, "as_of": as_of, "rookies": rookies,
-            "through_week": max(current, default=None),
-            "history": history(players, seasons, rule, year)}
+            "through_week": max(current, default=None), "history": rows}

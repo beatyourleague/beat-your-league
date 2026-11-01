@@ -32,7 +32,10 @@ REVIEW_SAMPLE = {"weeks": 12, "first_week": 7, "last_week": 18, "calls": 31, "hi
                                "percent": 80, "got": 32.1, "other": 9.4},
                  "worst_miss": {"week": 14, "pick": "George Kittle", "over": "Sam LaPorta",
                                 "percent": 72, "got": 3.2, "other": 21.0},
-                 "top_scorers": [{"name": "Josh Allen", "points": 240.5, "starts": 11}]}
+                 "top_scorers": [{"name": "Josh Allen", "points": 240.5, "starts": 11}],
+                 "rookies": [{"name": "Jeremiyah Love", "position": "RB",
+                              "season": {"games": 14, "per_game": 12.3, "recent": [9.1, 14.0, 11.2]}},
+                             {"name": "Jordyn Tyson", "position": "WR", "season": None}]}
 
 
 def _lines(name: str, team: Mapping[str, Any]) -> list[str]:
@@ -56,7 +59,21 @@ def _lines(name: str, team: Mapping[str, Any]) -> list[str]:
     for row in team.get("top_scorers") or []:
         lines.append(f"{row['name']}: {row['points']:.1f} points in {row['starts']} starts "
                      f"in the lineups we set.")
+    rookies = team.get("rookies") or []
+    if rookies:
+        lines.append("Your rookies:")
+        lines += [_rookie(row) for row in rookies]
     return lines
+
+
+def _rookie(row: Mapping[str, Any]) -> str:
+    played = row.get("season")
+    who = f"{row['name']}, {row['position']}"
+    if not played:
+        return f"{who}: no games."
+    if played["games"] == 1:
+        return f"{who}: 1 game, {played['per_game']:.1f} points."
+    return f"{who}: {played['games']} games, {played['per_game']:.1f} a game."
 
 
 def review_message(email: str, season: str, teams: Sequence[tuple[str, Mapping[str, Any]]],

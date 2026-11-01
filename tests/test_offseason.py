@@ -13,9 +13,10 @@ import pytest
 
 from engine import rookies
 from engine.scoring import preset
-from engine.season_review import review_team
+from engine.season_review import review_team, rookies_on_team
 from render import rookies as render_rookies
-from render.rookies import ROOKIE_SAMPLE, _bio, _season, _where, class_year, rookie_email, rookie_page
+from render.rookies import (ROOKIE_SAMPLE, _base_rate, _beside, _bio, _season, _where, class_year,
+                            rookie_email, rookie_page)
 from render.season_review import REVIEW_SAMPLE, review_message
 from run import plans, season_review
 from run.season_review import HoldEntry, append_holds, hold_code, is_due, load_holds, new_holds
@@ -74,6 +75,39 @@ def test_a_defense_is_not_scored_as_a_player() -> None:
                                        (date(2027, 1, 31), True), (date(2027, 2, 1), False)])
 def test_the_review_goes_after_the_last_game_and_not_months_later(today, due) -> None:
     assert is_due("2027-01-10", today) is due
+
+
+def _people() -> dict:
+    return {"r": {"display_name": "Rook", "position": "WR", "rookie_season": "2026"},
+            "u": {"display_name": "Undrafted", "position": "RB", "rookie_season": "2026"},
+            "v": {"display_name": "Veteran", "position": "WR", "rookie_season": "2019"},
+            "n": {"display_name": "Benched", "position": "TE", "rookie_season": "2026"}}
+
+
+def test_a_team_lists_its_rookies_best_first_and_undrafted_too() -> None:
+    weekly = {1: {"r": stat(5), "u": stat(20), "v": stat(30)}, 2: {"r": stat(5)}}
+    rows = rookies_on_team(["r", "u", "v", "n", "gone"], _people(), weekly, RULE, "2026")
+    assert [r["name"] for r in rows] == ["Undrafted", "Rook", "Benched"]
+    assert rows[1]["season"]["games"] == 2 and rows[2]["season"] is None
+
+
+def test_the_rookies_are_scored_under_the_teams_rule() -> None:
+    weekly = {1: {"r": {"receptions": "10"}}}
+    ppr = rookies_on_team(["r"], _people(), weekly, RULE, "2026")[0]["season"]["per_game"]
+    standard = rookies_on_team(["r"], _people(), weekly, preset("standard"), "2026")[0]["season"]["per_game"]
+    assert (ppr, standard) == (10.0, 0.0)
+
+
+def test_the_review_prints_a_teams_rookies_and_none_when_it_has_none() -> None:
+    message = review_message("a@b.co", "2026", [("Work", REVIEW_SAMPLE)], "k")
+    assert "Your rookies:" in message.text and "Jeremiyah Love, RB: 14 games, 12.3 a game." in message.text
+    assert "Jordyn Tyson, WR: no games." in message.text
+    plain = {k: v for k, v in REVIEW_SAMPLE.items() if k != "rookies"}
+    assert "Your rookies" not in review_message("a@b.co", "2026", [("Work", plain)], "k").text
+
+
+def test_only_leagues_that_carry_a_roster_over_get_them() -> None:
+    assert season_review.ROOKIE_LEAGUES == ("keeper", "dynasty")
 
 
 def test_the_review_shows_misses_and_predicts_nothing() -> None:
@@ -153,7 +187,7 @@ def test_the_room_counts_who_left() -> None:
     weekly = {1: {"9": {"position": "WR", "team": "NYJ", "targets": "6", "carries": "0"},
                   "8": {"position": "WR", "team": "NYJ", "targets": "4", "carries": "0"}}}
     assert rookies.team_rooms(people, weekly)[("NYJ", "WR")] == {
-        "left_share": 40, "lead": "Stayed", "arrived": []}
+        "left_share": 40, "lead": "Stayed", "arrived": [], "shares": {"9": 60, "8": 40}}
 
 
 def _rows(*rows: tuple) -> dict:
@@ -189,9 +223,11 @@ def test_a_rookie_is_placed_on_his_team_today() -> None:
     current and showed the team that drafted them."""
     moved = rookies.draft_class([player("1", "Moved", "TE", latest_team="MIA", team="DEN")], 2026)[0]
     assert (moved["team"], moved["drafted_by"]) == ("MIA", "DEN")
-    near = rookies.near_your_players([moved], [{"name": "Vet", "position": "TE", "team": "MIA"}])
+    near = rookies.near_your_players(
+        [moved], [{"player_id": "5", "name": "Vet", "position": "TE", "team": "MIA"}])
     assert near[0]["yours"] == ["Vet"]
-    assert rookies.near_your_players([moved], [{"name": "V", "position": "TE", "team": "DEN"}]) == []
+    assert rookies.near_your_players(
+        [moved], [{"player_id": "6", "name": "V", "position": "TE", "team": "DEN"}]) == []
     assert "MIA, drafted by DEN, round 1" in _where(moved)
 
 
@@ -275,12 +311,98 @@ def test_short_seasons_do_not_count() -> None:
     assert rookies._per_game("1", {w: {"1": {"rushing_yards": "150"}} for w in range(1, 6)}, RULE) is None
 
 
+def _rookie_with_room(**room) -> dict:
+    rookie = rookies.draft_class([player("1", "New", "RB")], 2026)[0]
+    return {**rookie, "room": {"left_share": 30, "shares": {"5": 55}, **room}}
+
+
 def test_it_finds_rookies_beside_a_subscribers_players() -> None:
     near = rookies.near_your_players(
-        rookies.draft_class([player("1", "New", "RB")], 2026),
-        [{"name": "Vet", "position": "RB", "team": "NYJ"},
-         {"name": "Other", "position": "WR", "team": "NYJ"}])
+        [_rookie_with_room()],
+        [{"player_id": "5", "name": "Vet", "position": "RB", "team": "NYJ"},
+         {"player_id": "6", "name": "Other", "position": "WR", "team": "NYJ"}])
     assert near[0]["yours"] == ["Vet"]
+    assert near[0]["usage"] == [{"name": "Vet", "share": 55}] and near[0]["left_share"] == 30
+
+
+def test_one_player_on_two_teams_is_one_line() -> None:
+    row = {"player_id": "5", "name": "Vet", "position": "RB", "team": "NYJ"}
+    assert rookies.near_your_players([_rookie_with_room()], [row, row])[0]["yours"] == ["Vet"]
+
+
+def test_a_rookie_is_not_beside_himself() -> None:
+    row = {"player_id": "1", "name": "New", "position": "RB", "team": "NYJ"}
+    assert rookies.near_your_players([_rookie_with_room()], [row]) == []
+
+
+def test_the_biggest_share_comes_first() -> None:
+    roster = [{"player_id": "5", "name": "Big", "position": "RB", "team": "NYJ"},
+              {"player_id": "6", "name": "Small", "position": "RB", "team": "NYJ"}]
+    near = rookies.near_your_players([_rookie_with_room(shares={"5": 55, "6": 10})], roster)
+    assert near[0]["yours"] == ["Big", "Small"]
+
+
+def test_the_email_says_where_a_rookie_leaves_your_player() -> None:
+    near = {"rookie": "New", "position": "RB", "team": "NYJ", "round": 2, "pick": 40,
+            "left_share": 30, "yours": ["Vet", "Late"],
+            "usage": [{"name": "Vet", "share": 55}, {"name": "Late", "share": None}]}
+    line = _beside(near, 2026)
+    assert "joins your Vet, Late." in line and "Vet had 55% of the team's 2025 RB targets and carries." in line
+    assert "Late had none of that usage here in 2025." in line
+    assert line.endswith("30% of that room has left.")
+
+
+def test_a_second_rookie_in_one_room_does_not_repeat_it() -> None:
+    near = [{"rookie": name, "position": "WR", "team": "NO", "round": 4, "pick": 100,
+             "left_share": 31, "yours": ["Vet"], "usage": [{"name": "Vet", "share": 45}]}
+            for name in ("One", "Two")]
+    text = rookie_email(ROOKIE_SAMPLE, near, "a@b.co", "k").text
+    assert text.count("Vet had 45%") == 1 and "Two (WR, NO, round 4, pick 100) joins the same room." in text
+
+
+def test_a_quarterback_is_counted_in_passes() -> None:
+    near = {"rookie": "New", "position": "QB", "team": "NYJ", "round": 2, "pick": 40,
+            "left_share": None, "yours": ["Vet"], "usage": [{"name": "Vet", "share": 90}]}
+    assert "2025 QB pass attempts." in _beside(near, 2026) and "room has left" not in _beside(near, 2026)
+
+
+# --------------------------------------------------------------------- #
+# the base rate on each row
+# --------------------------------------------------------------------- #
+
+HISTORY = [{"position": "RB", "round": "Round 1", "drafted": 16, "rookie_hits": 13},
+           {"position": "RB", "round": "Rounds 4–7", "drafted": 179, "rookie_hits": 9}]
+
+
+@pytest.mark.parametrize("round_,hits", [(1, 13), (5, 9), (7, 9)])
+def test_a_rookie_reads_his_own_row(round_, hits) -> None:
+    assert rookies.base_rate(HISTORY, "RB", round_)["rookie_hits"] == hits
+
+
+def test_no_row_is_no_line() -> None:
+    assert rookies.base_rate(HISTORY, "TE", 1) is None
+    assert rookies.base_rate(HISTORY, "RB", None) is None
+    assert _base_rate({"position": "RB", "base_rate": None}) == ""
+
+
+def test_the_base_rate_is_worded_as_the_past() -> None:
+    rate = rookies.base_rate(HISTORY, "RB", 1)
+    assert _base_rate({"position": "RB", "base_rate": rate}) == (
+        "Past RBs taken in Round 1: 13 of 16 reached a good pace as rookies.")
+
+
+def test_every_surface_defines_a_good_pace() -> None:
+    page = html.unescape(rookie_page({**ROOKIE_SAMPLE, "history": []}))
+    text = rookie_email(ROOKIE_SAMPLE, [], "a@b.co", "k").text
+    for words in (page, text):
+        assert "reached a good pace" in words and "15+ points a game for a QB" in words
+        assert "not a forecast" in words
+
+
+def test_the_published_page_agrees_with_its_own_table() -> None:
+    page = html.unescape((ROOT / "site" / "rookie-report.html").read_text(encoding="utf-8"))
+    assert "Past RBs taken in Round 1: 13 of 16 reached a good pace as rookies." in page
+    assert re.search(r"RB, Round 1</td><td class=\"n\">16</td><td class=\"n\">13<", page)
 
 
 def test_the_email_puts_their_players_first_and_says_it_is_not_a_ranking() -> None:

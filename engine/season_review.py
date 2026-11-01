@@ -13,6 +13,7 @@ from typing import Any, Mapping, Sequence
 from engine.decisions import HIT, MISS
 from engine.own_record import NO_RESULT, graded_calls
 from engine.projection import printed_percent
+from engine.rookies import this_season
 from engine.scoring import ScoringRule, score
 
 # The bands a buyer can read: what we said, and how those landed.
@@ -64,6 +65,21 @@ def _top_scorers(plans: Sequence[Mapping[str, Any]],
     ranked = sorted(totals.items(), key=lambda kv: (-kv[1]["points"], kv[0]))
     return [{**entry, "points": round(entry["points"], 1)}
             for _pid, entry in ranked[:TOP_SCORERS] if entry["points"] > 0]
+
+
+def rookies_on_team(player_ids: Sequence[str], players: Mapping[str, Mapping[str, Any]],
+                    weekly: Mapping[int, Mapping[str, Mapping[str, Any]]], rule: ScoringRule,
+                    season: str) -> list[dict[str, Any]]:
+    """The rookies on a roster and how they scored under its rule, best first.
+    ``rookie_season`` includes undrafted players, who are often the find."""
+    rows = []
+    for pid in player_ids:
+        player = players.get(pid) or {}
+        if str(player.get("rookie_season") or "") == str(season):
+            rows.append({"name": player.get("display_name") or pid,
+                         "position": player.get("position"),
+                         "season": this_season(pid, weekly, rule)})
+    return sorted(rows, key=lambda r: (-((r["season"] or {}).get("per_game", -1)), r["name"]))
 
 
 def review_team(plans: Sequence[Mapping[str, Any]],
