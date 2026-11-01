@@ -407,9 +407,10 @@ def test_the_sunday_scene_sits_directly_under_the_hero() -> None:
     assert punch, "the Sunday scene does not follow the hero"
     words = re.sub(r"<[^>]+>", "", punch.group(1))  # each sentence wraps as a unit
     assert "You benched him. He went for 30. You lost by four." in _flat(words)
-    # Owner review, Oct 31 2026: the answer sells not deciding alone, and never
-    # hints the report would have started the 30-point player.
-    assert "Don't make that call alone." in _flat(words)
+    # Owner decision, Nov 1 2026: the answer sells deciding early, the thing the
+    # product does, and never hints it would have started the 30-point player.
+    assert "Stop making that call five minutes before kickoff." in _flat(words)
+    assert "Don't make that call alone." not in LANDING
     assert "makes that call" not in LANDING
     assert 'class="proof"' not in LANDING and 'class="credsec"' not in LANDING
 

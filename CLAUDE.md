@@ -1478,8 +1478,9 @@ or records anything, and both state only what happened.
   `bills_all_year()` stays False.
 
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
-30. You lost by four." and its answer is "Don't make that call alone.": it names the decision we
-sell, and it must never hint the report would have started the 30-point player, because no
+30. You lost by four." and its answer is "Stop making that call five minutes before kickoff." (owner
+decision, Nov 1 2026, replacing "Don't make that call alone."): it sells deciding early, what the
+product does, and it must never hint the report would have started the 30-point player, because no
 projection reliably catches a bench spike. The free check promises "the calls your team faces",
 never "the calls": it lists decisions and does not make them. The steps say "Paste your roster",
 never "once", because managers update after waivers. A live report in the League Pass stack shows
