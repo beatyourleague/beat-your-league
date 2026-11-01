@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 from engine.rookies import POSITIONS, build, load_players
 from engine.scoring import preset
@@ -24,6 +26,9 @@ from run.delivery import Message
 ROOT = Path(__file__).resolve().parent.parent
 SITE = ROOT / "site"
 PAGE = "rookie-report.html"
+EASTERN = ZoneInfo("America/New_York")
+# A class this thin isn't in the file yet: keep last year's page up.
+MIN_SKILL_ROOKIES = 40
 POSITION_NAMES = {"QB": "Quarterbacks", "RB": "Running backs", "WR": "Wide receivers",
                   "TE": "Tight ends"}
 ORDER_NOTE = ("Listed in draft order. That's where NFL teams took them, not a ranking of ours, "
@@ -32,12 +37,22 @@ HISTORY_NOTE = ("Rookies drafted since 2014, under full PPR. A \"good pace\" is 
                 "game for a QB, {rb}+ for an RB or WR and {te}+ for a TE, over at least 6 games. "
                 "This is what happened to past classes, not a forecast for this one.")
 STOP = "Don't want these? Reply with the word stop."
+
+
+def class_year(today: date) -> int:
+    """The newest draft class: this year's from May, last year's before it."""
+    return today.year if today.month >= 5 else today.year - 1
+
+
 # The longest ordinary answer, for the launch check's width and sender audit.
 ROOKIE_SAMPLE = {
-    "year": 2026,
+    "year": 2026, "as_of": "Nov 1, 2026", "through_week": 8,
     "rookies": [{"name": "Fernando Mendoza", "position": "QB", "round": 1, "pick": 1, "team": "LV",
-                 "college": "Indiana", "age": 22, "height": "6'5\"", "weight": 225,
-                 "room": {"left_share": 96, "lead": "Aidan O'Connell"}}],
+                 "drafted_by": "LV", "status": None, "college": "Indiana", "age": 22,
+                 "height": "6'5\"", "weight": 225,
+                 "room": {"left_share": 96, "lead": "Aidan O'Connell",
+                          "arrived": ["Kirk Cousins"]},
+                 "season": {"games": 7, "per_game": 14.2, "recent": [12.1, 16.4, 13.0]}}],
     "history": [],
     "near": [{"rookie": "Fernando Mendoza", "position": "QB", "team": "LV", "round": 1, "pick": 1,
               "yours": ["Aidan O'Connell"]}]}
@@ -49,15 +64,39 @@ def _room(rookie: Mapping[str, Any], year: int) -> str:
     if not room:
         return f"No {rookie['position']} usage for this team in {year - 1}."
     noun = "pass attempts" if rookie["position"] == "QB" else "targets and carries"
+    arrived = room.get("arrived") or []
+    joined = f" Arrived: {', '.join(arrived)}." if arrived else ""
     lead = f" Still there: {room['lead']}." if room.get("lead") else ""
-    return f"{room['left_share']}% of the team's {year - 1} {rookie['position']} {noun} have left.{lead}"
+    return (f"{room['left_share']}% of the team's {year - 1} {rookie['position']} {noun} "
+            f"have left.{joined}{lead}")
+
+
+def _where(rookie: Mapping[str, Any]) -> str:
+    """His team now, and how he got there when it isn't the team that took him."""
+    now = str(rookie.get("team") or "")
+    was = rookie.get("drafted_by")
+    moved = f", drafted by {was}" if was and was != now else ""
+    return f"{now}{moved}, round {rookie['round']}"
+
+
+def _season(rookie: Mapping[str, Any], year: int) -> str:
+    """"2026: 7 games, 11.0 a game. Last 3: …", or who hasn't played yet. Empty
+    before the class has played a game."""
+    played = rookie.get("season")
+    if not played:
+        return f"{year}: no games yet."
+    if played["games"] == 1:
+        return f"{year}: 1 game, {played['per_game']:.1f} points."
+    recent = ", ".join(f"{float(p):.1f}" for p in played["recent"])
+    return (f"{year}: {played['games']} games, {played['per_game']:.1f} a game. "
+            f"Last {len(played['recent'])}: {recent}.")
 
 
 def _bio(rookie: Mapping[str, Any]) -> str:
     size = " ".join(x for x in (rookie.get("height"),
                                 f"{rookie['weight']} lb" if rookie.get("weight") else None) if x)
     age = f"age {rookie['age']}" if rookie.get("age") else None
-    return " · ".join(x for x in (rookie.get("college"), age, size) if x)
+    return " · ".join(x for x in (rookie.get("college"), age, size, rookie.get("status")) if x)
 
 
 def _history_rows(report: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -71,6 +110,7 @@ def rookie_email(report: Mapping[str, Any], near: Sequence[Mapping[str, Any]], e
     first four rounds. The whole class is on the page."""
     year = report["year"]
     subject = f"The {year} rookie report"
+    played = bool(report.get("through_week"))
     blocks: list[tuple[str, list[str]]] = []
     if near:
         blocks.append(("Landed beside your players", [
@@ -81,9 +121,11 @@ def rookie_email(report: Mapping[str, Any], near: Sequence[Mapping[str, Any]], e
                 if r["position"] == position and (r["round"] or 9) <= EMAIL_ROUNDS]
         if rows:
             blocks.append((POSITION_NAMES[position], [
-                f"{r['pick']}. {r['name']}, {r['team']} ({_bio(r)}). {_room(r, year)}"
+                f"{r['pick']}. {r['name']}, {_where(r)} ({_bio(r)}). {_room(r, year)}"
+                + (f" {_season(r, year)}" if played else "")
                 for r in rows]))
-    body = (f'<p style="{BASE}margin:0 0 14px 0;">{esc(ORDER_NOTE)}</p>'
+    dated = f"Data as of {report['as_of']}." if report.get("as_of") else ""
+    body = (f'<p style="{BASE}margin:0 0 14px 0;">{esc(ORDER_NOTE)} {esc(dated)}</p>'
             + "".join(f'<p style="{BASE}margin:0 0 6px 0;"><b>{esc(head)}</b></p>'
                       + "".join(f'<p style="{BASE}margin:0 0 6px 0;">{esc(line)}</p>'
                                 for line in lines)
@@ -96,7 +138,7 @@ def rookie_email(report: Mapping[str, Any], near: Sequence[Mapping[str, Any]], e
     body += (f'<p style="{SMALL}margin:0;">{esc(STOP)}</p>'
              + (f'<p style="{SMALL}margin:8px 0 0 0;">{esc(sender)}</p>' if sender else ""))
     html = _shell(subject, "Where the new class landed, and who joined your players.", body)
-    text: list[str] = [subject.upper(), "", ORDER_NOTE, ""]
+    text: list[str] = [subject.upper(), "", f"{ORDER_NOTE} {dated}".strip(), ""]
     for head, lines in blocks:
         text += [head.upper(), *lines, ""]
     if page_url:
@@ -123,6 +165,7 @@ STYLE = """
   td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;}
   td.n{white-space:nowrap;}
   .who{font-weight:700;}.sub{color:#5A6B80;font-size:13px;}
+  .played{font-size:13px;font-weight:600;}
   .ask{margin:26px 0 0;}
   .btn{display:inline-block;padding:12px 20px;border-radius:6px;font-weight:700;text-decoration:none;}
   .btn.gold{background:#F0B62A;color:#101E33;}
@@ -137,6 +180,9 @@ def rookie_page(report: Mapping[str, Any]) -> str:
     desc = (f"The {year} rookie class in draft order: where each player landed, how much of "
             f"his position's usage left that team, and how past rookies scored by round.")
     good = {r["position"]: int(r["line"]) for r in report["history"]}
+    played = bool(report.get("through_week"))
+    through = (f" {year} games are through Week {report['through_week']}, in full PPR."
+               if played else "")
     history = "".join(
         f'<tr><td>{esc(r["position_round"])}</td><td class="n">{r["drafted"]}</td>'
         f'<td class="n">{r["rookie_hits"]}</td>'
@@ -146,8 +192,10 @@ def rookie_page(report: Mapping[str, Any]) -> str:
     for position in POSITIONS:
         rows = "".join(
             f'<tr><td class="n">{r["pick"]}</td><td><span class="who">{esc(r["name"])}</span> '
-            f'<span class="sub">{esc(r["team"] or "")}, round {r["round"]}</span><br>'
-            f'<span class="sub">{esc(_bio(r))}</span></td><td>{esc(_room(r, year))}</td></tr>'
+            f'<span class="sub">{esc(_where(r))}</span><br>'
+            f'<span class="sub">{esc(_bio(r))}</span>'
+            + (f'<br><span class="played">{esc(_season(r, year))}</span>' if played else "")
+            + f'</td><td>{esc(_room(r, year))}</td></tr>'
             for r in report["rookies"] if r["position"] == position)
         classes += (f'<h2>{esc(POSITION_NAMES[position])}</h2><div class="scroll"><table>'
                     f'<thead><tr><th class="n">Pick</th><th>Player</th><th>The room</th></tr>'
@@ -174,11 +222,11 @@ def rookie_page(report: Mapping[str, Any]) -> str:
 <header><div class="wrap">
   {site_bar("")}
   <h1>The {year} rookie report</h1>
-  <p>Every drafted QB, RB, WR and TE: where he landed, how much of his position's usage left
-  that team, and how past rookies taken in the same round scored.</p>
+  <p>Every drafted QB, RB, WR and TE: where he is now, how much of his position's usage left
+  that team, who arrived, and how past rookies taken in the same round scored.</p>
 </div></header>
 <main id="main"><div class="wrap">
-  <p class="note">{esc(ORDER_NOTE)} Teams and the room are as the data stands now.</p>
+  <p class="note">{esc(ORDER_NOTE)} Data as of {esc(report.get("as_of") or "")}.{esc(through)}</p>
   <p class="note">Plan members can ask for it by email after each NFL Draft, with the rookies who
   landed beside their own players at the top.</p>
   <h2>How past rookies scored</h2>
@@ -196,20 +244,47 @@ def rookie_page(report: Mapping[str, Any]) -> str:
 """)
 
 
+def data_date(path: Path) -> str:
+    """The day the players file was read, in Eastern time: "Nov 1, 2026"."""
+    when = datetime.fromtimestamp(Path(path).stat().st_mtime, EASTERN)
+    return f"{when:%b} {when.day}, {when.year}"
+
+
 def load_report(cache: Path, year: int, *, live: bool = False) -> dict[str, Any]:
-    """Everything the class needs, from the nflverse cache."""
-    from ingest.nflverse import fetch, season_rows
-    players = load_players(fetch("players", "players.csv", cache, live=live))
+    """Everything the class needs, from the nflverse cache. Only the players
+    file and the class's own season can move, so only those revalidate."""
+    from ingest.nflverse import NflverseError, fetch, season_rows
+    players_csv = fetch("players", "players.csv", cache, live=live)
+    players = load_players(players_csv)
     seasons = {y: season_rows(cache, str(y), columns=None) for y in range(2014, year)}
-    return build(players, seasons[year - 1], seasons, preset("ppr"), year)
+    try:
+        current = season_rows(cache, str(year), live=live, columns=None)
+    except NflverseError:
+        current = {}                 # no stats file until the class has played
+    return build(players, seasons[year - 1], seasons, preset("ppr"), year,
+                 as_of=data_date(players_csv), current=current)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--year", type=int, default=2026)
+    parser.add_argument("--year", type=int, default=None,
+                        help="the draft class (default: the newest one out)")
     parser.add_argument("--cache", type=Path, default=ROOT / "data" / "raw" / "nflverse")
+    parser.add_argument("--live", action="store_true",
+                        help="the weekly run: revalidate, and keep the last page on a failure")
     args = parser.parse_args(argv)
-    (SITE / PAGE).write_text(rookie_page(load_report(args.cache, args.year)), encoding="utf-8")
+    year = args.year or class_year(datetime.now(EASTERN).date())
+    try:
+        report = load_report(args.cache, year, live=args.live)
+    except Exception as exc:  # noqa: BLE001 — this page must never stop the weekly run
+        if not args.live:
+            raise
+        print(f"Rookie page: kept as it is, this week's data couldn't be read ({exc!r}).")
+        return 0
+    if len(report["rookies"]) < MIN_SKILL_ROOKIES:
+        print(f"Rookie page: kept as it is, the {year} class isn't in the data yet.")
+        return 0
+    (SITE / PAGE).write_text(rookie_page(report), encoding="utf-8")
     print(f"wrote site/{PAGE}")
     return 0
 

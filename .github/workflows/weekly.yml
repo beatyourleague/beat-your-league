@@ -339,6 +339,11 @@ jobs:
       - name: Draft this week's public posts
         if: always()
         run: .venv/bin/python -m run.drops
+      # The public rookie report (render/rookies.py): each rookie's team, the room
+      # and this season's games move every week. A failure keeps the last page.
+      - name: Refresh the rookie report
+        if: always()
+        run: .venv/bin/python -m render.rookies --live
       # Sealed before they leave the runner (run/statebox.py RULE S1): without
       # CACHE_KEY this exits 1 once there is anything to seal.
       - name: Seal the registry and the sent lineups
@@ -405,7 +410,7 @@ jobs:
           RECORD_PATHS: >-
             data/processed/ledger data/processed/sent.jsonl site/join/players.json
             site/this-week.html site/week.json site/_headers content/this-week.md
-            site/join/byes.json site/byes/index.html
+            site/join/byes.json site/byes/index.html site/rookie-report.html
         run: |
           set -euo pipefail
           set -f
@@ -526,7 +531,7 @@ jobs:
           RECORD_ALLOWED: >-
             /data/processed/ledger/* /data/processed/sent.jsonl /site/join/players.json
             /site/this-week.html /site/week.json /site/_headers /content/this-week.md
-            /site/join/byes.json /site/byes/index.html
+            /site/join/byes.json /site/byes/index.html /site/rookie-report.html
         run: |
           set -euo pipefail
           set -f
@@ -586,7 +591,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
-          git add -A data/processed/ledger site/join/players.json site/this-week.html site/week.json site/_headers content/this-week.md site/join/byes.json site/byes/index.html
+          git add -A data/processed/ledger site/join/players.json site/this-week.html site/week.json site/_headers content/this-week.md site/join/byes.json site/byes/index.html site/rookie-report.html
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Weekly run: ledger, send log, player directory"

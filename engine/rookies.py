@@ -7,7 +7,10 @@ Three things, each a record of what happened:
   age and size. Draft order is the NFL's, and the report says so. It is not a
   ranking of ours.
 - **The room**: how much of the team's targets and carries at his position last
-  season went to players no longer there, and who is still there.
+  season went to players no longer there, who is still there, and who arrived
+  from another team. A vacancy with no arrivals in it would read as more open
+  than it is: Mendoza's Raiders lost 96% of their passes and signed Kirk Cousins.
+- **This season so far**, once a class has played: games and points a game.
 - **The history**: how rookies taken in the same round have scored. It's a base
   rate from past classes, under one stated scoring rule, never a forecast.
 
@@ -36,6 +39,14 @@ FIRST_CLASS = 2014
 YEARS_OUT = 3
 # A class is complete enough to publish once this many picks are in the file.
 MIN_PICKS = 200
+# Below this, an arrival is depth rather than part of the room's story.
+MIN_ARRIVAL_TOUCHES = 30
+ARRIVALS_SHOWN = 2
+GONE_STATUSES = ("RET", "CUT")
+# players.csv status -> what a reader needs to know. Active says nothing.
+STATUS_WORDS = {"DEV": "On the practice squad", "RES": "On the reserve list",
+                "RSR": "On the reserve list", "RSN": "On the reserve list",
+                "CUT": "Released"}
 
 
 def load_players(path: Path) -> list[dict[str, str]]:
@@ -77,10 +88,15 @@ def draft_class(players: Iterable[Mapping[str, str]], year: int) -> list[dict[st
         if (_int(player.get("draft_year")) != year or not pick
                 or player.get("position") not in POSITIONS):
             continue
+        drafted_by = player.get("draft_team")
         rookies.append({
             "player_id": player.get("gsis_id"), "name": player.get("display_name"),
             "position": player["position"], "round": _int(player.get("draft_round")),
-            "pick": pick, "team": player.get("draft_team"),
+            # Where he is now: a rookie traded or claimed since the draft
+            # plays beside this team's players, not the team that took him.
+            "pick": pick, "team": player.get("latest_team") or drafted_by,
+            "drafted_by": drafted_by,
+            "status": STATUS_WORDS.get(player.get("status") or ""),
             # A transfer's colleges are listed newest first.
             "college": (player.get("college_name") or "").split(";")[0].strip() or None,
             "age": _age(player.get("birth_date") or "", year),
@@ -113,6 +129,20 @@ def team_rooms(players: Iterable[Mapping[str, str]],
                 continue
             slot = used.setdefault((row["team"], position), {})
             slot[pid] = slot.get(pid, 0.0) + _touches(row, position)
+    # Everyone with last-season usage who is on a team now: the arrivals are
+    # the ones who did none of that usage for the team they're on.
+    usage: dict[tuple[str, str], float] = {}
+    for (_team, position), touches in used.items():
+        for pid, count in touches.items():
+            usage[(pid, position)] = usage.get((pid, position), 0.0) + count
+    joined: dict[tuple[str, str], list[tuple[float, str, str]]] = {}
+    for (pid, position), count in usage.items():
+        player = now.get(pid) or {}
+        team = player.get("latest_team")
+        if (team and count >= MIN_ARRIVAL_TOUCHES and pid not in used.get((team, position), {})
+                and player.get("status") not in GONE_STATUSES):
+            joined.setdefault((team, position), []).append(
+                (count, pid, player.get("display_name") or pid))
     rooms: dict[tuple[str, str], dict[str, Any]] = {}
     for (team, position), touches in used.items():
         total = sum(touches.values())
@@ -120,12 +150,26 @@ def team_rooms(players: Iterable[Mapping[str, str]],
             continue
         stayed = {pid: n for pid, n in touches.items()
                   if (now.get(pid) or {}).get("latest_team") == team
-                  and (now.get(pid) or {}).get("status") not in ("RET", "CUT")}
+                  and (now.get(pid) or {}).get("status") not in GONE_STATUSES}
         lead = max(stayed, key=lambda pid: (stayed[pid], pid), default=None)
+        arrived = sorted(joined.get((team, position), []), reverse=True)[:ARRIVALS_SHOWN]
         rooms[(team, position)] = {
             "left_share": round(100 * (total - sum(stayed.values())) / total),
-            "lead": (now[lead].get("display_name") if lead else None)}
+            "lead": (now[lead].get("display_name") if lead else None),
+            "arrived": [name for _count, _pid, name in arrived]}
     return rooms
+
+
+def this_season(player_id: str, weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
+                rule: ScoringRule) -> dict[str, Any] | None:
+    """A rookie's games so far, or None before his first. ``games`` counts stat
+    rows, so a game he missed isn't a zero."""
+    scores = [score(weekly[week][player_id], rule) for week in sorted(weekly)
+              if player_id in weekly[week]]
+    if not scores:
+        return None
+    return {"games": len(scores), "per_game": round(sum(scores) / len(scores), 1),
+            "recent": [round(s, 1) for s in scores[-3:]]}
 
 
 def _per_game(player_id: str, weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
@@ -185,10 +229,17 @@ def near_your_players(rookies: Sequence[Mapping[str, Any]],
 
 def build(players: Sequence[Mapping[str, str]], last_season: Mapping[int, Mapping[str, Mapping]],
           seasons: Mapping[int, Mapping[int, Mapping[str, Mapping[str, Any]]]],
-          rule: ScoringRule, year: int) -> dict[str, Any]:
-    """The whole report, the same for everyone but ``near_your_players``."""
+          rule: ScoringRule, year: int, as_of: str = "",
+          current: Mapping[int, Mapping[str, Mapping[str, Any]]] | None = None) -> dict[str, Any]:
+    """The whole report, the same for everyone but ``near_your_players``.
+    ``current`` is the class's own season so far, empty until it has played.
+    ``as_of`` is the day the data was read, in words."""
     rooms = team_rooms(players, last_season)
     rookies = draft_class(players, year)
+    current = current or {}
     for rookie in rookies:
         rookie["room"] = rooms.get((rookie["team"], rookie["position"]))
-    return {"year": year, "rookies": rookies, "history": history(players, seasons, rule, year)}
+        rookie["season"] = this_season(rookie["player_id"], current, rule)
+    return {"year": year, "as_of": as_of, "rookies": rookies,
+            "through_week": max(current, default=None),
+            "history": history(players, seasons, rule, year)}

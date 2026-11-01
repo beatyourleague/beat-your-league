@@ -14,7 +14,8 @@ import pytest
 from engine import rookies
 from engine.scoring import preset
 from engine.season_review import review_team
-from render.rookies import ROOKIE_SAMPLE, rookie_email, rookie_page
+from render import rookies as render_rookies
+from render.rookies import ROOKIE_SAMPLE, _bio, _season, _where, class_year, rookie_email, rookie_page
 from render.season_review import REVIEW_SAMPLE, review_message
 from run import plans, season_review
 from run.season_review import HoldEntry, append_holds, hold_code, is_due, load_holds, new_holds
@@ -151,7 +152,115 @@ def test_the_room_counts_who_left() -> None:
     people = [player("9", "Stayed", "WR"), player("8", "Gone", "WR", latest_team="BUF")]
     weekly = {1: {"9": {"position": "WR", "team": "NYJ", "targets": "6", "carries": "0"},
                   "8": {"position": "WR", "team": "NYJ", "targets": "4", "carries": "0"}}}
-    assert rookies.team_rooms(people, weekly)[("NYJ", "WR")] == {"left_share": 40, "lead": "Stayed"}
+    assert rookies.team_rooms(people, weekly)[("NYJ", "WR")] == {
+        "left_share": 40, "lead": "Stayed", "arrived": []}
+
+
+def _rows(*rows: tuple) -> dict:
+    return {1: {pid: {"position": pos, "team": team, "targets": str(n), "carries": "0",
+                      "attempts": str(n)} for pid, pos, team, n in rows}}
+
+
+def test_the_room_names_a_veteran_who_arrived() -> None:
+    """Review: Mendoza's line read 96% gone, O'Connell still there, with Kirk
+    Cousins on the roster. A vacancy with no arrivals in it overstated it."""
+    people = [player("9", "Stayed", "QB", team="LV"), player("8", "Gone", "QB", latest_team="NYJ"),
+              player("7", "Cousins", "QB", team="LV")]
+    weekly = _rows(("9", "QB", "LV", 40), ("8", "QB", "LV", 500), ("7", "QB", "ATL", 300))
+    room = rookies.team_rooms(people, weekly)[("LV", "QB")]
+    assert room["arrived"] == ["Cousins"] and room["lead"] == "Stayed"
+
+
+def test_a_player_who_was_already_there_did_not_arrive() -> None:
+    people = [player("9", "Same", "WR", team="NYJ")]
+    weekly = _rows(("9", "WR", "NYJ", 90))
+    assert rookies.team_rooms(people, weekly)[("NYJ", "WR")]["arrived"] == []
+
+
+def test_depth_and_players_who_are_gone_do_not_arrive() -> None:
+    people = [player("1", "Base", "WR", team="NYJ"), player("2", "Depth", "WR", team="NYJ"),
+              player("3", "Cut", "WR", team="NYJ", status="CUT")]
+    weekly = _rows(("1", "WR", "NYJ", 90), ("2", "WR", "BUF", 5), ("3", "WR", "BUF", 90))
+    assert rookies.team_rooms(people, weekly)[("NYJ", "WR")]["arrived"] == []
+
+
+def test_a_rookie_is_placed_on_his_team_today() -> None:
+    """Review: three 2026 rookies had moved, while the page said its teams were
+    current and showed the team that drafted them."""
+    moved = rookies.draft_class([player("1", "Moved", "TE", latest_team="MIA", team="DEN")], 2026)[0]
+    assert (moved["team"], moved["drafted_by"]) == ("MIA", "DEN")
+    near = rookies.near_your_players([moved], [{"name": "Vet", "position": "TE", "team": "MIA"}])
+    assert near[0]["yours"] == ["Vet"]
+    assert rookies.near_your_players([moved], [{"name": "V", "position": "TE", "team": "DEN"}]) == []
+    assert "MIA, drafted by DEN, round 1" in _where(moved)
+
+
+def test_a_rookie_still_on_his_drafting_team_reads_plainly() -> None:
+    rookie = rookies.draft_class([player("1", "A", "WR")], 2026)[0]
+    assert _where(rookie) == "NYJ, round 1"
+
+
+def test_a_rookie_off_the_active_roster_says_so() -> None:
+    rookie = rookies.draft_class([player("1", "A", "WR", status="RSR")], 2026)[0]
+    assert "On the reserve list" in _bio(rookie)
+
+
+def test_a_season_so_far_counts_games_played_only() -> None:
+    weekly = {1: {"1": {"receiving_yards": "100"}}, 2: {}, 3: {"1": {"receiving_yards": "50"}}}
+    assert rookies.this_season("1", weekly, RULE) == {"games": 2, "per_game": 7.5, "recent": [10.0, 5.0]}
+    assert rookies.this_season("9", weekly, RULE) is None
+
+
+def test_the_season_line_reads_plainly() -> None:
+    assert _season({"season": None}, 2026) == "2026: no games yet."
+    assert _season({"season": {"games": 1, "per_game": 2.2, "recent": [2.2]}}, 2026) == "2026: 1 game, 2.2 points."
+    assert "7 games, 11.0 a game. Last 3: 1.0, 2.0, 3.0." in _season(
+        {"season": {"games": 7, "per_game": 11.0, "recent": [1, 2, 3]}}, 2026)
+
+
+def test_no_season_line_before_a_class_has_played() -> None:
+    """In May the class has no games: "no games yet" on 80 rows is noise."""
+    report = {**ROOKIE_SAMPLE, "through_week": None}
+    assert "no games yet" not in rookie_page(report)
+    assert "2026: 7 games" not in rookie_email(report, [], "a@b.co", "k").text
+    assert "2026: 7 games" in rookie_email(ROOKIE_SAMPLE, [], "a@b.co", "k").text
+
+
+def test_the_page_says_when_its_data_is_from() -> None:
+    page = rookie_page({**ROOKIE_SAMPLE, "history": []})
+    assert "Data as of Nov 1, 2026." in page and "as the data stands now" not in page
+    assert "Data as of Nov 1, 2026." in rookie_email(ROOKIE_SAMPLE, [], "a@b.co", "k").text
+
+
+def test_the_newest_class_turns_over_in_may() -> None:
+    assert class_year(date(2026, 11, 4)) == 2026
+    assert class_year(date(2027, 4, 30)) == 2026
+    assert class_year(date(2027, 5, 1)) == 2027
+
+
+def test_a_failed_read_keeps_the_last_page(monkeypatch, tmp_path) -> None:
+    page = tmp_path / "rookie-report.html"
+    page.write_text("last week's page", encoding="utf-8")
+    monkeypatch.setattr(render_rookies, "SITE", tmp_path)
+    monkeypatch.setattr(render_rookies, "load_report", lambda *a, **k: 1 / 0)
+    assert render_rookies.main(["--live"]) == 0
+    assert page.read_text(encoding="utf-8") == "last week's page"
+
+
+def test_a_class_not_in_the_data_keeps_the_last_page(monkeypatch, tmp_path) -> None:
+    page = tmp_path / "rookie-report.html"
+    page.write_text("last year's page", encoding="utf-8")
+    monkeypatch.setattr(render_rookies, "SITE", tmp_path)
+    monkeypatch.setattr(render_rookies, "load_report", lambda *a, **k: {"rookies": []})
+    assert render_rookies.main(["--live"]) == 0
+    assert page.read_text(encoding="utf-8") == "last year's page"
+
+
+def test_the_weekly_run_rebuilds_and_may_commit_the_page() -> None:
+    flow = (ROOT / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
+    assert "run: .venv/bin/python -m render.rookies --live" in flow
+    assert "site/join/byes.json site/byes/index.html site/rookie-report.html" in flow
+    assert "/site/join/byes.json /site/byes/index.html /site/rookie-report.html" in flow
 
 
 def test_a_recent_class_cannot_drag_the_three_season_figure() -> None:
