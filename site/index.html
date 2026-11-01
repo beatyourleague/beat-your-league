@@ -636,6 +636,7 @@
   .js .punch.armed.go b i:nth-child(2){transition-delay:.28s;}
   .js .punch.armed.go b i:nth-child(3){transition-delay:.56s;}
   .js .punch.armed.go span{transition-delay:.9s;}
+  .js .punch.armed.go span:last-child{transition-delay:1.15s;}
 
   /* ------------------------------------------------ how it works: three real things */
   .steps{list-style:none;display:grid;grid-template-columns:1.32fr 1fr 1fr;gap:clamp(20px,3vw,36px);margin-top:44px;}
@@ -1246,7 +1247,8 @@
      (owner review, Oct 31 2026: it sat in a thin strip). -->
 <section class="scene" aria-label="The call that costs you the week">
   <p class="punch" id="punch"><b><i>You benched him.</i> <i>He went for 30.</i> <i>You lost by four.</i></b>
-  <span>Stop making that call five minutes before kickoff.</span></p>
+  <span>Stop making that call five minutes before kickoff.</span>
+  <span>Every Wednesday, one email decides your lineup.</span></p>
 </section>
 
 <!-- How it works, as three real things: the paste the roster box reads, the
@@ -1262,7 +1264,7 @@
     <li class="step">
       <span class="sn">01</span>
       <h3>Paste your roster</h3>
-      <p>Any app. No login.</p>
+      <p>No login.</p>
       <!-- Four lines of the ESPN page's own example (render/platforms.py
            PLATFORMS, held to it by test), as the roster box reads them. -->
       <div class="paste" role="img" aria-label="Lines copied from ESPN, read as Josh Allen, Sam LaPorta, Baltimore Ravens and Jake Bates">
@@ -1372,7 +1374,7 @@
       <a class="cardlink" href="sample-report.html">See a real report first</a>
     </div>
   </div>
-  <p class="finance" id="currency-note">All prices in US dollars. Checkout on Stripe. We never see your card.</p>
+  <p class="finance" id="currency-note">All prices in US dollars. Checkout on Stripe.</p>
   <!-- Filled when checkout opens. -->
   <p class="finance" id="finance-note" hidden></p>
   <p class="lpline"><svg class="lpicon" viewBox="0 0 26 26" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="13" cy="9" r="4"/><path d="M5.5 22c.6-4.4 3.5-6.8 7.5-6.8s6.9 2.4 7.5 6.8"/><path d="M19.3 5.5a3.6 3.6 0 0 1 0 7M24 19.5c-.5-2.7-1.9-4.5-4.2-5.3M6.7 5.5a3.6 3.6 0 0 0 0 7M2 19.5c.5-2.7 1.9-4.5 4.2-5.3"/></g></svg><span class="lpbody"><b>Run the league?</b> The League Pass covers every manager, each with their own report, up to 14 teams.

@@ -411,6 +411,7 @@ def test_the_sunday_scene_sits_directly_under_the_hero() -> None:
     # product does, and never hints it would have started the 30-point player.
     assert "Stop making that call five minutes before kickoff." in _flat(words)
     assert "Don't make that call alone." not in LANDING
+    assert "Every Wednesday, one email decides your lineup." in _flat(words)
     assert "makes that call" not in LANDING
     assert 'class="proof"' not in LANDING and 'class="credsec"' not in LANDING
 
