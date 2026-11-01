@@ -144,14 +144,17 @@ DYNASTY_STEPS = ("Copy your roster from any app, or type each name into “Add a
 DYNASTY_LIMIT_NOTE = "TE premium and six-point passing touchdowns aren't scored yet. Pick the closest."
 DYNASTY_DOESNT = ("It sets up this week's lineup. It doesn't value trades, rank rookies or help "
                   "with your startup or rookie draft. It uses the same weekly model as every "
-                  "league, so it isn't tuned for dynasty. Reports run during the NFL season, "
-                  "not the off-season.")
+                  "league, so it isn't tuned for dynasty. Weekly reports run during the NFL "
+                  "season, not the off-season.")
 DYNASTY_NO_SYNC = ("It doesn't connect to your league or set your lineup there. You make the "
                    "moves. Roster changed? Update it from the link in any report, or reply "
                    "with it.")
 DYNASTY_TEAMS = "In redraft, keeper and dynasty leagues? One plan covers up to 3 teams."
 DYNASTY_TRADE = ("Weighing a trade? Your plan's Trade Check shows what it does to this week's "
                  "lineup and your byes. It doesn't say what the players are worth long term.")
+DYNASTY_ROOKIE = "See the rookie report"
+DYNASTY_ROOKIE_NOTE = ("After the NFL Draft, plan members can ask for the rookie report: every "
+                       "new QB, RB, WR and TE, where he landed and who landed beside your players.")
 DYNASTY_LINK = "Dynasty or keeper league? See what you get"
 DYNASTY_PASS = "Everyone in your league in? The League Pass gives every manager their own report."
 
@@ -505,6 +508,7 @@ def dynasty_page() -> str:
     <div class="cta">{_ask(DYNASTY)}<a class="btn ghost" href="../sample-report.html">See a real report</a></div>
     <p>{esc(DYNASTY_TEAMS)}</p>
     <p>{esc(DYNASTY_TRADE)}</p>
+    <p>{esc(DYNASTY_ROOKIE_NOTE)} <a href="../rookie-report.html">{esc(DYNASTY_ROOKIE)}</a>.</p>
     <p><a href="../league-pass.html">{esc(DYNASTY_PASS)}</a></p>
     <p><a href="../how-it-works.html">How the report works</a>, section by section.</p>
     <p>Works with rosters from {apps} or any other app.</p>

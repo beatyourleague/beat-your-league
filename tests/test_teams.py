@@ -389,7 +389,7 @@ LATE = _plan(FINAL + timedelta(days=5))
 
 
 def test_today_a_plan_stops_because_months_are_empty() -> None:
-    assert plans.empty_months() == [2, 3, 4, 5, 6, 7, 8]
+    assert plans.empty_months() == [2, 3, 4, 6, 7, 8]
     assert not plans.bills_all_year()
     assert billing.needs_stop([LATE], FINAL)[0]
 
@@ -404,7 +404,7 @@ def test_the_switch_alone_cannot_bill_an_empty_month(monkeypatch) -> None:
 def test_with_every_month_filled_the_switch_keeps_plans_running(monkeypatch) -> None:
     monkeypatch.setattr(plans, "YEAR_ROUND_BILLING", True)
     monkeypatch.setattr(plans, "EXTRAS", {m: "something real" for m in range(2, 9)})
-    assert plans.bills_all_year()
+    assert plans.bills_all_year() and plans.empty_months() == []
     assert billing.needs_stop([LATE], FINAL)[0] == []
 
 

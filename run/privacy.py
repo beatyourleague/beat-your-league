@@ -81,6 +81,7 @@ class Found:
     signups: list[dict] = field(default_factory=list)
     seats: list[dict] = field(default_factory=list)
     teams: list[dict] = field(default_factory=list)
+    holds: list[dict] = field(default_factory=list)
     updates: list[dict] = field(default_factory=list)
     registry: list[dict] = field(default_factory=list)
     named_as_payer: int = 0
@@ -92,6 +93,7 @@ class Found:
     def counts(self) -> dict[str, int]:
         return {"signups": len(self.signups), "seat claims": len(self.seats),
                 "extra teams": len(self.teams),
+                "rookie report requests": len(self.holds),
                 "roster updates": len(self.updates), "registry rows": len(self.registry),
                 "stored weekly plans": len(self.plans),
                 "on the stop list": int(self.stop_list),
@@ -153,6 +155,7 @@ def find(code: str, registry_dir: Path, plans_dirs: list[Path],
          suppress_file: Path | None = None, worker_rows: list[dict] | None = None,
          ) -> Found:
     from run.intake import REGISTRY_NAME, SEAT_LOG_NAME, SIGNUP_LOG_NAME
+    from run.season_review import HOLD_LOG_NAME
     from run.suppress import load_suppressed
     from run.teams import TEAM_LOG_NAME
     from run.updates import UPDATE_LOG_NAME
@@ -162,6 +165,7 @@ def find(code: str, registry_dir: Path, plans_dirs: list[Path],
     found.seats = [r for r in _jsonl(registry_dir / SEAT_LOG_NAME) if hit(r.get("email"))]
     found.updates = [r for r in _jsonl(registry_dir / UPDATE_LOG_NAME) if hit(r.get("email"))]
     found.teams = [r for r in _jsonl(registry_dir / TEAM_LOG_NAME) if hit(r.get("email"))]
+    found.holds = [r for r in _jsonl(registry_dir / HOLD_LOG_NAME) if hit(r.get("email"))]
     registry = registry_dir / REGISTRY_NAME
     rows = json.loads(registry.read_text(encoding="utf-8")) if registry.is_file() else []
     rows = rows if isinstance(rows, list) else []
@@ -196,6 +200,7 @@ def forget(code: str, found: Found, registry_dir: Path,
            ) -> dict[str, int]:
     """Remove every row found. Returns counts. Writes only what changes."""
     from run.intake import REGISTRY_NAME, SEAT_LOG_NAME, SIGNUP_LOG_NAME
+    from run.season_review import HOLD_LOG_NAME
     from run.suppress import SUPPRESS_FILE, _write, load_suppressed
     from run.teams import TEAM_LOG_NAME
     from run.updates import UPDATE_LOG_NAME
@@ -204,7 +209,8 @@ def forget(code: str, found: Found, registry_dir: Path,
     done = {"signups": _rewrite_jsonl(registry_dir / SIGNUP_LOG_NAME, keep),
             "seat claims": _rewrite_jsonl(registry_dir / SEAT_LOG_NAME, keep),
             "roster updates": _rewrite_jsonl(registry_dir / UPDATE_LOG_NAME, keep),
-            "extra teams": _rewrite_jsonl(registry_dir / TEAM_LOG_NAME, keep)}
+            "extra teams": _rewrite_jsonl(registry_dir / TEAM_LOG_NAME, keep),
+            "rookie report requests": _rewrite_jsonl(registry_dir / HOLD_LOG_NAME, keep)}
     registry = registry_dir / REGISTRY_NAME
     removed = 0
     if registry.is_file():
@@ -330,7 +336,7 @@ def report_email(action: str, code: str, found: Found, done: dict[str, int] | No
             except RefError:
                 continue
         export = {"signups": found.signups, "seat_claims": found.seats,
-                  "extra_teams": found.teams,
+                  "extra_teams": found.teams, "rookie_report_requests": found.holds,
                   "roster_updates": found.updates, "registry": found.registry,
                   "rosters_decoded": decoded,
                   "weekly_plans": [json.loads(p.read_text(encoding="utf-8"))

@@ -177,7 +177,7 @@ _ENTITLED_STATUSES = ("active", "trialing")
 # few hours), and lapses by itself. A plan its buyer cancelled carries no key,
 # so it ends when it ends.
 SEASON_STOP_KEY = "byl_offseason_stop"
-SEASON_STOP_GRACE_DAYS = 21
+SEASON_STOP_GRACE_DAYS = 28
 
 # RULE E1 — A REFUND ENDS ENTITLEMENT, EVEN WHILE THE SUBSCRIPTION IS ACTIVE.
 #

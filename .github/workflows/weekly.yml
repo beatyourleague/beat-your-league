@@ -294,6 +294,24 @@ jobs:
           # variable set for one week, AWAY@HOME. Unset excuses nothing.
           POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
         run: .venv/bin/python -m run.tuesday
+      # The season review (run/season_review.py): the first Wednesday after the
+      # last game, when the season's box scores are in. Here because this job
+      # holds the sent lineups. Any other week it says "not due" and sends nothing.
+      - name: Send season reviews
+        if: always() && steps.open.outcome == 'success'
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          LOG_SECRET: ${{ secrets.LOG_SECRET }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
+          BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
+        run: .venv/bin/python -m run.season_review
       # The live sample (render/live_sample.py): this week's report for the
       # published sample roster, so the site shows the product running now,
       # not a 2024 replay. Its FIRST build before the week's first kickoff

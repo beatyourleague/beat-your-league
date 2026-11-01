@@ -235,6 +235,8 @@ const VALID = /^[0-9a-f]{24}$/.test(CODE);
 const SEAT = new URLSearchParams(location.search).get("k") === "seat";
 // Another team on a plan (run/teams.py): the same POST, its own words.
 const TEAM = new URLSearchParams(location.search).get("k") === "team";
+// The season review's button (run/season_review.py): consent for the rookie report.
+const HOLD = new URLSearchParams(location.search).get("k") === "hold";
 const go = document.getElementById("go");
 const msg = document.getElementById("msg");
 function say(text, kind) { msg.textContent = text; msg.className = "msg " + (kind || ""); }
@@ -253,6 +255,13 @@ if (TEAM) {
     "Press the button within 7 days of asking and it's usually set up within the hour. " +
     "Nothing is charged.";
   go.textContent = "Yes, add this team";
+}
+if (HOLD) {
+  document.title = "Beat Your League — The rookie report";
+  document.getElementById("head").textContent = "Send me the rookie report";
+  document.getElementById("intro").textContent = "Press the button and we'll email you the " +
+    "rookie report after the NFL Draft. It's free and nothing bills.";
+  go.textContent = "Yes, send it to me";
 }
 if (!VALID) {
   go.disabled = true;
@@ -287,7 +296,9 @@ go.addEventListener("click", () => {
     // lives 7 days from the claim, and a pass holds only as many seats as
     // its league has teams (OPS-R7), so a seat is not "Confirmed" here
     // either: the intake decides, and says so by email when it can't.
-    say(TEAM
+    say(HOLD
+      ? "You're on the list. The rookie report comes after the NFL Draft."
+      : TEAM
       ? "Received. If you asked in the last 7 days, your team is usually set up within " +
         "the hour and we'll email you when it is. If your plan's teams are all in use, " +
         "we'll email you to say so."

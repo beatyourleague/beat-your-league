@@ -38,7 +38,7 @@
   // Pages answering with 404.html, so that is what it counts as.
   const OTHER = ["join/confirm", "terms", "privacy", "legal", "compare", "confidence",
                  "projections", "no-call", "backtest", "ledger",
-                 "espn", "yahoo", "sleeper", "cbs", "dynasty"];
+                 "espn", "yahoo", "sleeper", "cbs", "dynasty", "rookie-report"];
   // The keys the join page may name for itself (window.bylPage).
   const JOIN_KEYS = ["join", "join-pass", "join-try", "other"];
   const sent = {};

@@ -156,6 +156,8 @@ The report is `reports/launch-readiness.md`; `make launch-check` holds the rest 
   Tuesday run would build Sep 2027 reports from a 2026 roster. Hold reports for a
   prior-season roster until a post-draft roster is confirmed; one pre-season "paste your new
   roster" email. Only then state the pass's 12-month coverage on the pricing card.
+- **Fill the empty months.** The season review (January) and rookie report (May) exist. Year-round
+  billing still needs something real in February to April and June to August.
 - ~~A multi-team price.~~ **DONE (Nov 1 2026): a plan covers up to 3 teams.** A bigger plan waits
   for buyers asking for a fourth.
 - **Free post-draft roster check (Aug 2027 lead magnet).** The facts-only roster report

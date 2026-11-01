@@ -64,16 +64,11 @@ def empty_section(calls_now: int | None, last_report: bool = False
     return {"record": None, "note": EMPTY_NOTE, "stamp": NEXT_STAMP}
 
 
-def own_record(plans: Sequence[Mapping[str, Any]],
-               weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
-               rule: ScoringRule, before_week: int, *,
-               calls_now: int = 1, last_report: bool = False) -> dict[str, Any]:
-    """The receipts section for one subscriber, from their stored plans.
-
-    ``calls_now`` (odds this report prints) and ``last_report`` decide what
-    the empty section may promise (``empty_section``). A void (neither player
-    scored) or a tie is listed as "no result" and counted apart, so every call
-    a report printed shows up once its week is graded."""
+def graded_calls(plans: Sequence[Mapping[str, Any]],
+                 weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
+                 rule: ScoringRule, before_week: int) -> list[dict[str, Any]]:
+    """Every call in ``plans`` from a week before ``before_week`` with box
+    scores, graded. A void (neither player scored) or a tie is NO_RESULT."""
     graded: list[dict[str, Any]] = []
     for plan in sorted(plans, key=lambda p: int(p["week"])):
         week = int(plan["week"])
@@ -92,6 +87,20 @@ def own_record(plans: Sequence[Mapping[str, Any]],
                 outcome = NO_RESULT
             graded.append({**call, "week": week, "got": round(got, 1),
                            "other": round(other, 1), "outcome": outcome})
+    return graded
+
+
+def own_record(plans: Sequence[Mapping[str, Any]],
+               weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
+               rule: ScoringRule, before_week: int, *,
+               calls_now: int = 1, last_report: bool = False) -> dict[str, Any]:
+    """The receipts section for one subscriber, from their stored plans.
+
+    ``calls_now`` (odds this report prints) and ``last_report`` decide what
+    the empty section may promise (``empty_section``). A void (neither player
+    scored) or a tie is listed as "no result" and counted apart, so every call
+    a report printed shows up once its week is graded."""
+    graded = graded_calls(plans, weekly, rule, before_week)
     if not graded:
         return empty_section(calls_now, last_report)
     decided = [c for c in graded if c["outcome"] != NO_RESULT]

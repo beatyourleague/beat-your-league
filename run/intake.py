@@ -3059,6 +3059,14 @@ def main(argv: list[str] | None = None) -> int:
         candidate.extend(to_rows(added_teams))
         if not args.dry_run:
             append_team_log(team_sweep.confirmed, team_log_path)
+    # The season review's button: consent for the rookie report (run/season_review.py).
+    from run.season_review import HOLD_LOG_NAME, append_holds, load_holds, new_holds
+    hold_path = registry_dir / HOLD_LOG_NAME
+    holds = new_holds(current, confirm_rows, (known_season,
+                                              str(int(known_season) - 1)), secret,
+                      load_holds(hold_path), datetime.now(timezone.utc))
+    if holds and not args.dry_run:
+        append_holds(holds, hold_path)
     if team_rows:
         print(f"Teams: {len(team_sweep.confirmed)} added; {len(team_sweep.pending)} "
               f"awaiting confirmation; {len(team_sweep.full)} past their plan's "

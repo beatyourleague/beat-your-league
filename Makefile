@@ -369,6 +369,10 @@ byes:
 platforms:
 	$(PY) -m render.platforms
 
+# The published rookie report (site/rookie-report.html).
+rookies:
+	$(PY) -m render.rookies
+
 # Grade first, then draft: a Receipts post written before settlement is a
 # post about games that have not finished.
 receipts:

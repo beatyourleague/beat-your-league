@@ -7,8 +7,8 @@ runners:
 
 - ``TEAMS_INCLUDED``: how many teams one subscription carries (run/teams.py).
 - ``SPORTS``: what a team can be, and the months each one delivers something.
-- ``EXTRAS``: anything else a member receives in a month of its own, such as
-  an off-season report. Empty today.
+- ``EXTRAS``: anything else a member receives in a month of its own: the
+  rookie report in May. The season review lands in January, a football month.
 - ``YEAR_ROUND_BILLING``: whether plans keep renewing all year.
 
 PLAN §4 bans billing a month with nothing in it, so year-round billing is a
@@ -40,7 +40,7 @@ SPORTS: dict[str, Sport] = {
 }
 
 # Month -> what a member receives in it that no sport covers.
-EXTRAS: dict[int, str] = {}
+EXTRAS: dict[int, str] = {5: "the rookie report"}
 
 YEAR_ROUND_BILLING = False
 

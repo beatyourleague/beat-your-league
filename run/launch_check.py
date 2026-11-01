@@ -2192,6 +2192,8 @@ def other_email_samples(season: str) -> list[tuple[str, str, str | None]]:
     from render.seat_claim import confirm_email as seat_confirm_email
     from render.seat_claim import full_email, unmatched_email
     from render.team_mail import team_confirm_email, team_full_email
+    from render.rookies import ROOKIE_SAMPLE, rookie_email
+    from render.season_review import REVIEW_SAMPLE, review_message
     from render.trade_mail import TRADE_SAMPLE, trade_email
     from render.welcome import welcome_message
     from run.refs import decode_roster, encode_roster
@@ -2229,6 +2231,12 @@ def other_email_samples(season: str) -> list[tuple[str, str, str | None]]:
             ("team plan full", team_full_email()[1], None),
             ("trade check", trade_email(TRADE_SAMPLE, "Work league",
                                         "https://example.com/join/?update=1")[1], None)]
+    review = review_message("a@example.com", season, [("Work league", REVIEW_SAMPLE)], "k",
+                            "https://example.com/join/confirm.html?c=" + "a" * 24 + "&k=hold")
+    out.append(("season review", review.html, review.unsubscribe))
+    rookies = rookie_email(ROOKIE_SAMPLE, ROOKIE_SAMPLE["near"], "a@example.com", "k",
+                           "https://example.com/rookie-report.html")
+    out.append(("rookie report", rookies.html, rookies.unsubscribe))
     msg = messages(["a@example.com"], "https://example.com/join/")[0]
     out.append(("launch announcement", msg.html, msg.unsubscribe))
     ref = encode_roster("season", "ppr", sample.SLOTS, list(live_sample.LIVE_ROSTER),

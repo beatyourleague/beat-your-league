@@ -34,7 +34,7 @@ def test_it_says_what_it_is_not() -> None:
     """Each line stops a buyer paying for something that does not exist."""
     for limit in ("It doesn't value trades, rank rookies or help with your startup or rookie draft",
                   "it isn't tuned for dynasty",
-                  "Reports run during the NFL season, not the off-season",
+                  "Weekly reports run during the NFL season, not the off-season",
                   "TE premium and six-point passing touchdowns aren't scored yet",
                   "Their odds wait until they have enough games on record"):
         assert limit in WORDS, limit

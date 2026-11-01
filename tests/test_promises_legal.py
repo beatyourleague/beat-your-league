@@ -29,7 +29,7 @@ PRIVACY_VERSIONS = [
     # keeps in its own address, its waitlist row and its two counted steps).
     ("2026-10-25", "9b76a92788b6df6f"),
     # Extra teams and team names (owner decision): what we keep when you add one.
-    ("2026-11-01", "a05c28e94cf04dc7"),
+    ("2026-11-01", "644153a38b9dd5cb"),
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "0d5cce06d12dd87c"),
