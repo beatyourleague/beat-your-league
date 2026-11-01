@@ -9,7 +9,7 @@
 requests==2.34.2
 
 # Development / tests (never installed beside the crons' secrets):
-pytest==9.1.1
+pytest==9.2.0
 # The workflow tests parse .github/workflows/*.yml, and the paid-path import
 # walk reads which runners the crons execute. Unpinned, CI never had it: the
 # walk crashed and every workflow rule skipped, so the suite was red on GitHub
