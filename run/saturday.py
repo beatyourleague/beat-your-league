@@ -50,13 +50,14 @@ from typing import Any, Mapping, Sequence
 
 from engine.final_check import Now, final_check, worth_sending
 from render.final_check import render_final_check, subject_for_check, text_for_check
-from render.report import unsubscribe_target
+from render.report import team_name, unsubscribe_target
 from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
 from run.rosters import RosterRegistryError, load_rosters
 from run.solo import (CACHE_DIR, current_season, current_week, season_over,
                        week_one_due)
 from run.subscriptions import DEFAULT_EXPORT
+from run.teams import DEFAULT_LABEL
 from run.watchdog import NOT_CONFIGURED_NOTE, SATURDAY, mark_run, not_configured
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -146,6 +147,8 @@ def build_plan(report: Mapping[str, Any], projections: Mapping[str, float],
         "slots": [{"slot": row["slot"], "player_id": row.get("player_id")}
                   for row in report.get("lineup") or []],
         "players": players,
+        # What tells this team's Saturday email from another of the buyer's.
+        "team": team_name(report),
         # The calls this report printed, for the subscriber's own receipts
         # (engine/own_record.py) — graded next week against the box scores.
         "calls": [{"slot": row["slot"], "pick": row["player_id"],
@@ -477,12 +480,18 @@ def _check_one(subscriber, args, season, week, at, starts, listed, filed, roster
         return "quiet", None
     return "send", Message(
         to=subscriber.email,
-        subject=subject_for_check(week, changes),
+        subject=subject_for_check(week, changes, _team(subscriber, plan)),
         html=render_final_check(plan, changes, at, seat=_way_out(subscriber)),
         text=text_for_check(plan, changes, at, seat=_way_out(subscriber)),
         # Its own key, distinct from Tuesday's, and once per week.
         key=f"{season}-w{week:02d}-final-{subscriber.slug}",
         unsubscribe=unsubscribe_target(subscriber.is_league_seat or subscriber.one_time))
+
+
+def _team(subscriber, plan: Mapping) -> str:
+    """The name that tells a subscriber's teams apart in an inbox: the one
+    they gave it, or the name its Tuesday report carried."""
+    return subscriber.label if subscriber.label != DEFAULT_LABEL else plan.get("team") or ""
 
 
 def _could_mail(args) -> bool:

@@ -131,6 +131,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from ingest.nflverse import NflverseError
+from run.plans import bills_all_year
 from run.checkout import (SEASON_2027_FIRST_RENEWAL, SEASON_2027_PRICE_CENTS, is_paid,
                           post as _stripe_post, season_2027_links, sweep_sessions)
 from run.redact import redact
@@ -415,6 +416,10 @@ def needs_stop(subscriptions: Iterable[Mapping[str, Any]], final: datetime,
             continue                             # RULE B5: already ending
         if returned(subscription) in ("refunded", "lost"):
             due.append(dict(subscription))
+            continue
+        # Plans stop after the season only while some month has nothing in it
+        # (run/plans.py, PLAN §4). A refund above still ends a plan either way.
+        if bills_all_year():
             continue
         period_end = _period_end(subscription)
         if period_end is None:

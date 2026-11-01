@@ -34,6 +34,8 @@ from render.report import (CANCEL_HEAD, CANCEL_PERIOD, EMAIL_META, ONCE_STOP_BOD
                            reply_update_works, seat_stop_href)
 from render.sender import CONTACT, sender_line
 from run.delivery import Message
+from run.plans import TEAMS_INCLUDED
+from run.teams import add_team_url
 
 # One test asserts these equal the landing page's own numbers.
 # 2026 prices (owner decision, Oct 31 2026): monthly plans that stop on their
@@ -52,7 +54,7 @@ SEASON_2027_RENEWAL = "$39"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
-TERMS_VERSION = "2026-10-31"
+TERMS_VERSION = "2026-11-01"
 
 # The distinction every commercial email must carry (and the reports do).
 UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — "
@@ -554,6 +556,21 @@ def _block(title: str, inner: str) -> str:
                                                    f'{inner}</div>'))
 
 
+TEAMS_HEAD = "Another team?"
+TEAMS_BODY = (f"Your plan covers up to {TEAMS_INCLUDED} teams at no extra charge: redraft, "
+              f"keeper or dynasty, each with its own report.")
+
+
+def _add_team_link(plan: str, season_over: bool) -> str | None:
+    """Where a buyer adds a team, once the whole flow can work. A seat has no
+    plan of its own, and nothing can start in the off-season."""
+    if plan == "seat" or season_over:
+        return None
+    url = add_team_url(os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
+                       os.environ.get("FORM_ENDPOINT", ""))
+    return url if url and url.startswith("https://") else None
+
+
 def welcome_message(email: str, plan: str, slug: str, season: str,
                     purchased_at: str = "", seat_link: str | None = None,
                     duplicate: str | None = None,
@@ -658,6 +675,11 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                      f'{esc(label)}</a>.' if href else "")
         twice_text = twice + (f" Where to cancel: {label}: {href}" if href else "")
         blocks.append(_block(TWICE_HEAD, f"{para}{esc(twice)}{link_html}</p>"))
+    teams_url = _add_team_link(plan, season_over)
+    if teams_url:
+        blocks.append(_block(TEAMS_HEAD, (
+            f'{para}{esc(TEAMS_BODY)} <a href="{esc(teams_url)}" style="color:{NAVY};">'
+            f'Add a team</a>.</p>')))
     if share:
         lead, link, paste = share
         inner = para + esc(lead) + "</p>"
@@ -725,6 +747,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     text_lines = ["BEAT YOUR LEAGUE", "YOU'RE IN.", "", opener]
     if twice_text:
         text_lines += ["", TWICE_HEAD.upper(), twice_text]
+    if teams_url:
+        text_lines += ["", TEAMS_HEAD.upper(), f"{TEAMS_BODY} {teams_url}"]
     if share:
         lead, link, paste = share
         text_lines += ["", "SEND YOUR LEAGUE THIS", lead]

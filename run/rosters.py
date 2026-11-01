@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from engine.subscriber import RosterSpec, SubscriberError
+from run.plans import FOOTBALL, SPORTS
 from run.refs import LEAGUE_PASS, MONTHLY, SEASON, RefError, decode_roster
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -128,6 +129,9 @@ class RosterSubscriber:
     subscription_ids: tuple[str, ...] = ()
     # Bought through the 2027 Season Pass link (``y:``; run/checkout.py).
     season_2027: bool = False
+    # What this team plays (run/plans.py SPORTS). Written only when it isn't
+    # football, so every row today is byte-identical.
+    sport: str = FOOTBALL
 
     @property
     def is_league_seat(self) -> bool:
@@ -282,7 +286,8 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
         league_size=size, label=label, plan=plan, covered_by=covered_by,
         stripe_customer_id=stripe_customer_id, origin=origin, billing=billing,
         roster_as_of=roster_as_of, pass_id=pass_id, pass_customer=pass_customer,
-        subscription_ids=subscription_ids, season_2027=raw.get("season_2027") is True)
+        subscription_ids=subscription_ids, season_2027=raw.get("season_2027") is True,
+        sport=_sport(raw.get("sport"), where))
     try:
         # RosterSpec carries the roster's own invariants (no duplicate player,
         # enough players to fill the lineup). Running it here means a row that
@@ -291,6 +296,14 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
     except SubscriberError as exc:
         raise RosterRegistryError(f"{where}: {exc}") from exc
     return subscriber
+
+
+def _sport(raw: object, where: str) -> str:
+    sport = str(raw or FOOTBALL).strip()
+    if sport not in SPORTS:
+        raise RosterRegistryError(f"{where}: sport must be one of {tuple(SPORTS)}, "
+                                  f"got {raw!r}")
+    return sport
 
 
 def _pass_fields(raw: dict, plan: str, billing: str | None,

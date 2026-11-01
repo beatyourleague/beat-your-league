@@ -222,12 +222,14 @@ def purchase_times(subscribers, signups) -> list[datetime | None]:
     takes its payer's earliest purchase."""
     by_slug: dict[str, datetime] = {}
     by_email: dict[str, datetime] = {}
+    by_plan: dict[str, datetime] = {}
     for signup in signups:
         stamp = str(getattr(signup, "seen_at", "") or "")
         if not stamp.isdigit():
             continue
         bought = datetime.fromtimestamp(int(stamp), tz=timezone.utc)
-        for table, key in ((by_slug, signup.slug), (by_email, signup.email.lower())):
+        for table, key in ((by_slug, signup.slug), (by_email, signup.email.lower()),
+                           (by_plan, getattr(signup, "subscription_id", None))):
             if key not in table or bought < table[key]:
                 table[key] = bought
     times: list[datetime | None] = []
@@ -235,7 +237,11 @@ def purchase_times(subscribers, signups) -> list[datetime | None]:
         if subscriber.covered_by:
             times.append(by_email.get(subscriber.covered_by.lower()))
         else:
-            times.append(by_slug.get(subscriber.slug))
+            # An extra team (run/teams.py) is not in the signup log; it is no
+            # older than the plan it sits on.
+            plans = [by_plan[s] for s in getattr(subscriber, "subscription_ids", ())
+                     if s in by_plan]
+            times.append(by_slug.get(subscriber.slug) or (min(plans) if plans else None))
     return times
 
 

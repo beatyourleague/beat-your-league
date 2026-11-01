@@ -149,6 +149,9 @@ DYNASTY_DOESNT = ("It sets up this week's lineup. It doesn't value trades, rank 
 DYNASTY_NO_SYNC = ("It doesn't connect to your league or set your lineup there. You make the "
                    "moves. Roster changed? Update it from the link in any report, or reply "
                    "with it.")
+DYNASTY_TEAMS = "In redraft, keeper and dynasty leagues? One plan covers up to 3 teams."
+DYNASTY_TRADE = ("Weighing a trade? Your plan's Trade Check shows what it does to this week's "
+                 "lineup and your byes. It doesn't say what the players are worth long term.")
 DYNASTY_LINK = "Dynasty or keeper league? See what you get"
 DYNASTY_PASS = "Everyone in your league in? The League Pass gives every manager their own report."
 
@@ -500,6 +503,8 @@ def dynasty_page() -> str:
     <p>{esc(DYNASTY_NO_SYNC)}</p>
 
     <div class="cta">{_ask(DYNASTY)}<a class="btn ghost" href="../sample-report.html">See a real report</a></div>
+    <p>{esc(DYNASTY_TEAMS)}</p>
+    <p>{esc(DYNASTY_TRADE)}</p>
     <p><a href="../league-pass.html">{esc(DYNASTY_PASS)}</a></p>
     <p><a href="../how-it-works.html">How the report works</a>, section by section.</p>
     <p>Works with rosters from {apps} or any other app.</p>

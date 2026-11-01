@@ -252,6 +252,9 @@ still open one. Make three new links and switch the old ones off.
    shows as you paste — normal; never your Mac password).
    - Success: an `[ok ]` line for each of the two links, then a line saying they are all
      set and verified.
+   - Leave Stripe's "Limit customers to one subscription" setting **off** on both links. Extra
+     teams need no second purchase, but a fourth team or a League Pass on the same email does,
+     and that setting would turn the purchase away.
    - `You cannot use custom_text with Managed Payments`: that link still has it on.
    - `HTTP 401`: the key was cut off. `HTTP 403`: it lacks Payment Links **Write**.
    - No key to reveal? Make a restricted key with Payment Links **Write**, everything else None.

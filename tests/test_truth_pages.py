@@ -266,7 +266,7 @@ def test_thanks_holds_six_paper_cards_and_one_button() -> None:
     assert "font-size:13px" in kicker and "color:var(--slate)" in kicker
     assert page.count("<li ") + page.count("<li>") >= 3
     block = page.split('<div class="nextsteps" id="next-steps"')[1].split("\n    </div>")[0]
-    assert block.count("nextcard") == 3 and block.count('class="btn') == 1
+    assert block.count("nextcard") == 4 and block.count('class="btn') == 1
     assert '<button type="button" class="btn gold" id="friend-share">Send it to them</button>' in block
     numbers = re.findall(r'<h2><span class="n">(\d\d)</span>', page)
     assert numbers == ["01", "02", "03"]

@@ -387,6 +387,11 @@ held for a season not yet delivered. `run/economics.py`'s honest view: the prepa
 a $39 2027 re-buy below a re-buy rate of about 77%, above the model's own 30–70%; watch
 it against that.
 
+**A plan covers up to 3 teams (owner decision, Nov 1 2026).** Priced by teams, never by league
+type or sport. Extra teams are added after purchase, so checkout stays one decision. A bigger plan
+comes only once buyers ask for a fourth team. `run/plans.py` holds the catalogue and the year-round
+switch, which can't bill a month with nothing in it.
+
 **At checkout, still exactly one decision:** Season Pass **$39** shown beside **$14.99/mo**.
 Refunds no-questions until the buyer's first weekly report's week kicks off (the second report's
 until Oct 30 2026, "through Week 2" until Sep 29 2026 — see the refund-cycling note below). Monthly moved from $9.99 to $14.99 because

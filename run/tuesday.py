@@ -70,6 +70,8 @@ from run.solo import (CACHE_DIR, SeasonOver, SoloError, WeekData, _prior_form,
                        season_over, week_has_kicked_off, week_one_due)
 from run.saturday import (PLANS_DIR, build_plan, first_plans_dir, plan_setup,
                           write_plan)
+from run.plans import TEAMS_INCLUDED
+from run.teams import DEFAULT_LABEL, add_team_url, team_counts, teams_held
 from run.updates import public_update_url
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
 from run.watchdog import NOT_CONFIGURED_NOTE, TUESDAY, mark_run, not_configured
@@ -123,7 +125,8 @@ class RunResult:
 def subscriber_meta(subscriber: RosterSubscriber,
                     seat_counts: Mapping[str, int] | None = None,
                     seat_link: str | None = None,
-                    seat_cap: int | None = None) -> dict:
+                    seat_cap: int | None = None,
+                    teams: Mapping[str, int] | None = None) -> dict:
     """What a report says about the SUBSCRIPTION rather than the week:
 
     - ``plan`` (contract C1): season | monthly | pass | league_pass — from the
@@ -138,8 +141,21 @@ def subscriber_meta(subscriber: RosterSubscriber,
       subscriber can see which roster the report read.
     - ``seat_link`` (C4), in a pass league only (payer or seat): the league's
       own seat link, so a report forwarded to the group chat points a
-      leaguemate at the seat already paid for, never the $39 checkout."""
+      leaguemate at the seat already paid for, never the $39 checkout.
+    - ``team_given``: the name the subscriber chose for this team, which leads
+      the subject and the masthead.
+    - ``teams`` on a subscription's report (never a seat): how many of its
+      ``TEAMS_INCLUDED`` it holds, and the link to add one."""
     meta: dict = {"plan": subscriber.report_plan}
+    if subscriber.label and subscriber.label != DEFAULT_LABEL:
+        meta["team_given"] = subscriber.label
+    if subscriber.subscription_ids and not subscriber.is_league_seat:
+        meta["teams"] = {"held": teams_held(subscriber, teams or {}),
+                         "cap": TEAMS_INCLUDED,
+                         "add_url": add_team_url(
+                             os.environ.get("SITE_URL", ""),
+                             os.environ.get("UPDATE_SECRET", ""),
+                             os.environ.get("FORM_ENDPOINT", ""), subscriber)}
     if subscriber.league_type != "redraft":
         meta["league_type"] = subscriber.league_type   # the masthead's label
     if subscriber.one_time:
@@ -209,7 +225,8 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    seat_counts: Mapping[str, int] | None = None,
                    seat_link: str | None = None,
                    seat_cap: int | None = None,
-                   early_look: bool = False) -> RunResult:
+                   early_look: bool = False,
+                   teams: Mapping[str, int] | None = None) -> RunResult:
     """One roster's week: build, write the archive, prepare the email.
 
     ``early_look``: a buyer between Monday night's game and Wednesday's run.
@@ -243,7 +260,7 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # carries (render/report.season_end_lines); with it ride the pass
         # payer's seat count and the day the roster was set.
         report["meta"].update(subscriber_meta(subscriber, seat_counts, seat_link,
-                                              seat_cap))
+                                              seat_cap, teams))
         if early_look:
             report["meta"]["early_look"] = True
         # The link carries this subscription's own scoring, size and lineup
@@ -252,6 +269,10 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         report["meta"]["update_url"] = public_update_url(
             os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
             os.environ.get("FORM_ENDPOINT", ""), roster=subscriber)
+        # The Trade Check is the same link with its own word: a paid plan only.
+        if report["meta"]["update_url"] and not subscriber.is_league_seat:
+            report["meta"]["trade_url"] = report["meta"]["update_url"].replace(
+                "?update=1", "?trade=1", 1)
         # The Receipts are THIS subscriber's calls (engine/own_record.py),
         # never the shared preset ledger counted as if it were theirs. With no
         # plans stored yet it is the honest empty state.
@@ -610,11 +631,12 @@ def main(argv: list[str] | None = None) -> int:
     seat_counts = {key: len(seats)
                    for key, seats in league_pass_seats(subscribers).items()}
     payers = {s.pass_key: s for s in subscribers if s.is_pass_payer and s.pass_key}
+    held_teams = team_counts(subscribers)
     results = [run_subscriber(s, data, template_html, out_dir=args.out,
                               processed_dir=args.processed_dir, record=sending,
                               plans_dir=args.plans_dir or PLANS_DIR,
                               first_plans=first_plans_dir(args.registry),
-                              seat_counts=seat_counts,
+                              seat_counts=seat_counts, teams=held_teams,
                               seat_link=league_seat_link(s, payers),
                               seat_cap=pass_seat_cap(s, payers))
                for s in subscribers if s.key not in done]

@@ -28,6 +28,8 @@ PRIVACY_VERSIONS = [
     # And, still before it was published: the free bye-week planner (what it
     # keeps in its own address, its waitlist row and its two counted steps).
     ("2026-10-25", "9b76a92788b6df6f"),
+    # Extra teams and team names (owner decision): what we keep when you add one.
+    ("2026-11-01", "a05c28e94cf04dc7"),
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "0d5cce06d12dd87c"),
@@ -45,6 +47,9 @@ TERMS_VERSIONS = [
     # no founding rate or 2027 price. No buyer had accepted any version, and a date
     # can only move forward, so the digest was replaced, not appended.
     ("2026-10-31", "33112ce6ea3b7719"),
+    # A plan covers up to 3 teams (owner decision). No buyer had ever paid, so no
+    # change notice was owed.
+    ("2026-11-01", "b08058e9c2d62a8b"),
 ]
 
 _DATE = re.compile(r"Last updated (\d{1,2} [A-Z][a-z]+ \d{4})\.")

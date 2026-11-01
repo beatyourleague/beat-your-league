@@ -69,6 +69,11 @@
  *   POST JSON  {kind:"update_request", email, ref, replaces?}  (confirm-by-
  *                                email, step 1; replaces = the link's &o= tag,
  *                                12 hex — run/updates.py origin_tag)
+ *   POST JSON  {kind:"team_add", email, ref, name?, owner?}  (another team on
+ *                                a subscription; like update_request it grants
+ *                                nothing until the inbox on file confirms it)
+ *   POST JSON  {kind:"trade_check", email, ref, owner?}  (the Trade Check; the
+ *                                answer goes only to an address on a plan)
  *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code —
  *                                for a roster request OR a seat claim; the
  *                                intake knows which by recomputing both)
@@ -162,6 +167,9 @@ const SLUG = /^[0-9a-f]{10}$/;
 // kind:"update" carries; a 10-hex test here dropped every report link's tag
 // (pre-launch review APPSEC-5).
 const ORIGIN_TAG = /^[0-9a-f]{12}$/;
+// A team's name (run/teams.py clean_name, same rule on the join page). It lands
+// in an email subject, so no line break or markup can get through.
+const TEAM_NAME = /^[A-Za-z0-9][A-Za-z0-9 '&.\-]{0,23}$/;
 const TOKEN = /^[0-9a-f]{20}$/;
 const CODE = /^[0-9a-f]{24}$/;
 const VIA = /^[a-z0-9-]{1,24}$/;
@@ -174,7 +182,7 @@ const ROW_TTL_SECONDS = 400 * 24 * 60 * 60;
 const SHORT_ROW_TTL_SECONDS = 30 * 24 * 60 * 60;
 // Every kind a row may be. Anything else is refused: an unknown kind used to
 // be stored as a seat.
-const KINDS = ["seat", "update", "update_request", "confirm", "trial", "waitlist"];
+const KINDS = ["seat", "update", "update_request", "team_add", "trade_check", "confirm", "trial", "waitlist"];
 // One row per (kind, mailbox, UTC day) for these two — see the header.
 const ONE_A_DAY = ["trial", "waitlist"];
 // Where a POST may come from, besides the site's own SITE_ORIGIN.
@@ -253,7 +261,19 @@ function sanitizeKind(body) {
     // it picks which of the address's teams, never authorises one. A
     // malformed slug is dropped, never refused — the intake can still choose.
     const replaces = String(body.replaces || "").trim().toLowerCase();
-    return ORIGIN_TAG.test(replaces) ? { kind, email, ref, replaces } : { kind, email, ref };
+    return { kind, email, ref,
+             ...(ORIGIN_TAG.test(replaces) ? { replaces } : {}), ...teamName(body) };
+  }
+  if (kind === "team_add") {
+    // Grants nothing either. `owner` is the report link's &o=: which of the
+    // address's subscriptions, never proof of one. A malformed one is dropped.
+    const owner = String(body.owner || "").trim().toLowerCase();
+    return { kind, email, ref,
+             ...(ORIGIN_TAG.test(owner) ? { owner } : {}), ...teamName(body) };
+  }
+  if (kind === "trade_check") {
+    const owner = String(body.owner || "").trim().toLowerCase();
+    return { kind, email, ref, ...(ORIGIN_TAG.test(owner) ? { owner } : {}) };
   }
   if (kind === "seat") {
     // A seat names its pass ONLY by the per-pass seat link's `pass_token`
@@ -274,6 +294,12 @@ function sanitizeKind(body) {
   const token = String(body.token || "").trim();
   if (!TOKEN.test(token) || (replaces && !SLUG.test(replaces))) return null;
   return replaces ? { kind, email, ref, replaces, token } : { kind, email, ref, token };
+}
+
+// An unusable name is dropped, never refused: a team needs no name.
+function teamName(body) {
+  const name = String(body.name || "").trim().replace(/\s+/g, " ");
+  return TEAM_NAME.test(name) ? { name } : {};
 }
 
 function sanitize(body) {

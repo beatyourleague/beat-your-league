@@ -1243,6 +1243,10 @@ FLOWS = (
     ("roster update (report link)", "open", "?update=1&s=half_ppr&n=10&t=sf",
      "update_request", None),
     ("roster update (bare link)", "open", "?update=1", "update_request", None),
+    # Another team on a plan (run/teams.py): no payment, one row for the inbox
+    # on file to confirm.
+    ("add a team", "open", "?add=1&league=dynasty", "team_add", None),
+    ("trade check", "open", "?trade=1&s=half_ppr&n=10&t=sf", "trade_check", None),
     ("closed checkout", "closed", "", "waitlist", None),
 )
 # Boxes a buyer must tick in a mode before its button posts anything.
@@ -2130,7 +2134,7 @@ def _env(name: str, value: str | None) -> Iterator[None]:
 # A transactional reply to the reader's own request, with no ask in it and no
 # list behind it: the roster-change confirmation. Exempt from both checks, as
 # tests/test_email_safety.py exempts it.
-TRANSACTIONAL = ("roster confirmation",)
+TRANSACTIONAL = ("roster confirmation", "team confirmation", "team plan full", "trade check")
 WAY_OUT = re.compile(r"cancel|reply \"stop\"|only email we.ll send you|unsubscrib", re.I)
 
 
@@ -2187,8 +2191,10 @@ def other_email_samples(season: str) -> list[tuple[str, str, str | None]]:
     from render.roster_update import confirm_email
     from render.seat_claim import confirm_email as seat_confirm_email
     from render.seat_claim import full_email, unmatched_email
+    from render.team_mail import team_confirm_email, team_full_email
+    from render.trade_mail import TRADE_SAMPLE, trade_email
     from render.welcome import welcome_message
-    from run.refs import encode_roster
+    from run.refs import decode_roster, encode_roster
     from run.waitlist import messages
     import render.live_sample as live_sample
     import render.sample as sample
@@ -2215,6 +2221,14 @@ def other_email_samples(season: str) -> list[tuple[str, str, str | None]]:
             ("seat confirmation",
              seat_confirm_email("https://example.com/join/confirm.html?c=" + "a" * 24
                                 + "&k=seat", ["A", "B"])[1], seat_stop_href())]
+    team = decode_roster(encode_roster("monthly", "ppr", sample.SLOTS, list(live_sample.LIVE_ROSTER),
+                                       league_size=12, league_type="dynasty"))
+    out += [("team confirmation",
+             team_confirm_email("https://example.com/join/confirm.html?c=" + "a" * 24 + "&k=team",
+                                ["A", "B"], team, "Work league")[1], None),
+            ("team plan full", team_full_email()[1], None),
+            ("trade check", trade_email(TRADE_SAMPLE, "Work league",
+                                        "https://example.com/join/?update=1")[1], None)]
     msg = messages(["a@example.com"], "https://example.com/join/")[0]
     out.append(("launch announcement", msg.html, msg.unsubscribe))
     ref = encode_roster("season", "ppr", sample.SLOTS, list(live_sample.LIVE_ROSTER),
@@ -2695,7 +2709,8 @@ def count_recipients(registry: Path | None = None) -> tuple[int, int] | str:
                                          season, since=since))
         except Exception:  # noqa: BLE001 — subscribers alone still answer the question
             pending = 0
-    return len({s.email for s in subscribers}), pending
+    # Rows, not addresses: every team gets its own report.
+    return len(subscribers), pending
 
 
 def check_volume() -> list[Gate]:

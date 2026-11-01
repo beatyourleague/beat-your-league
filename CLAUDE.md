@@ -1401,6 +1401,47 @@ channel tag gives way before the roster does. A 40-player report built at about 
 off-season products come later: a one-off rookie report after the NFL Draft is the test, folded
 into the membership once there are enough months to bill for.
 
+**A plan covers up to 3 teams (owner decision, Nov 1 2026).** A membership is priced by teams,
+never by league type or sport, because the market prices by league count (FantasyPros: 2, 10 or 50
+leagues per sport) and three separate plans at $44.97 was out of line. `run/plans.py` is the
+catalogue: `TEAMS_INCLUDED`, `SPORTS` (each with the months it delivers), `EXTRAS`, and
+`YEAR_ROUND_BILLING`. Adding a sport or an off-season product starts there. How a team works
+(`run/teams.py`, `render/team_mail.py`, `join/?add=1`):
+- **The first team comes through checkout; the others come through the add page**, at no charge.
+  A team is a registry row naming the SAME Stripe subscription, so entitlement (D2), a cancel, a
+  refund, a lost dispute and the season stop all reach every team without a line of new code, and
+  the billing page shows one purchase. That is the point of the design: no second Stripe object.
+- **A request grants nothing.** The intake mails the address on the subscription, and the team
+  exists when that inbox presses the button (`team-log.jsonl`, sealed with the registry). An
+  address with no live subscription gets silence, so the page can't reveal who subscribes.
+  Stripe unreadable: requests wait. Confirmation emails share the roster update's daily allowance.
+- **The fourth team is told no by email, nothing charged.** Swapping is a roster update on a team.
+  A second plan on the address carries three more. Same roster and settings = one report (LP2-D1),
+  but the same players as keeper and redraft are two teams, because a league type is a setting.
+- **Teams can be named** (`label`, `clean_name`: 24 characters, no line break or markup, same rule
+  in Python, the Worker and the page). A name leads the subject and masthead, set on the add page
+  or through a roster update (`latest_names`, so a later update without a name keeps it).
+- **A pass buyer may add teams too, as monthly rows**, never as second passes; a seat is one team.
+- **Year-round billing is a switch with a condition.** `bills_all_year()` is True only when
+  `YEAR_ROUND_BILLING` is on AND `empty_months()` is empty, so the switch alone can't bill a month
+  with nothing in it (PLAN §4). A refund still ends a plan either way. Turning it on also needs
+  new words on every page that says a plan won't renew after Week 16's report, and in terms §3.
+- `RosterSubscriber.sport` is validated against `SPORTS` and defaults to football. `make stats`
+  prints teams per plan: that count decides when a bigger plan or a member page is worth building.
+
+**The Trade Check (`run/trades.py`, `render/trade_mail.py`, `join/?trade=1`, Nov 1 2026).** Included
+in a plan, because it costs almost nothing to run. A subscriber pastes the roster as it would stand
+after a deal; the hourly `daily.yml` step runs the report twice through the same model and emails
+the gap, the slots that change, the byes that empty a spot before and after, and how the players
+moving have scored. **No verdict, no %, nothing recorded, and no roster changes.** A rest-of-season
+value has never been graded, and we can't see the other team or the league, so it never says
+whether to make the deal. `report_for` is the only source of a figure; the points gap is the
+difference between rows the two reports printed. The team's own scoring, size and lineup are used,
+never what was left on the page. Only an address on an entitled plan is answered, a seat is not, a
+paste sharing under half of the team isn't a trade (this must not become a free report on a
+friend's team), three a day per address, and it yields to paid mail. Pages must keep saying it
+doesn't value trades long term: that line on the dynasty page stays true.
+
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
 30. You lost by four." and its answer is "Don't make that call alone.": it names the decision we
 sell, and it must never hint the report would have started the 30-point player, because no

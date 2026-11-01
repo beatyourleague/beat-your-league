@@ -219,6 +219,8 @@ class RosterUpdate:
     # it was fixed for confirmed ones).
     nonce: str = ""
     request_ts: str = ""
+    # The name the subscriber gave this team, on a request that set one.
+    name: str = ""
 
     @property
     def key(self) -> tuple[str, str, str, str]:
@@ -424,6 +426,12 @@ def latest_per_target(log: Iterable[RosterUpdate]) -> dict[tuple[str, str], Rost
     return latest
 
 
+def latest_names(log: Iterable[RosterUpdate]) -> dict[tuple[str, str], str]:
+    """(address, slug) -> the newest name a confirmed update gave that team.
+    Most updates name nothing and must not wipe a name given earlier."""
+    return {(u.email.lower(), u.replaces): u.name for u in log if u.name}
+
+
 def apply_updates(rows: list[dict], latest: Mapping[tuple[str, str], RosterUpdate],
                   since: Mapping[tuple[str, str], datetime] | None = None,
                   ) -> tuple[list[dict], int]:
@@ -538,12 +546,16 @@ class PendingRequest:
     ref: str
     code: str
     ts: str = ""
+    name: str = ""
 
 
-def confirm_code(email: str, replaces: str, ref: str, secret: str, ts: str = "") -> str:
+def confirm_code(email: str, replaces: str, ref: str, secret: str, ts: str = "",
+                 name: str = "") -> str:
     if not secret:
         raise ValueError("a confirmation code needs a secret")
-    message = f"confirm|{email.strip().lower()}|{replaces}|{ref}|{ts}"
+    # A name is part of what is confirmed; without one the code is unchanged.
+    message = (f"confirm|{email.strip().lower()}|{replaces}|{ref}|{ts}"
+               + (f"|{name}" if name else ""))
     return hmac.new(secret.encode("utf-8"), message.encode("utf-8"),
                     hashlib.sha256).hexdigest()[:CONFIRM_CODE_LENGTH]
 
@@ -713,14 +725,26 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
                         if str(r.get("email", "")).lower() == email
                         and str(r.get("origin") or slug_of(str(r.get("ref", "")))) == replaces),
                        None)
-        if current is not None and same_roster(str(current.get("ref", "")), ref):
+        from run.teams import clean_name
+        name = clean_name(row.get("name"))
+        if (current is not None and same_roster(str(current.get("ref", "")), ref)
+                and (not name or name == current.get("label"))):
             continue                       # nothing would change
-        code = confirm_code(email, replaces, ref, secret, ts)
+        # One address, one roster, one report (LP2-D1). Two rows with one ref
+        # collide at the writer, which would drop the older of them, and that
+        # row may be the League Pass itself.
+        if any(same_roster(str(r.get("ref", "")), ref) for r in registry_rows
+               if str(r.get("email", "")).lower() == email
+               and str(r.get("origin") or slug_of(str(r.get("ref", "")))) != replaces):
+            problems.append(f"a roster update request for {_mask(email)} repeats another "
+                            f"of their teams — not sent")
+            continue
+        code = confirm_code(email, replaces, ref, secret, ts, name)
         if now - when > timedelta(days=EXPIRY_DAYS) and not (
                 code in pressed
                 and pressed[code] - when <= timedelta(days=EXPIRY_DAYS)):
             continue
-        live.append(PendingRequest(email, replaces, ref, code, ts))
+        live.append(PendingRequest(email, replaces, ref, code, ts, name))
     pending = [r for r in live
                if r.ts > applied.get((r.email, r.replaces), "")]
     # The daily cap, by the Worker's own date, oldest first — deterministic.
@@ -748,7 +772,7 @@ def confirmed_updates(pending: Iterable[PendingRequest],
     codes = {str(r.get("code") or "").strip().lower() for r in confirm_rows}
     stamp = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
     return [RosterUpdate(email=p.email, replaces=p.replaces, ref=p.ref, seen_at=stamp,
-                         nonce=p.code, request_ts=p.ts)
+                         nonce=p.code, request_ts=p.ts, name=p.name)
             for p in sorted(pending, key=lambda r: r.ts) if p.code in codes]
 
 

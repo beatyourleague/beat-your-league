@@ -703,6 +703,10 @@ Baltimore Ravens
       </div>
       <label class="optlabel" id="lbl-email" for="email">Where reports go</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+      <div id="team-name-wrap" style="display:none">
+        <label class="optlabel" for="team-name">Team name (optional)</label>
+        <input type="text" id="team-name" maxlength="24" placeholder="Work league" autocomplete="off">
+      </div>
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
       <!-- The short form: price, renewal and how to stop, then the refund and
            its limit. Every detail stays in terms.html, at Stripe and in the
@@ -783,6 +787,8 @@ Baltimore Ravens
   <ul>
     <li><span id="side-first"><b>A report the day you join</b>, then a new one every Wednesday evening</span></li>
     <li><span>Every slot decided for <b>your roster</b> and scoring</span></li>
+    <li><span><b>Up to 3 teams</b> on one plan: redraft, keeper or dynasty. Add the others
+      after you join, at no extra charge</span></li>
     <li><span>An <b>if/then plan</b> for injury news, and a <b>Saturday check</b> when it
       changes your lineup</span></li>
     <li><span><b>Byes ahead</b> flagged, playoff weeks included</span></li>
@@ -891,6 +897,8 @@ const NOTIFY_LIST_ENDPOINT = "";
 // roster; the Worker refuses a free-report row while its own switch is off,
 // and this page once told every such visitor to check their address for typos.
 const TRIAL_OPEN = false;
+// How many teams one plan covers (run/plans.py TEAMS_INCLUDED, held by test).
+const TEAMS_INCLUDED = 3;
 // The project inbox (Cloudflare Email Routing), never a personal address.
 const CONTACT_EMAIL = "hello@beatyourleague.com";
 // The League Pass is for sale only while its seats can be claimed. Seats
@@ -955,7 +963,7 @@ const SOURCE = VIA || (RESTORED && RESTORED.via) || undefined;
 // ?plan=monthly | ?plan=pass — which card they came from. Anything else is the
 // Monthly plan. A restored roster comes back as the plan it was saved under,
 // whatever ?plan= says: the ref is the choice made LAST (FUNNEL F8).
-const RESTORED_PLAN = RESTORED && !QUERY.has("pass") && !QUERY.has("update") && !QUERY.has("try")
+const RESTORED_PLAN = RESTORED && !QUERY.has("pass") && !QUERY.has("update") && !QUERY.has("add") && !QUERY.has("try")
   ? ({ monthly: "monthly", league_pass: "pass" })[RESTORED.plan] || "" : null;
 const PLAN_PARAM = RESTORED_PLAN !== null ? RESTORED_PLAN : QUERY.get("plan") || "";
 const WANTS_PASS = PLAN_PARAM === "pass";
@@ -976,7 +984,7 @@ const SEAT_LINK_MISSING = SEAT_MODE && !PASS_TOKEN;
 // a click on $14.99 never lands on $49. Only a purchase has this choice. The
 // submit handler reads this, never the URL.
 const PLAN_CHOICE = SEASON_2027_READY && !WANTS_PASS && !SEAT_MODE &&
-  !QUERY.has("update") && QUERY.get("try") !== "1";
+  !QUERY.has("add") && !QUERY.has("update") && QUERY.get("try") !== "1";
 let chose2027 = PLAN_CHOICE && PLAN_PARAM !== "monthly";
 
 // Say checkout is closed BEFORE someone pastes fifteen names, not after. The
@@ -1014,7 +1022,15 @@ const TOKEN_UPDATE = /^[0-9a-f]{10}$/.test(UPDATE_SLUG) &&
 // subscription and that inbox presses the button (run/updates.py).
 // One mode wins, and the UI and the submit handler read the SAME flags: a URL
 // carrying both ?pass and ?update showed the update UI and posted a seat claim.
-const UPDATE_MODE = !SEAT_MODE && (TOKEN_UPDATE || QUERY.has("update"));
+// ?add=1 — another team on a plan that already exists (run/teams.py). It is an
+// update in everything but its words and its row: no payment, no sales panel,
+// and nothing happens until the inbox on file presses the button.
+const ADD_MODE = !SEAT_MODE && !TOKEN_UPDATE && !QUERY.has("update") && QUERY.get("add") === "1";
+// ?trade=1 — the Trade Check (run/trades.py): the roster as it would stand after
+// a deal, answered by email. Nothing on the plan changes.
+const TRADE_MODE = !SEAT_MODE && !TOKEN_UPDATE && !QUERY.has("update") && !ADD_MODE &&
+  QUERY.get("trade") === "1";
+const UPDATE_MODE = !SEAT_MODE && (TOKEN_UPDATE || QUERY.has("update") || ADD_MODE || TRADE_MODE);
 // &o=<slug> — the update link names the subscription it came from (D13), so a
 // subscriber with more than one team changes the one whose report they were
 // reading. Posted as ``replaces``; it picks a team, never authorises one — the
@@ -1036,6 +1052,8 @@ window.bylPage = SEAT_MODE || UPDATE_MODE ? "other" : TRY_MODE ? "join-try"
 // markup keeps the default, so a page whose script never runs still reads
 // right for the visit most people make.
 const HEADING = SEAT_MODE ? "Claim your seat"
+              : ADD_MODE ? "Add a team"
+              : TRADE_MODE ? "Check a trade"
               : UPDATE_MODE ? "Update your roster"
               : TRY_MODE ? (FORM_ENDPOINT && TRIAL_OPEN ? "Get a free report" : "Free reports open soon")
               : WANTS_PASS ? "Cover your whole league" : "";
@@ -2376,10 +2394,20 @@ function seatLinkMissingWords() {
     "welcome email and on their weekly reports.";
 }
 
+// run/teams.py clean_name, and the Worker's TEAM_NAME.
+const TEAM_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 '&.\-]{0,23}$/;
+
 function submitUpdate(email, ref) {
   if (!FORM_ENDPOINT) {
-    showError("err-email", "Roster updates aren't open yet. We're finishing " +
-      "setup. Nothing was sent or saved.");
+    showError("err-email", (ADD_MODE ? "Adding teams isn't" :
+                            TRADE_MODE ? "The Trade Check isn't" : "Roster updates aren't") +
+      " open yet. We're finishing setup. Nothing was sent or saved.");
+    return;
+  }
+  const teamName = $("team-name").value.trim().replace(/\s+/g, " ");
+  if (teamName && !TEAM_NAME_RE.test(teamName)) {
+    showError("err-email", "Keep the team name under 24 characters, with letters, " +
+      "numbers and spaces.");
     return;
   }
   // The settings ride in the ref and replace the ones on file (FUNNEL F1).
@@ -2393,8 +2421,12 @@ function submitUpdate(email, ref) {
     body: JSON.stringify(TOKEN_UPDATE
       ? { kind: "update", email: email, ref: ref,
           replaces: UPDATE_SLUG, token: UPDATE_TOKEN }
-      : UPDATE_ORIGIN ? { kind: "update_request", email: email, ref: ref, replaces: UPDATE_ORIGIN }
-      : { kind: "update_request", email: email, ref: ref }),
+      : ADD_MODE ? { kind: "team_add", email: email, ref: ref, name: teamName,
+                     owner: UPDATE_ORIGIN }
+      : TRADE_MODE ? { kind: "trade_check", email: email, ref: ref, owner: UPDATE_ORIGIN }
+      : UPDATE_ORIGIN ? { kind: "update_request", email: email, ref: ref, replaces: UPDATE_ORIGIN,
+                          name: teamName }
+      : { kind: "update_request", email: email, ref: ref, name: teamName }),
     signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw refusedBy(response);
@@ -2925,9 +2957,31 @@ if (TRY_MODE) {
   $("renew-note").style.display = "none";
   $("terms-line").style.display = "none";
   if (FORM_ENDPOINT) { $("closed-note").style.display = "none"; }
-  else { closedUpFront("Roster updates"); }
+  else {
+    closedUpFront(ADD_MODE ? "Extra teams" : TRADE_MODE ? "Trade checks" : "Roster updates");
+  }
   $("first-note").style.display = "none";
   $("update-note").style.display = "list-item";
+  $("team-name-wrap").style.display = TRADE_MODE ? "none" : "block";
+  if (TRADE_MODE) {
+    $("header-pitch").textContent =
+      "Paste your roster as it would look after the trade. We'll email you what it does " +
+      "to this week's lineup and your byes. It's included in your plan, and nothing on " +
+      "your plan changes.";
+    $("submit").textContent = "Check this trade";
+    $("update-note").textContent = "If this is the address your reports go to, the answer " +
+      "usually lands within the hour. Up to three a day.";
+  }
+  if (ADD_MODE) {
+    $("header-pitch").textContent =
+      "Your plan covers up to " + TEAMS_INCLUDED + " teams at no extra charge. Paste " +
+      "this team's roster and set its league. Enter the address your reports go to " +
+      "and we'll email it a button to confirm.";
+    $("submit").textContent = "Add this team";
+    $("update-note").textContent = "If this is the address your reports go to, you'll " +
+      "get an email with a button. Press it and the team is added, usually within the " +
+      "hour. Nothing is charged.";
+  }
 } else if (SEAT_MODE) {
   // Whoever bought the pass, not necessarily the commissioner (LP-D7): the
   // League Pass page sells it to any manager, and this page once sent their
@@ -3100,6 +3154,20 @@ function settingsFromLink() {
 // are confirmed by the box too.
 let UPDATE_SETTINGS_FROM_LINK = false;
 function prefillUpdateSettings() {
+  // A new team has no settings on file to replace, so there is nothing to vouch for.
+  if (ADD_MODE) {
+    settingsFromLink();
+    UPDATE_SETTINGS_FROM_LINK = true;
+    showSettings(true);
+    return;
+  }
+  // A trade check reads the team's own settings from the registry (run/trades.py).
+  if (TRADE_MODE) {
+    settingsFromLink();
+    UPDATE_SETTINGS_FROM_LINK = true;
+    $("settings-intro").hidden = true;
+    return;
+  }
   const told = RESTORED ? [] : settingsFromLink();
   UPDATE_SETTINGS_FROM_LINK = told.length === 3;
   $("update-settings").textContent = UPDATE_SETTINGS_FROM_LINK

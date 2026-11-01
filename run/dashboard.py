@@ -432,12 +432,15 @@ def collect_registry(ctx: Context) -> Source:
         return _source("registry", status="error", note=redact(exc))
     names = {"season": "Pass holders", "monthly": "Monthly", "pass": "League Pass buyers",
              "league_pass": "League Pass seats", "season_2027": "2027 Season Pass holders"}
-    plans = Counter(names.get(s.report_plan, s.report_plan) for s in rows)
+    # One subscription is one plan, however many teams it carries.
+    plan_rows = {(s.subscription_ids[0] if s.subscription_ids else s.slug): s for s in rows}
+    plans = Counter(names.get(s.report_plan, s.report_plan) for s in plan_rows.values())
     payers = {s.pass_key: s for s in rows if s.is_pass_payer and s.pass_key}
     seats = Counter(s.pass_key for s in rows if s.is_league_seat and s.pass_key)
     filled = sorted(((seats.get(k, 0), max(0, int(p.league_size))) for k, p in payers.items()),
                     key=lambda t: (-t[0], -t[1]))
-    return _source("registry", data={"total": len(rows), "plans": dict(plans),
+    return _source("registry", data={"total": len(plan_rows), "teams": len(rows),
+                                     "plans": dict(plans),
                                      "seats": filled,
                                      "setups": dict(Counter(f"{s.scoring}/{s.league_size}"
                                                             for s in rows))},

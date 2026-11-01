@@ -93,15 +93,21 @@ from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
                       is_roster_ref)
 from run.updates import (UPDATE_LOG_NAME, PendingRequest, append_update_log,
                          applied_request_ts, apply_updates, confirm_url,
-                         confirmation_key, confirmed_updates, latest_per_target,
-                         load_update_log, seat_token, seat_url, slug_of,
+                         confirmation_key, confirmed_updates, latest_names,
+                         latest_per_target, load_update_log, seat_token, seat_url,
+                         slug_of,
                          validate_requests, validate_updates)
 from run.rosters import (_EMAIL_RE, MONTHLY, PASS_BILLING, SEASON, SEASON_2027,
                          RosterRegistryError, drop_unloadable, load_rosters)
+from render.team_mail import team_added_message, team_confirm_email, team_full_email
 from render.welcome import welcome_message
 from run.delivery import DRY_PROVIDER, build_provider, send_all
+from run.plans import TEAMS_INCLUDED
 from run.solo import CACHE_DIR, SoloError, load_week_data, spec_from_ref
 from run.subscriptions import SubscriptionError
+from run.teams import (DEFAULT_LABEL, TEAM_LOG_NAME, PendingTeam, TeamEntry, TeamSweep,
+                       add_names, append_team_log, load_team_log, sweep_teams,
+                       team_confirm_url, team_counts, team_mail_key, team_row_open)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_DIR = REPO_ROOT / "data" / "registry"
@@ -665,7 +671,8 @@ def _subscription_id(session: dict) -> str | None:
 # (render/welcome.py) while it is the newest. When the terms move, APPEND the
 # new date here — tests/test_promises_billing.py fails while TERMS_VERSION is
 # missing — and never edit an old one: a recorded consent names one of these.
-TERMS_HISTORY = ("2026-10-15", "2026-10-17", "2026-10-18", "2026-10-30", "2026-10-31")
+TERMS_HISTORY = ("2026-10-15", "2026-10-17", "2026-10-18", "2026-10-30", "2026-10-31",
+                 "2026-11-01")
 
 
 def terms_version_at(created: int) -> str | None:
@@ -855,7 +862,7 @@ def _encodable(row: Mapping) -> bool:
 
 # The form kinds this run reads (fetch_seats `kinds`): never the waitlist or
 # free-report rows, which other runners read and a flood would fill.
-INTAKE_KINDS = ("seat", "update", "update_request", "confirm")
+INTAKE_KINDS = ("seat", "update", "update_request", "team_add", "confirm")
 
 _SEAT_TOKEN = re.compile(r"^[0-9a-f]{20}$")
 # The intake's own record of every CONFIRMED seat claim, append-only beside
@@ -2107,6 +2114,46 @@ def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None,
                            purchased_at=str(signup.seen_at or ""), **extra)
 
 
+TEAM_SOURCE = "team"
+
+
+def team_signups(entries: Iterable[TeamEntry], parents: Iterable[RosterSignup],
+                 current: Mapping[tuple[str, str], str] | None = None) -> list[RosterSignup]:
+    """Confirmed teams as signups, so a team is written, welcomed and sent its
+    first report by the same code as a purchase. Each one names its parent's
+    subscription, which is all entitlement reads (run/subscriptions D2).
+
+    A pass buyer's extra team is a monthly row: it is not the league's pass,
+    carries no seats and needs no seat link. A team whose roster the address
+    has since BOUGHT as its own purchase gives way to the purchase (LP2-D1)."""
+    parents = list(parents)
+    owner = {sub: parent for parent in parents for sub in parent.own_subscriptions}
+    bought = {_content(parent, current) for parent in parents}
+    out: list[RosterSignup] = []
+    for entry in entries:
+        parent = owner.get(entry.subscription_id)
+        if parent is None:
+            continue
+        at = datetime.fromisoformat(entry.seen_at.replace("Z", "+00:00"))
+        team = RosterSignup(
+            email=parent.email, ref=entry.ref,
+            plan=parent.plan if parent.plan != LEAGUE_PASS else MONTHLY,
+            seen_at=str(int(at.timestamp())),
+            stripe_customer_id=parent.stripe_customer_id,
+            league_size=decode_roster(entry.ref).league_size,
+            label=entry.name or DEFAULT_LABEL,
+            source=TEAM_SOURCE, origin=entry.origin,
+            subscription_id=entry.subscription_id, season_2027=parent.season_2027,
+            # A parent folded from two purchases is served while either lives
+            # (D2), and so are its teams.
+            group_subscriptions=parent.group_subscriptions)
+        # As it stands now: a confirmed update moves a team's roster.
+        if _content(team, current) in bought:
+            continue
+        out.append(team)
+    return out
+
+
 def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
                    season: str,
                    duplicates: Mapping[tuple[str, str], str] | None = None,
@@ -2129,7 +2176,8 @@ def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
     newer one is where the person learns they hold two (``duplicates``).
     """
     messages = [_welcome(s, season, (duplicates or {}).get(s.key), season_over)
-                for s in [*servable, *seats]]
+                for s in [*servable, *seats] if s.source != TEAM_SOURCE]
+    messages += [team_added_message(s) for s in seats if s.source == TEAM_SOURCE]
     if not messages:
         return 0
 
@@ -2196,7 +2244,8 @@ def _send_confirmations(awaiting: list[PendingRequest], data,
         listed = [names.name(pid) for pid in roster.player_ids] if names is not None else []
         subject, html, text = confirm_email(confirm_url(site, request.code), listed,
                                             settings=roster,
-                                            on_file=_on_file(request, rows))
+                                            on_file=_on_file(request, rows),
+                                            name=request.name)
         messages.append(Message(to=request.email, subject=subject, html=html,
                                 text=text, key=confirmation_key(request)))
     provider = build_provider(None)
@@ -2211,6 +2260,52 @@ def _send_confirmations(awaiting: list[PendingRequest], data,
           f"{len(failures)} failed")
     for result in failures:
         print(f"    CONFIRMATION FAILED {result.message.key}: {result.detail}",
+              file=sys.stderr)
+    return len(failures)
+
+
+def _send_team_mail(sweep: TeamSweep, data) -> int:
+    """One email per request, ever, to the address on the subscription only:
+    a button for a team with room, a plain note for one without. Bounded by
+    the per-address allowance in run/teams.py."""
+    requests = [*sweep.pending, *sweep.full]
+    if not requests:
+        return 0
+    from run.delivery import Message
+
+    site = os.environ.get("SITE_URL", "")
+    if not site or not os.environ.get("UPDATE_SECRET", ""):
+        print(f"Team requests: {len(requests)} pending — SITE_URL or UPDATE_SECRET "
+              f"is not set, so none were sent.")
+        return 0
+    names = getattr(data, "players", None) if data is not None else None
+
+    def listed(request: PendingTeam) -> list[str]:
+        ids = decode_roster(request.ref).player_ids
+        return [names.name(pid) for pid in ids] if names is not None else []
+
+    messages = []
+    for request in sweep.pending:
+        subject, html, text = team_confirm_email(
+            team_confirm_url(site, request.code), listed(request),
+            decode_roster(request.ref), request.name)
+        messages.append(Message(to=request.email, subject=subject, html=html,
+                                text=text, key=team_mail_key("confirm", request)))
+    for request in sweep.full:
+        subject, html, text = team_full_email()
+        messages.append(Message(to=request.email, subject=subject, html=html,
+                                text=text, key=team_mail_key("full", request)))
+    provider = build_provider(None)
+    if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
+        print(f"Team requests: {len(messages)} pending — EMAIL_PROVIDER is not "
+              f"set, so none were sent.")
+        return 0
+    sends = send_all(messages, provider=provider)
+    failures = [r for r in sends if not r.ok]
+    print(f"Team requests via {provider.name}: "
+          f"{sum(r.ok and not r.skipped for r in sends)} sent, {len(failures)} failed")
+    for result in failures:
+        print(f"    TEAM MAIL FAILED {result.message.key}: {result.detail}",
               file=sys.stderr)
     return len(failures)
 
@@ -2283,13 +2378,15 @@ def subscriber_for(signup: RosterSignup):
         origin=signup.slug, roster_as_of=_purchase_day(signup.seen_at),
         pass_id=signup.pass_of if (plan == LEAGUE_PASS or billing == PASS_BILLING) else None,
         pass_customer=signup.pass_customer if plan == LEAGUE_PASS else None,
-        season_2027=signup.season_2027)
+        season_2027=signup.season_2027, label=signup.label,
+        subscription_ids=tuple(signup.own_subscriptions) if plan != LEAGUE_PASS else ())
 
 
 def _first_file(signup, data, season: str, processed_dir, record: bool = True,
                 out_dir: Path | None = None, sent: set[str] | None = None,
                 seat_counts: Mapping[str, int] | None = None,
-                payers: Mapping[str, Any] | None = None):
+                payers: Mapping[str, Any] | None = None,
+                teams: Mapping[str, int] | None = None):
     """The file a purchase earns, chosen by WHEN the purchase happened.
     -> the week's report as a ``run.tuesday.RunResult``, or None for the
     roster file.
@@ -2342,7 +2439,7 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
                                 seat_counts=seat_counts,
                                 seat_link=league_seat_link(subscriber, payers or {}),
                                 seat_cap=pass_seat_cap(subscriber, payers or {}),
-                                early_look=early)
+                                early_look=early, teams=teams)
         if result.ok and result.message is not None:
             return result
         # Fall through to the roster file rather than sending nothing.
@@ -2352,7 +2449,8 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
 def _send_first_files(servable: list[RosterSignup], data, season: str,
                       processed_dir=None, first_plans: Path | None = None,
                       out_dir: Path | None = None,
-                      seat_counts: Mapping[str, int] | None = None) -> int:
+                      seat_counts: Mapping[str, int] | None = None,
+                      teams: Mapping[str, int] | None = None) -> int:
     """The file they get for paying, on the day they pay. -> how many paid
     signups this run could not build or send one for (pre-launch review
     APPSEC-1: a quota-starved buyer's refused first report used to exit 0).
@@ -2423,7 +2521,7 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
         try:
             weekly = _first_file(signup, data, season, processed_dir, record=sending,
                                  out_dir=out_dir, sent=sent, seat_counts=seat_counts,
-                                 payers=payers)
+                                 payers=payers, teams=teams)
             if weekly is not None:
                 messages.append(weekly.message)
                 weeklies.append(weekly)
@@ -2431,7 +2529,7 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
                     plans[weekly.message.key] = weekly.plan
                 continue
             roster = signup.roster()
-            spec = spec_from_ref(roster)
+            spec = replace(spec_from_ref(roster), label=signup.label)
             report = build_preseason_report(
                 spec, data.directory, data.prior, season, CACHE_DIR,
                 season_started=getattr(data, "week", 1) > 1, byes=byes,
@@ -2528,6 +2626,21 @@ def _live_subscriptions(signups: list[RosterSignup], api_key: str,
         problems.append(f"could not tell which subscriptions are live, so one "
                         f"address's purchases of one roster were merged as "
                         f"logged ({exc})")
+        return None
+    return set(ids) if ids is not None else None
+
+
+def _team_live(team_rows: list[Mapping], api_key: str,
+               problems: list[str]) -> "set[str] | None":
+    """The subscriptions active right now, asked of Stripe only when somebody
+    has asked to add a team. None when it cannot be told: the requests wait."""
+    if not team_rows or not api_key:
+        return None
+    from run.subscriptions import SubscriptionError, load_paid_from_stripe
+    try:
+        ids = load_paid_from_stripe(api_key).subscription_ids
+    except SubscriptionError as exc:
+        problems.append(f"could not tell which subscriptions are live ({exc})")
         return None
     return set(ids) if ids is not None else None
 
@@ -2797,6 +2910,7 @@ def main(argv: list[str] | None = None) -> int:
     seats = SeatSweep()
     update_rows: list[dict] = []
     request_rows: list[dict] = []
+    team_rows: list[dict] = []
     confirm_rows: list[dict] = []
     secret = os.environ.get("UPDATE_SECRET", "")
     # SEC-4: whether the seat-link secret moved without the old one kept,
@@ -2848,6 +2962,7 @@ def main(argv: list[str] | None = None) -> int:
         update_rows = [r for r in form_rows if str(r.get("kind") or "") == "update"]
         request_rows = [r for r in form_rows
                         if str(r.get("kind") or "") == "update_request"]
+        team_rows = [r for r in form_rows if str(r.get("kind") or "") == "team_add"]
         confirm_rows = [r for r in form_rows if str(r.get("kind") or "") == "confirm"]
         seat_log = load_seat_log(seat_log_path)
         try:
@@ -2901,7 +3016,12 @@ def main(argv: list[str] | None = None) -> int:
               f"{seats.reset_released} released and {seats.reset_stale} old-link "
               f"claim(s) ignored by a buyer's seat reset")
 
-    candidate = to_rows(merged.signups) + seat_rows
+    # Extra teams (run/teams.py): logged ones are written like purchases, so an
+    # update reaches them and they count against their subscription.
+    team_log_path = registry_dir / TEAM_LOG_NAME
+    team_log = load_team_log(team_log_path)
+    teams = team_signups(team_log, merged.signups, current_refs)
+    candidate = to_rows(merged.signups) + to_rows(teams) + seat_rows
 
     # Self-serve roster UPDATES (run/updates.py). Validated against the rows
     # about to be written — a subscriber can only change a roster they hold —
@@ -2926,6 +3046,23 @@ def main(argv: list[str] | None = None) -> int:
         request_rows, current, known or None, secret,
         applied=applied_request_ts(base_log), confirm_rows=confirm_rows)
     problems.extend(request_problems)
+    # Asked only while a request can still be pressed: Stripe's whole list on
+    # every hourly run for a 30-day-old row would buy nothing.
+    open_rows = [r for r in team_rows if team_row_open(r, datetime.now(timezone.utc))]
+    team_sweep = sweep_teams(open_rows, current, known or None, secret,
+                             _team_live(open_rows, api_key, problems), team_log,
+                             confirm_rows)
+    problems.extend(team_sweep.problems)
+    if team_sweep.confirmed:
+        added_teams = team_signups(team_sweep.confirmed, merged.signups, current_refs)
+        teams.extend(added_teams)
+        candidate.extend(to_rows(added_teams))
+        if not args.dry_run:
+            append_team_log(team_sweep.confirmed, team_log_path)
+    if team_rows:
+        print(f"Teams: {len(team_sweep.confirmed)} added; {len(team_sweep.pending)} "
+              f"awaiting confirmation; {len(team_sweep.full)} past their plan's "
+              f"{TEAMS_INCLUDED} teams; {len(teams)} extra team(s) on file")
     confirmed = confirmed_updates(pending, confirm_rows, secret)
     validated = [*validated, *confirmed]
     confirmed_codes = {u.nonce for u in confirmed}
@@ -2937,6 +3074,7 @@ def main(argv: list[str] | None = None) -> int:
         update_log = [*load_update_log(update_log_path), *validated]
     candidate, applied = apply_updates(candidate, latest_per_target(update_log),
                                        since=seats.last_claimed)
+    candidate = add_names(candidate, latest_names(update_log))
     if update_rows or request_rows or applied:
         print(f"Updates: {applied} roster(s) changed; {len(pending)} request(s) "
               f"valid, {len(confirmed)} confirmed, {len(awaiting)} awaiting "
@@ -3074,26 +3212,30 @@ def main(argv: list[str] | None = None) -> int:
         # collision and any update — so nobody is welcomed or sent a first
         # report for a seat that was not written.
         seat_signups = seat_signups_from(rows, seats.first_claimed)
+        written = {(str(r.get("email", "")).lower(), r.get("origin")) for r in rows}
+        teams_written = [t for t in teams if (t.email.lower(), t.origin) in written]
         # PAID MAIL FIRST (APPSEC-1). The provider's daily allowance is shared,
         # and every note below goes to an address a stranger can type: sent
         # first, 99 of them spent the allowance and the buyer's first report
         # was refused (reproduced). Welcomes, then first reports, then the
         # roster-update confirmations (only ever to a subscriber's own
         # address), then the seat notes inside the day's caps.
-        unsent = _send_welcomes(servable, seat_signups, known_season,
+        unsent = _send_welcomes(servable, [*seat_signups, *teams_written], known_season,
                                 merged.duplicates, season_over=season_over)
         from run.saturday import FIRST_PLANS_NAME
         # The merged list: one first report per roster, never one per purchase
         # of it (LP2-D1).
-        unsent += _send_first_files([*merged.signups, *seat_signups], data,
-                                    known_season,
+        unsent += _send_first_files([*merged.signups, *teams_written, *seat_signups],
+                                    data, known_season,
                                     first_plans=registry_dir / FIRST_PLANS_NAME,
-                                    seat_counts=seat_counts(rows))
+                                    seat_counts=seat_counts(rows),
+                                    teams=team_counts(rows))
         if unsent:
             print(f"{unsent} welcome(s) or first report(s) owed to a paid signup "
                   f"did not go out — they retry next run; exiting non-zero so "
                   f"this is not a green cron.", file=sys.stderr)
         unsent += _send_confirmations(awaiting, data, on_file=current)
+        unsent += _send_team_mail(team_sweep, data)
         now = datetime.now(timezone.utc)
         notes_held = _send_seat_notes(seats, data, now, known_season)
         failing = bool(failing or unsent or notes_held)

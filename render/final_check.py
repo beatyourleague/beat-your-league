@@ -58,7 +58,8 @@ def _lower_first(text: str) -> str:
 
 
 @buyer_slots
-def subject_for_check(week: int, changes: list[Change]) -> str:
+def subject_for_check(week: int, changes: list[Change], team: str = "") -> str:
+    head = f"Week {week}" + (f" — {team}" if team else "")
     moves = [c for c in changes if c.kind in (SWAP, BACK)]
     holes = [c for c in changes if c.kind == NO_FILL]
     # Every hole is counted: the subscriber reads only the subject in an
@@ -66,21 +67,21 @@ def subject_for_check(week: int, changes: list[Change]) -> str:
     hole_words = "a hole" if len(holes) == 1 else f"{len(holes)} holes"
     if moves and holes:
         # A swap must not hide an unfilled slot either.
-        return (f"Week {week}: {len(moves)} change{'s' if len(moves) > 1 else ''} "
+        return (f"{head}: {len(moves)} change{'s' if len(moves) > 1 else ''} "
                 f"and {hole_words} in your lineup before kickoff")
     if len(moves) == 1:
-        return (f"Week {week}: one change before kickoff — "
+        return (f"{head}: one change before kickoff — "
                 f"{_lower_first(moves[0].action)}")
     if moves:
-        return f"Week {week}: {len(moves)} changes before kickoff"
+        return f"{head}: {len(moves)} changes before kickoff"
     if holes:
-        return f"Week {week}: {hole_words} in your lineup before kickoff"
+        return f"{head}: {hole_words} in your lineup before kickoff"
     cleared = [c for c in changes if c.kind == UNBLOCKED]
     if cleared:
-        return (f"Week {week}: {cleared[0].action.split(' is cleared')[0]} is "
+        return (f"{head}: {cleared[0].action.split(' is cleared')[0]} is "
                 f"cleared — no pickup needed" if len(cleared) == 1 else
-                f"Week {week}: {len(cleared)} starters cleared — no pickups needed")
-    return f"Week {week}: a starter is questionable — here's your plan"
+                f"{head}: {len(cleared)} starters cleared — no pickups needed")
+    return f"{head}: a starter is questionable — here's your plan"
 
 
 def _groups(changes: list[Change]) -> list[tuple[str, list[Change]]]:

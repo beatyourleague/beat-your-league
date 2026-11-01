@@ -896,6 +896,8 @@ def team_name(report: Mapping[str, Any]) -> str | None:
     meta = report.get("meta") or {}
     if not is_subscriber_report(meta):
         return None
+    if meta.get("team_given"):
+        return str(meta["team_given"])      # the name its owner chose
     if meta.get("team_lead"):
         # Fixed by the roster on file (engine.solo_report.team_lead, panel
         # review RQ2-06): the same subscription keeps the same name every
@@ -2429,6 +2431,59 @@ def update_lines(meta: Mapping[str, Any]) -> list[str]:
             + (f"{body} {url}" if url else UPDATE_REPLY)]
 
 
+TRADE_BODY = "See what it does to your lineup and byes before you say yes:"
+
+
+def _trade_url(meta: Mapping[str, Any]) -> str | None:
+    """The Trade Check's link, on a plan's weekly reports. Not on the season's
+    last, when there is no week left to trade for."""
+    if meta.get("trial") or _last_report(meta):
+        return None
+    return meta.get("trade_url")
+
+
+def _teams_words(meta: Mapping[str, Any]) -> tuple[str, str] | None:
+    """(the sentence, the link after it) about the other teams this plan
+    covers, or None. A subscriber's weekly reports only, and never the
+    season's last, when there is nothing left to add a team for."""
+    teams = meta.get("teams")
+    if not teams or meta.get("trial") or _last_report(meta):
+        return None
+    held, cap, url = int(teams["held"]), int(teams["cap"]), teams.get("add_url")
+    if held >= cap:
+        return (f"Your plan's {cap} teams are all in use. To swap one, change its "
+                f"roster with the link in that team's report.", "")
+    if not url:
+        return None
+    have = f"You have {held}. " if held > 1 else ""
+    return (f"Your plan covers up to {cap} teams at no extra charge. {have}"
+            f"Add another here:", url)
+
+
+def team_line(meta: Mapping[str, Any]) -> str:
+    """Shared by both HTML renderers, under the roster change line."""
+    trade = _trade_url(meta)
+    trade_html = (f'<b>Weighing a trade?</b> {esc(TRADE_BODY)} '
+                  f'<a href="{esc(trade)}">{esc(trade)}</a><br>' if trade else "")
+    words = _teams_words(meta)
+    if not words:
+        return trade_html
+    body, url = words
+    link = f' <a href="{esc(url)}">{esc(url)}</a>' if url else ""
+    return f"<b>Another team?</b> {esc(body)}{link}<br>{trade_html}"
+
+
+def team_lines(meta: Mapping[str, Any]) -> list[str]:
+    """The plain-text twin."""
+    trade = _trade_url(meta)
+    trade_lines = ["", f"WEIGHING A TRADE? {TRADE_BODY} {trade}"] if trade else []
+    words = _teams_words(meta)
+    if not words:
+        return trade_lines
+    body, url = words
+    return ["", "ANOTHER TEAM? " + body + (f" {url}" if url else ""), *trade_lines]
+
+
 def footer(meta: Mapping[str, Any]) -> str:
     basis = availability_basis(meta)
     demo = ("Sample report built from a real past season, to show what you get. "
@@ -2443,7 +2498,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'<footer>{footmap}<b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'{read_line(meta)}'
-        f'{update_line(meta)}'
+        f'{update_line(meta)}{team_line(meta)}'
         f'{seats_line(meta)}'
         f'{_forward_line(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>'

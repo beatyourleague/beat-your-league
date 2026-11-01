@@ -233,6 +233,8 @@ const VALID = /^[0-9a-f]{24}$/.test(CODE);
 // from a roster request's. Only the words change, so a leaguemate claiming a
 // seat is not asked to "use my new roster" for reports they don't get yet.
 const SEAT = new URLSearchParams(location.search).get("k") === "seat";
+// Another team on a plan (run/teams.py): the same POST, its own words.
+const TEAM = new URLSearchParams(location.search).get("k") === "team";
 const go = document.getElementById("go");
 const msg = document.getElementById("msg");
 function say(text, kind) { msg.textContent = text; msg.className = "msg " + (kind || ""); }
@@ -243,6 +245,14 @@ if (SEAT) {
     "league's League Pass, or to change the roster on the seat you hold. Press the " +
     "button within 7 days of asking and it's usually set up within the hour.";
   go.textContent = "Yes, set up my seat";
+}
+if (TEAM) {
+  document.title = "Beat Your League — Confirm your new team";
+  document.getElementById("head").textContent = "Confirm your new team";
+  document.getElementById("intro").textContent = "You asked to add a team to your plan. " +
+    "Press the button within 7 days of asking and it's usually set up within the hour. " +
+    "Nothing is charged.";
+  go.textContent = "Yes, add this team";
 }
 if (!VALID) {
   go.disabled = true;
@@ -277,7 +287,11 @@ go.addEventListener("click", () => {
     // lives 7 days from the claim, and a pass holds only as many seats as
     // its league has teams (OPS-R7), so a seat is not "Confirmed" here
     // either: the intake decides, and says so by email when it can't.
-    say(SEAT
+    say(TEAM
+      ? "Received. If you asked in the last 7 days, your team is usually set up within " +
+        "the hour and we'll email you when it is. If your plan's teams are all in use, " +
+        "we'll email you to say so."
+      : SEAT
       ? "Received. If you asked in the last 7 days, your seat is usually set up within " +
         "the hour and your first report follows the same day — unless your league's " +
         "seats are all taken, when we email you to say so. If this was a roster " +

@@ -80,6 +80,7 @@ class Found:
 
     signups: list[dict] = field(default_factory=list)
     seats: list[dict] = field(default_factory=list)
+    teams: list[dict] = field(default_factory=list)
     updates: list[dict] = field(default_factory=list)
     registry: list[dict] = field(default_factory=list)
     named_as_payer: int = 0
@@ -90,6 +91,7 @@ class Found:
 
     def counts(self) -> dict[str, int]:
         return {"signups": len(self.signups), "seat claims": len(self.seats),
+                "extra teams": len(self.teams),
                 "roster updates": len(self.updates), "registry rows": len(self.registry),
                 "stored weekly plans": len(self.plans),
                 "on the stop list": int(self.stop_list),
@@ -152,19 +154,22 @@ def find(code: str, registry_dir: Path, plans_dirs: list[Path],
          ) -> Found:
     from run.intake import REGISTRY_NAME, SEAT_LOG_NAME, SIGNUP_LOG_NAME
     from run.suppress import load_suppressed
+    from run.teams import TEAM_LOG_NAME
     from run.updates import UPDATE_LOG_NAME
     hit = _matches(code)
     found = Found()
     found.signups = [r for r in _jsonl(registry_dir / SIGNUP_LOG_NAME) if hit(r.get("email"))]
     found.seats = [r for r in _jsonl(registry_dir / SEAT_LOG_NAME) if hit(r.get("email"))]
     found.updates = [r for r in _jsonl(registry_dir / UPDATE_LOG_NAME) if hit(r.get("email"))]
+    found.teams = [r for r in _jsonl(registry_dir / TEAM_LOG_NAME) if hit(r.get("email"))]
     registry = registry_dir / REGISTRY_NAME
     rows = json.loads(registry.read_text(encoding="utf-8")) if registry.is_file() else []
     rows = rows if isinstance(rows, list) else []
     found.registry = [r for r in rows if isinstance(r, dict) and hit(r.get("email"))]
     found.named_as_payer = sum(1 for r in rows if isinstance(r, dict)
                                and hit(r.get("covered_by")) and not hit(r.get("email")))
-    slugs = _slugs([*found.signups, *found.seats, *found.updates, *found.registry])
+    slugs = _slugs([*found.signups, *found.seats, *found.updates, *found.teams,
+                    *found.registry])
     for root in plans_dirs:
         for slug in slugs:
             found.plans.extend(sorted(Path(root).glob(f"*/w??-{slug}.json")))
@@ -192,12 +197,14 @@ def forget(code: str, found: Found, registry_dir: Path,
     """Remove every row found. Returns counts. Writes only what changes."""
     from run.intake import REGISTRY_NAME, SEAT_LOG_NAME, SIGNUP_LOG_NAME
     from run.suppress import SUPPRESS_FILE, _write, load_suppressed
+    from run.teams import TEAM_LOG_NAME
     from run.updates import UPDATE_LOG_NAME
     hit = _matches(code)
     keep = lambda r: not hit(r.get("email"))  # noqa: E731
     done = {"signups": _rewrite_jsonl(registry_dir / SIGNUP_LOG_NAME, keep),
             "seat claims": _rewrite_jsonl(registry_dir / SEAT_LOG_NAME, keep),
-            "roster updates": _rewrite_jsonl(registry_dir / UPDATE_LOG_NAME, keep)}
+            "roster updates": _rewrite_jsonl(registry_dir / UPDATE_LOG_NAME, keep),
+            "extra teams": _rewrite_jsonl(registry_dir / TEAM_LOG_NAME, keep)}
     registry = registry_dir / REGISTRY_NAME
     removed = 0
     if registry.is_file():
@@ -323,6 +330,7 @@ def report_email(action: str, code: str, found: Found, done: dict[str, int] | No
             except RefError:
                 continue
         export = {"signups": found.signups, "seat_claims": found.seats,
+                  "extra_teams": found.teams,
                   "roster_updates": found.updates, "registry": found.registry,
                   "rosters_decoded": decoded,
                   "weekly_plans": [json.loads(p.read_text(encoding="utf-8"))

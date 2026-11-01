@@ -629,7 +629,7 @@ def test_each_reader_asks_the_worker_for_its_own_kinds_only(monkeypatch) -> None
     assert intake.fetch_seats("https://w.test", "k", kinds=intake.INTAKE_KINDS) == []
     intake.fetch_seats("https://w.test/?x=1", "k", kinds=("trial",))
     intake.fetch_seats("https://w.test", "k")
-    assert seen == ["https://w.test?kinds=confirm,seat,update,update_request",
+    assert seen == ["https://w.test?kinds=confirm,seat,team_add,update,update_request",
                     "https://w.test/?x=1&kinds=trial", "https://w.test"]
     def body(name: str, fn: str = "def main(") -> str:
         return (ROOT / "run" / name).read_text(encoding="utf-8").split(fn, 1)[1]
@@ -637,7 +637,7 @@ def test_each_reader_asks_the_worker_for_its_own_kinds_only(monkeypatch) -> None
     assert "kinds=TRIAL_KINDS" in body("trials.py")
     assert (ROOT / "run" / "waitlist.py").read_text(encoding="utf-8") \
         .count("kinds=WAITLIST_KINDS") == 2
-    assert set(intake.INTAKE_KINDS) == {"seat", "update", "update_request", "confirm"}
+    assert set(intake.INTAKE_KINDS) == {"seat", "update", "update_request", "team_add", "confirm"}
 
 
 def test_the_operators_roster_change_carries_the_read_key(monkeypatch) -> None:

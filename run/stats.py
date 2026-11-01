@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 FORM_KINDS = (("waitlist", "Waitlist sign-ups"),
+              ("team_add", "Extra teams asked for"),
               ("trial", "Free-report requests"),
               ("update_request", "Roster-update requests"),
               ("confirm", "Roster-update confirmations"),
@@ -266,6 +267,18 @@ def _paid_by_league_line(sessions: list[dict]) -> str:
     return ("  Paid signups by league type (ever): "
             + ", ".join(f"{kind} {counts[kind]}" for kind in ("redraft", "keeper", "dynasty")
                         if counts[kind]))
+
+
+def teams_line(registry: list) -> str:
+    """How many plans hold more than one team: what decides whether a bigger
+    plan or a member page is worth building (run/plans.py)."""
+    from run.teams import team_counts
+    counts = Counter(team_counts(registry).values())
+    if not counts:
+        return "  Teams per plan: no plans on file"
+    return ("  Teams per plan: "
+            + ", ".join(f"{held} team{'s' if held > 1 else ''}: {counts[held]}"
+                        for held in sorted(counts)))
 
 
 def season_2027_end() -> "date | None":
@@ -965,6 +978,8 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None) -> 
                          f"copy, then pass --registry PATH.")
     if registry is not None and rows is not None:
         conv = conversions(rows, [s.email for s in registry])
+    if registry is not None:
+        print(teams_line(registry))
 
     # Fail soft by design: a payments view that cannot be read is said in its
     # own section and changes neither the rest of the page nor the exit code.

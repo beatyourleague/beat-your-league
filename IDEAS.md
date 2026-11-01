@@ -58,8 +58,7 @@ the Stripe products and the GitHub repo are done; what is left is there.
   STACKED and Scoutcast both open their week with.
 - ~~Power rankings / playoff odds.~~ **Not possible: both need every team in
   the league, and the roster product reads no league.**
-- A multi-roster price. One purchase covers one roster, which is where the
-  most engaged prospect (three leagues, three teams) buys once and stops.
+- ~~A multi-roster price.~~ **DONE (Nov 1 2026): up to 3 teams on one plan.**
 
 ### Pricing and positioning
 - ~~$29 is at the floor of this market.~~ **DONE: the season pass is $39.**
@@ -157,8 +156,8 @@ The report is `reports/launch-readiness.md`; `make launch-check` holds the rest 
   Tuesday run would build Sep 2027 reports from a 2026 roster. Hold reports for a
   prior-season roster until a post-draft roster is confirmed; one pre-season "paste your new
   roster" email. Only then state the pass's 12-month coverage on the pricing card.
-- **A multi-team price.** 23% of players run 3+ leagues; today each team is its own
-  subscription (the FAQ says so).
+- ~~A multi-team price.~~ **DONE (Nov 1 2026): a plan covers up to 3 teams.** A bigger plan waits
+  for buyers asking for a fourth.
 - **Free post-draft roster check (Aug 2027 lead magnet).** The facts-only roster report
   through the trial pipeline (`join/?check=1`, one per address), upselling the pass.
 - **"Tell me next August", with consent**, on the season's last report and at cancel —

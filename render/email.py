@@ -66,6 +66,8 @@ from render.report import (
     RANGE_DEFINITION,
     RANGE_LABEL,
     SEEDED_SECTION_LINE,
+    team_line,
+    team_lines,
     update_line,
     update_lines,
     read_line,
@@ -1116,7 +1118,7 @@ def _solo_text(report: Mapping[str, Any]) -> str:
               source_line(meta),
               availability_basis(meta),
               *read_lines(meta),
-              *update_lines(meta),
+              *update_lines(meta), *team_lines(meta),
               *_forward_lines(meta),
               "",
               *cancel_lines(stop_route(meta)),
@@ -1329,7 +1331,7 @@ def _league_text(report: Mapping[str, Any]) -> str:
               source_line(meta),
               availability_basis(meta),
               *read_lines(meta),
-              *update_lines(meta),
+              *update_lines(meta), *team_lines(meta),
               *_forward_lines(meta),
               "",
               # A seat's way out is a stop request, a subscriber's is the
@@ -1466,7 +1468,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'<b>Beat Your League</b> — '
         f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
         f'{read_line(meta)}'
-        f'{update_line(meta)}'
+        f'{update_line(meta)}{team_line(meta)}'
         f'{seats_line(meta)}'
         f'{_forward_line(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>'

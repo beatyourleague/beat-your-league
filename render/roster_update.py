@@ -82,7 +82,7 @@ def settings_line(settings: Any, on_file: Any = None) -> str:
 
 
 def confirm_email(url: str, names: Sequence[str], settings: Any = None,
-                  on_file: Any = None) -> tuple[str, str, str]:
+                  on_file: Any = None, name: str = "") -> tuple[str, str, str]:
     """(subject, html, text). ``settings`` is the requested roster (its
     scoring, size and lineup); ``on_file`` the subscription as it stands, so a
     setting the change would move reads old → new."""
@@ -92,6 +92,8 @@ def confirm_email(url: str, names: Sequence[str], settings: Any = None,
     setup = settings_line(settings, on_file) if settings is not None else ""
     setup_html = (f'<p style="{BASE}margin:0 0 14px 0;"><b>Settings:</b> '
                   f'{esc(setup)}</p>' if setup else "")
+    name_html = (f'<p style="{BASE}margin:0 0 14px 0;"><b>Team name:</b> {esc(name)}</p>'
+                 if name else "")
     html = (
         f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
@@ -110,7 +112,7 @@ def confirm_email(url: str, names: Sequence[str], settings: Any = None,
         f'text-transform:uppercase;color:{CARD};padding-top:6px;">'
         f'Confirm your roster change</div></td></tr>'
         f'<tr><td style="padding:22px 26px;">'
-        f'<p style="{BASE}margin:0 0 14px 0;">{esc(LEDE)}</p>{roster_html}{setup_html}'
+        f'<p style="{BASE}margin:0 0 14px 0;">{esc(LEDE)}</p>{name_html}{roster_html}{setup_html}'
         f'<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
         f'<td style="background:{FLAG};border-radius:4px;">'
         f'<a href="{esc(url)}" style="display:inline-block;padding:12px 22px;'
@@ -122,6 +124,7 @@ def confirm_email(url: str, names: Sequence[str], settings: Any = None,
     text = "\n".join([
         SUBJECT.upper(), "",
         LEDE, "",
+        *([f"Team name: {name}", ""] if name else []),
         *([f"New roster: {listed}", ""] if listed else []),
         *([f"Settings: {setup}", ""] if setup else []),
         f"Review and confirm: {url}", "", LIMIT, "", IGNORE, ""])

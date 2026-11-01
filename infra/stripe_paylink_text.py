@@ -72,7 +72,7 @@ ONE_TIME = ("One payment — no subscription, nothing to cancel. Nothing renews 
 MESSAGES = {
     "season": ONE_TIME,
     "monthly": (
-        f"Bills {MONTHLY_PRICE} USD a month until you cancel. {STOPS} "
+        f"Bills {MONTHLY_PRICE} USD a month for up to 3 teams until you cancel. {STOPS} "
         f"{CANCEL[0].upper()}{CANCEL[1:]}. {REFUND} — one per person."),
     "league_pass": (
         f"Bills {PASS_PRICE} USD a month for your whole league until you cancel. {STOPS} "
