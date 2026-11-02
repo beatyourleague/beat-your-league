@@ -844,16 +844,16 @@ def test_a_list_that_starts_in_the_playoffs_says_no_byes_once(tmp_path) -> None:
 @needs_node
 def test_the_closed_button_promises_a_kept_roster_only_when_one_is_kept(tmp_path) -> None:
     """Planner review, reproduced: the closed button always read "Keep my
-    roster — email me when it opens", while with no list endpoint (today's
-    configuration, join/'s too) the fallback email carries only the address
+    roster — email me when it opens", while with no list endpoint the fallback email carries only the address
     and the note after it says "Your roster isn't saved with us" — and with no
     roster checked nothing is kept at all. It is the site's "Tell me when it
     opens" unless an endpoint is set AND a clean roster is on screen; the
     scoring and size questions, which shape only the kept roster, wait for it."""
-    closed = _run_page(tmp_path, search="?ref=" + SAMPLE_REF)
+    closed = _run_page(tmp_path, search="?ref=" + SAMPLE_REF,
+                       consts={"NOTIFY_LIST_ENDPOINT": '""'})
     assert closed["ctaChecked"]["button"] == "Tell me when it opens"
     assert closed["ctaChecked"]["settingsHidden"] is False
-    fresh = _run_page(tmp_path, paste="")
+    fresh = _run_page(tmp_path, paste="", consts={"NOTIFY_LIST_ENDPOINT": '""'})
     assert fresh["ctaButton"] == "Tell me when it opens" and fresh["ctaSettingsHidden"] is True
     listed = _run_page(tmp_path, search="?ref=" + SAMPLE_REF, edit="Josh Allen\n",
                        consts={"NOTIFY_LIST_ENDPOINT": '"https://forms.beatyourleague.com/rows"'})

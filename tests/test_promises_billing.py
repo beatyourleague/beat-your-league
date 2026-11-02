@@ -393,12 +393,11 @@ def test_the_launch_gates_this_round_added(site, monkeypatch) -> None:
     day seats can be claimed"), D4 (no LOG_SECRET while selling) and
     JOIN-161/169 (late crons while selling) — each FAILs only when it should."""
     import run.launch_check as lc
-    worker = "https://forms.beatyourleague.com"
-    _set(site / "join/index.html", 'const FORM_ENDPOINT = "";',
-         f'const FORM_ENDPOINT = "{worker}";')
+    worker = 'const FORM_ENDPOINT = "https://forms.beatyourleague.com/rows";'
+    assert _gate(lc.check_funnel_config(), "confirm page posts") == "PASS"
+    _set(site / "join/confirm.html", worker, 'const FORM_ENDPOINT = "";')
     assert _gate(lc.check_funnel_config(), "confirm page posts") == "FAIL"
-    _set(site / "join/confirm.html", 'const FORM_ENDPOINT = "";',
-         f'const FORM_ENDPOINT = "{worker}";')
+    _set(site / "join/confirm.html", 'const FORM_ENDPOINT = "";', worker)
     assert _gate(lc.check_funnel_config(), "confirm page posts") == "PASS"
 
     assert _gate(lc.check_funnel_config(), "opens the day seats") == "PASS"

@@ -844,7 +844,7 @@ def test_the_counter_must_post_to_the_forms_e_route_and_switch_on_with_the_worke
     FAILs; the Worker live with the counter still off is owner setup."""
     gates = lc.check_funnel_config()
     assert _gate(gates, "page counter posts").status == "PASS"
-    assert _gate(gates, "page counter is on once").status == "PASS"
+    assert _gate(gates, "page counter is on once").status == "OWNER"
     _set(site / "count.js", "ENDPOINT", "https://byl-forms.someone.workers.dev/e")
     gates = lc.check_funnel_config()
     assert _gate(gates, "page counter posts").status == "FAIL"

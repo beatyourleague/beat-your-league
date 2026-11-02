@@ -8,6 +8,7 @@ that owns it to say so — then requires the real tree to raise no FAIL.
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -41,7 +42,15 @@ def test_selling_a_closed_checkout_fails(site) -> None:
     assert _status(gates, "agree on whether checkout is open") == "FAIL"
 
 
+def _no_form_worker(site) -> None:
+    """The join page as it stood before the Worker was wired in."""
+    join = site / "join" / "index.html"
+    join.write_text(re.sub(r'^const FORM_ENDPOINT = "[^"]*";', 'const FORM_ENDPOINT = "";',
+                           join.read_text(), flags=re.M))
+
+
 def test_a_free_report_button_with_nowhere_to_post_fails(site) -> None:
+    _no_form_worker(site)
     page = site / "index.html"
     page.write_text(page.read_text().replace("const TRIAL_OPEN = false;",
                                              "const TRIAL_OPEN = true;"))
@@ -158,6 +167,7 @@ def test_opening_checkout_before_the_form_worker_fails(site) -> None:
     two in order — so a buyer could pay with roster changes possible only by a
     reply the owner applies by hand. CHECKOUT_OPEN on the landing with the join
     page's FORM_ENDPOINT empty is a FAIL; with the Worker wired it passes."""
+    _no_form_worker(site)
     page = site / "index.html"
     page.write_text(page.read_text().replace("const CHECKOUT_OPEN = false;",
                                              "const CHECKOUT_OPEN = true;"))
@@ -799,11 +809,9 @@ def test_a_planner_left_behind_on_launch_morning_fails(site) -> None:
     planner.write_text(text.replace("const CHECKOUT_CAN_COMPLETE = false;",
                                     "const CHECKOUT_CAN_COMPLETE = true;"))
     assert _status(lc.check_funnel_config(), "planner's checkout and free-report flags") == "FAIL"
-    planner.write_text(text.replace('const NOTIFY_LIST_ENDPOINT = "";',
-                                    'const NOTIFY_LIST_ENDPOINT = "https://elsewhere.example/rows";'))
-    join = site / "join" / "index.html"
-    join.write_text(join.read_text().replace('const FORM_ENDPOINT = "";',
-                                             'const FORM_ENDPOINT = "https://forms.example/rows";'))
+    planner.write_text(re.sub(r'^const NOTIFY_LIST_ENDPOINT = "[^"]*";',
+                              'const NOTIFY_LIST_ENDPOINT = "https://elsewhere.example/rows";',
+                              text, flags=re.M))
     assert _status(lc.check_funnel_config(), "same form Worker") == "FAIL"
 
 

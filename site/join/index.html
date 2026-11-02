@@ -884,13 +884,13 @@ const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";  // run.checkout, held by t
 // carry their picks — the one path that still needs a form backend. PLAN §0
 // keeps this EMPTY until seat provenance is fixed: the link is necessarily
 // public, so an unvalidated endpoint is a free-report generator.
-const FORM_ENDPOINT = "";
+const FORM_ENDPOINT = "https://forms.beatyourleague.com/rows";
 // Launch-notify list. While checkout is closed a buyer who typed their email is
 // remembered — EMAIL ONLY, no roster — instead of being told to come back. It
 // posts kind "waitlist" to the same Worker as everything else (FORM_ENDPOINT
 // above); set both to the same URL. Separate constants on purpose: the seat
 // path must keep working even if the owner ever splits the backends.
-const NOTIFY_LIST_ENDPOINT = "";
+const NOTIFY_LIST_ENDPOINT = "https://forms.beatyourleague.com/rows";
 // The free first report (?try=1). The SAME switch as the landing's TRIAL_OPEN
 // and the form Worker's TRIAL_OPEN variable — the launch check holds the three
 // together. Off, the page says free reports aren't open before anyone types a

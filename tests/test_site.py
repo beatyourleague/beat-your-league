@@ -640,8 +640,8 @@ def test_an_individual_signup_is_never_posted_anywhere() -> None:
     assert "STRIPE_LINK" not in seat, "a seat holder was routed to checkout"
     assert "if (SEAT_MODE) {\n    submitSeat(" in handler, \
         "seat mode must leave the payment path before it picks a link"
-    assert 'const FORM_ENDPOINT = ""' in JOIN, \
-        "PLAN §0: the seat endpoint stays empty until seat provenance is fixed"
+    assert 'const FORM_ENDPOINT = "https://forms.beatyourleague.com/rows"' in JOIN, \
+        "seats post to the form Worker on our own domain"
 
 
 def test_no_payment_details_are_collected_by_us() -> None:
@@ -4429,8 +4429,8 @@ def _run_confirm_page(search: str, endpoint: str) -> dict:
     stands after load and after the button is pressed (fetch answers 200)."""
     import json as _json
     code = re.search(r"<script>(.*?)</script>", CONFIRM, re.S).group(1)
-    code = code.replace('const FORM_ENDPOINT = "";',
-                        f"const FORM_ENDPOINT = {_json.dumps(endpoint)};")
+    code = re.sub(r'const FORM_ENDPOINT = "[^"]*";',
+                  lambda _: f"const FORM_ENDPOINT = {_json.dumps(endpoint)};", code)
     return _node(
         "const els = {}; const el = (id) => els[id] || (els[id] = {id, textContent: '',"
         " className: '', disabled: false, handlers: {}, attrs: {}, addEventListener(t, f) {"
