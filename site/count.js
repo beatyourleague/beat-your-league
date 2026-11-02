@@ -22,7 +22,7 @@
   "use strict";
   // "https://forms.beatyourleague.com/e" once the Worker is live — never a
   // *.workers.dev address (blockers treat another site's beacon as a tracker).
-  const ENDPOINT = "";
+  const ENDPOINT = "https://forms.beatyourleague.com/e";
   const LIVE = "beatyourleague.com";
   const EVENTS = ["view", "roster", "checkout", "waitlist", "trial", "dynasty", "keeper"];
   // The Worker drops a line any field of which fails this; so does this file.

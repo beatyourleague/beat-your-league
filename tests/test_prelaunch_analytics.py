@@ -844,7 +844,7 @@ def test_the_counter_must_post_to_the_forms_e_route_and_switch_on_with_the_worke
     FAILs; the Worker live with the counter still off is owner setup."""
     gates = lc.check_funnel_config()
     assert _gate(gates, "page counter posts").status == "PASS"
-    assert _gate(gates, "page counter is on once").status == "OWNER"
+    assert _gate(gates, "page counter is on once").status == "PASS"
     _set(site / "count.js", "ENDPOINT", "https://byl-forms.someone.workers.dev/e")
     gates = lc.check_funnel_config()
     assert _gate(gates, "page counter posts").status == "FAIL"
@@ -898,6 +898,7 @@ def test_a_counter_that_records_nothing_for_two_days_is_a_warning() -> None:
 def test_the_account_gate_is_owner_setup_while_the_counter_is_off(site, monkeypatch) -> None:
     import requests
     monkeypatch.setattr(requests, "post", lambda *a, **k: pytest.fail("no query while off"))
+    _set(site / "count.js", "ENDPOINT", "")
     assert lc.check_counter_account()[0].status == "OWNER"
 
 
