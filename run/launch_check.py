@@ -1664,7 +1664,8 @@ def worker_status(endpoint: str, api_key: str) -> dict:
     import urllib.request
     joiner = "&" if "?" in endpoint else "?"
     request = urllib.request.Request(f"{endpoint}{joiner}status=1", method="GET",
-                                     headers={"Authorization": f"Bearer {api_key}"})
+                                     headers={"Authorization": f"Bearer {api_key}",
+                                              "User-Agent": "beat-your-league-intake"})
     with urllib.request.urlopen(request, timeout=20) as response:
         data = json.loads(response.read().decode("utf-8"))
     if not isinstance(data, dict) or "trial_open" not in data:

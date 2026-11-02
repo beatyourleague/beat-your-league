@@ -789,7 +789,9 @@ def fetch_seats(endpoint: str, api_key: str | None = None,
         joiner = "&" if "?" in endpoint else "?"
         endpoint = (f"{endpoint}{joiner}kinds="
                     f"{urllib.parse.quote(','.join(wanted), safe=',_')}")
-    request = urllib.request.Request(endpoint, method="GET")
+    # Cloudflare refuses Python's default User-Agent with error 1010.
+    request = urllib.request.Request(endpoint, method="GET",
+                                     headers={"User-Agent": "beat-your-league-intake"})
     if api_key:
         request.add_header("Authorization", f"Bearer {api_key}")
     try:

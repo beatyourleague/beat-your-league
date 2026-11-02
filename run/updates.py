@@ -877,7 +877,8 @@ def post_row(endpoint: str, row: Mapping, api_key: str | None = None) -> None:
     request = urllib.request.Request(
         endpoint, data=json.dumps(dict(row)).encode("utf-8"), method="POST",
         headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {key}"})
+                 "Authorization": f"Bearer {key}",
+                 "User-Agent": "beat-your-league-intake"})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             status = response.status

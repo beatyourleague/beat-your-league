@@ -273,7 +273,8 @@ def delete_worker_rows(rows: list[dict], endpoint: str, api_key: str) -> tuple[i
             continue
         request = urllib.request.Request(
             f"{endpoint}?{urllib.parse.urlencode({'key': key})}", method="DELETE",
-            headers={"Authorization": f"Bearer {api_key}"})
+            headers={"Authorization": f"Bearer {api_key}",
+                     "User-Agent": "beat-your-league-intake"})
         for attempt in (1, 2):
             try:
                 with urllib.request.urlopen(request, timeout=20) as response:

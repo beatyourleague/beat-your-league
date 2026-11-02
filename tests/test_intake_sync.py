@@ -1257,3 +1257,18 @@ def test_a_first_email_never_rebuilds_a_week_already_in_the_log(
     assert builds == [], "a week's report already in the log was rebuilt"
     assert [m.key.startswith("preseason-") for m in up.sent] == [True]
     assert not _ledger(processed)
+
+
+@pytest.mark.parametrize("module", ["run/intake.py", "run/sync.py", "run/updates.py",
+                                    "run/privacy.py", "run/launch_check.py"])
+def test_every_request_to_the_worker_names_a_user_agent(module) -> None:
+    """Nov 2 2026, on the live Worker: Cloudflare answers Python's default
+    User-Agent with 403, error 1010, while curl and browsers pass. Every read
+    of the form rows failed from the crons, so seats, roster updates and free
+    reports would all have stopped, and no stubbed test could see it."""
+    source = Path(module).read_text(encoding="utf-8")
+    assert "User-Agent" in source
+    for call in re.findall(r"urllib\.request\.Request\((?:[^()]|\([^()]*\))*\)", source):
+        if "api.github.com" in call or "api.stripe.com" in call:
+            continue
+        assert "User-Agent" in call, f"{module}: {call}"

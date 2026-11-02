@@ -383,7 +383,8 @@ def fetch_seats(endpoint: str, api_key: str | None = None) -> list[dict]:
     form vendor can produce one, and swapping vendors is this function, not an
     architecture. Returns raw rows; validation happens with everything else.
     """
-    request = urllib.request.Request(endpoint, method="GET")
+    request = urllib.request.Request(endpoint, method="GET",
+                                     headers={"User-Agent": "beat-your-league-intake"})
     if api_key:
         request.add_header("Authorization", f"Bearer {api_key}")
     try:
