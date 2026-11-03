@@ -340,7 +340,11 @@ def test_the_2027_plan_replaces_every_nothing_renews_line() -> None:
         assert target in fn, target
     assert 'textContent = "Unlock my lineups — $49";' in fn
     assert "We email you before it bills" in re.sub(r'"\s*\+\s*"', "", fn)
-    assert LANDING.count('(SEASON_2027_READY ? "" : " Stops on its own after your title game.")') == 2
+    # The hero's risk line follows the flag; the finance note no longer says
+    # it stops at all (DES-5: it repeated the card's first line).
+    assert LANDING.count('(SEASON_2027_READY ? "" : " Stops on its own after your title game.")') == 1
+    finance = LANDING.split('const finance = document.getElementById("finance-note");')[1]
+    assert "stops on its own" not in finance.split("finance.hidden")[0].lower()
 
 
 def test_the_ref_prefix_stays_s() -> None:

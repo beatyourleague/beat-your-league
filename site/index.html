@@ -184,6 +184,9 @@
   .cta-row .textlink{color:var(--paper);font-size:16px;font-weight:600;padding:10px 6px;
     text-underline-offset:4px;text-decoration-color:rgba(246,244,238,.4);}
   .cta-row .textlink:hover{color:var(--paper);}
+  /* With the free report open the link wraps under two buttons, so it starts
+     where they do (FUN-13); beside one button it keeps its tap padding. */
+  .cta-row .textlink.stacked{padding-left:0;}
   /* A phone's route to the price (review M13): the nav's Pricing is hidden
      below 600px (contract C2: the logo plus one link), so the hero and the
      closer carry a small text link to #pricing there instead. */
@@ -1032,6 +1035,9 @@
        nav above it competes with it. The sticky bar keeps it in reach. */
     nav .btn{display:none;}
     .cta-row .onlysm{display:inline-block;}
+    /* Two hero buttons stack at one width, so the ghost one is never wider
+       than the gold one (DES-4). */
+    .hero .cta-row.pair .btn{flex:1 1 100%;}
   }
   @media (max-width:480px){
     .watchform{flex-direction:column;gap:8px;}
@@ -1595,10 +1601,16 @@ function season2027Card() {
 }
 if (TRIAL_OPEN) {
   const tryCta = document.getElementById("try-cta");
-  if (tryCta) tryCta.hidden = false;
+  if (tryCta) {
+    tryCta.hidden = false;
+    tryCta.parentNode.classList.add("pair");
+  }
   // The full report stays one tap away from the hero (launch audit).
   const sample = document.getElementById("hero-sample");
-  if (sample) sample.textContent = "or read a real report first";
+  if (sample) {
+    sample.textContent = "or read a real report first";
+    sample.classList.add("stacked");
+  }
 }
 // The launch waitlist. One address, one message, when signups open. It posts to
 // the same Cloudflare Worker that takes League Pass seats and roster updates
@@ -1827,9 +1839,9 @@ if (CHECKOUT_OPEN) {
     if (finance) {
       // The League Pass has its own section right below, so this line no
       // longer pitches it a second time (review BUYER-4).
-      finance.textContent = "Payment runs on Stripe's own page. Your roster " +
-        "and scoring ride into checkout with you." +
-        (SEASON_2027_READY ? "" : " Stops on its own after your title game.");
+      // The card's first line and the risk line already say it stops on its
+      // own, and the line above names Stripe (DES-5): this one adds the roster.
+      finance.textContent = "Your roster and scoring ride into checkout with you.";
       finance.hidden = false;
     }
   } else {
@@ -1889,6 +1901,11 @@ function closeForSeason(line) {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
+  // One hero button again, so the two-button layout goes with the second.
+  const heroPair = document.querySelector(".hero .cta-row.pair");
+  if (heroPair) heroPair.classList.remove("pair");
+  const stacked = document.getElementById("hero-sample");
+  if (stacked) stacked.classList.remove("stacked");
   const next2027 = document.getElementById("pass-2027");
   if (next2027) next2027.remove();
   [["hero-open", "Tell me when it opens"], ["sticky-cta", "Tell me when it opens"],

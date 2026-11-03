@@ -602,6 +602,26 @@ def test_a_phone_has_a_route_to_the_price() -> None:
     assert "$" not in _flat(HERO)
 
 
+def test_the_two_hero_buttons_line_up_once_the_free_report_opens() -> None:
+    """FUN-13 and DES-4, reproduced on a scratch copy with checkout and the
+    free report open: at 390px "Get my lineups" was 152px wide beside a 242px
+    ghost "Try it free on your roster", and "or read a real report first"
+    started 6px right of both buttons (its tap padding, made for sitting
+    beside one). Only that state changes: the row is marked as a pair, its
+    buttons share one width below 600px, and the link starts flush. A season
+    that ends hides the second button and takes both marks off."""
+    trial = LANDING.split("if (TRIAL_OPEN) {")[1].split("\n}\n")[0]
+    assert 'tryCta.parentNode.classList.add("pair");' in trial
+    assert 'sample.classList.add("stacked");' in trial
+    assert ".cta-row .textlink.stacked{padding-left:0;}" in CSS
+    assert ".hero .cta-row.pair .btn{flex:1 1 100%;}" in _block(CSS, "@media (max-width:599px)")
+    # Beside one button (closed and interim) the row keeps its own layout.
+    assert "pair" not in HERO and "stacked" not in HERO
+    over = _js_function(LANDING, "closeForSeason")
+    assert 'heroPair.classList.remove("pair")' in over
+    assert 'stacked.classList.remove("stacked")' in over
+
+
 def test_a_waitlist_signup_is_counted_once_it_is_accepted() -> None:
     """Routed from the analytics branch (contract C1): the landing's capture
     counts a waitlist signup only after the form accepted it — after the
