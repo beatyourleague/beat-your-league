@@ -4819,8 +4819,13 @@ def test_the_faq_is_short_and_its_heading_stays_in_view() -> None:
 
 
 def _live_week_gate(page: str) -> bool:
-    # And the page is in the card layout the phone shows (review BUYER-1).
-    return re.search(r"w\.odds >= 3 && w\.closest_call &&\s*w\.cards === true", page) \
+    # And the page is in the card layout the phone shows (review BUYER-1), and
+    # its card 01 printed a projected total (DES-1: a week whose QB was on bye
+    # with nobody cleared behind him opened on "no projected total", on the
+    # page linked as "this week's report"). week.json writes `total` only
+    # when it is false, so an older build still passes.
+    return re.search(r"w\.odds >= 3 && w\.closest_call &&\s*w\.cards === true"
+                     r" && w\.total !== false", page) \
         is not None and 'querySelectorAll("[data-live-week]")' in page
 
 

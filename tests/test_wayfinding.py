@@ -90,6 +90,9 @@ def test_the_map_links_this_weeks_report_only_under_the_heros_rule() -> None:
     assert re.search(r'<a href="this-week\.html" data-live-week hidden>', block)
     script = (SITE / "footer.js").read_text(encoding="utf-8")
     assert re.search(r"w\.odds >= 3 && w\.closest_call && w\.cards === true", script)
+    # DES-1: a week whose card 01 printed no projected total (a starter who
+    # can't play, nobody cleared behind him) is not the page to show off.
+    assert re.search(r"w\.cards === true &&\s*w\.total !== false", script)
     assert '(w.phase || "season") !== "season"' in script and "today > w.lands_on" in script
     digest = hashlib.sha256((SITE / "footer.js").read_bytes()).hexdigest()[:10]
     assert f'<script src="/footer.js?v={digest}" defer></script>' in block
