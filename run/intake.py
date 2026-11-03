@@ -2448,11 +2448,45 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
     return None
 
 
+def _still_paid(signups: list[RosterSignup], api_key: str) -> list[RosterSignup]:
+    """The purchases whose money is still with us. A purchase refunded in full,
+    or ended in Stripe, between the payment and its first email is owed no
+    first report: the Wednesday and Saturday runs check entitlement, and this
+    path did not, so a Monday-night buyer refunded on Tuesday morning was
+    still mailed the week's early look (launch review PUR-3).
+
+    One Stripe read, made only when there is a first email to send. A read
+    that fails changes nothing: the email goes as before, because the
+    alternative is withholding a paid buyer's report on a network hiccup.
+    The welcome is not filtered here: it acknowledges the purchase."""
+    if not api_key or not signups:
+        return signups
+    from run.subscriptions import SubscriptionError, load_paid_from_stripe
+    try:
+        paid = load_paid_from_stripe(api_key)
+    except SubscriptionError as exc:
+        print(f"First files: could not check for refunds ({exc}); sending as usual.",
+              file=sys.stderr)
+        return signups
+    gone = set(paid.refunded) | set(getattr(paid, "ended", ()) or ())
+    kept = []
+    for signup in signups:
+        ids = signup.own_subscriptions or ([signup.pass_of] if signup.pass_of else [])
+        if ids and set(ids) <= gone:
+            continue
+        kept.append(signup)
+    if len(kept) < len(signups):
+        print(f"First files: {len(signups) - len(kept)} purchase(s) refunded or "
+              f"cancelled before their first email; nothing sent to them.")
+    return kept
+
+
 def _send_first_files(servable: list[RosterSignup], data, season: str,
                       processed_dir=None, first_plans: Path | None = None,
                       out_dir: Path | None = None,
                       seat_counts: Mapping[str, int] | None = None,
-                      teams: Mapping[str, int] | None = None) -> int:
+                      teams: Mapping[str, int] | None = None,
+                      api_key: str = "") -> int:
     """The file they get for paying, on the day they pay. -> how many paid
     signups this run could not build or send one for (pre-launch review
     APPSEC-1: a quota-starved buyer's refused first report used to exit 0).
@@ -2492,6 +2526,9 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     # Tuesday run's, which checks entitlement and reads the current roster.
     entries = _sent_entries()
     servable = [s for s in servable if not _served_since_purchase(s, entries)]
+    # And only purchases Stripe has not since refunded (PUR-3). ``api_key`` is
+    # main()'s, never read from the environment here.
+    servable = _still_paid(servable, api_key)
     if not servable:
         return 0
     if data is None:
@@ -3110,11 +3147,13 @@ def main(argv: list[str] | None = None) -> int:
     # and invisible: green cron, no alarm. Found Aug 24 2026.
     # `remembered` counts too — an unresolved payment stays unresolved until a
     # human clears it, and a re-run that goes green is how it gets forgotten.
-    unattributed = [p for p in list(problems) + list(remembered)
-                    if str(p).startswith("PAID-UNATTRIBUTED")]
+    # Each problem once: this run's are already appended to `remembered`, so a
+    # plain concatenation counted one wrong-link payment as two (PUR-5).
+    unattributed = list(dict.fromkeys(p for p in [*problems, *remembered]
+                                      if str(p).startswith("PAID-UNATTRIBUTED")))
     # Contract C4 / SEC-3: served, and red while the session is in the sweep.
-    playoff_early = [p for p in list(problems) + list(remembered)
-                     if str(p).startswith("PLAYOFF-EARLY")]
+    playoff_early = list(dict.fromkeys(p for p in [*problems, *remembered]
+                                       if str(p).startswith("PLAYOFF-EARLY")))
 
     line = "=" * 62
     print(f"\n{line}\nROSTER INTAKE{' (dry run)' if args.dry_run else ''}\n{line}")
@@ -3239,7 +3278,7 @@ def main(argv: list[str] | None = None) -> int:
                                     data, known_season,
                                     first_plans=registry_dir / FIRST_PLANS_NAME,
                                     seat_counts=seat_counts(rows),
-                                    teams=team_counts(rows))
+                                    teams=team_counts(rows), api_key=api_key)
         if unsent:
             print(f"{unsent} welcome(s) or first report(s) owed to a paid signup "
                   f"did not go out — they retry next run; exiting non-zero so "

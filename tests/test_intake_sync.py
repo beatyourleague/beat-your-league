@@ -174,6 +174,20 @@ def test_an_unattributable_payment_is_reported_every_run(tmp_path, stripe,
     assert "still open" not in capsys.readouterr().err
 
 
+def test_one_unattributable_payment_is_counted_once(tmp_path, stripe, directory,
+                                                    capsys) -> None:
+    """Reproduction (launch review PUR-5): one paid session through a link not in
+    the map printed one PAID-UNATTRIBUTED line and then "2 PAID payment(s) could
+    not be attributed", on this run and every run after, because this run's
+    problem is already in the remembered list it was concatenated with. That
+    count is the line the owner reads if their test pays through the wrong link."""
+    stripe["sessions"] = [_session(None)]
+    assert _run(tmp_path) == 1
+    assert "1 PAID payment(s) could not be attributed" in capsys.readouterr().err
+    assert _run(tmp_path) == 1
+    assert "1 PAID payment(s) could not be attributed" in capsys.readouterr().err
+
+
 # --------------------------------------------------------------------- #
 # the plan is a fact, not a claim
 # --------------------------------------------------------------------- #
@@ -1257,6 +1271,43 @@ def test_a_first_email_never_rebuilds_a_week_already_in_the_log(
     assert builds == [], "a week's report already in the log was rebuilt"
     assert [m.key.startswith("preseason-") for m in up.sent] == [True]
     assert not _ledger(processed)
+
+
+def test_a_purchase_refunded_before_its_first_email_is_not_sent_one(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Reproduction (launch review PUR-3): welcome sent Monday night, the charge
+    refunded in full, and the next hourly intake still mailed the week's report
+    to the refunded purchase ("First files via resend: 1 sent"), because only
+    the Wednesday and Saturday runs consulted refunds. One Stripe read now
+    drops a purchase whose subscription Stripe lists as refunded or ended; a
+    read that fails sends as before, and with no key nothing is asked."""
+    import run.subscriptions as subscriptions
+    from run.intake import RosterSignup
+    from run.subscriptions import PaidList, SubscriptionError
+    up = _Sink()
+    data, season, week = _first_email_env(tmp_path, monkeypatch, up)
+    signup = RosterSignup(email="fan@example.com", ref=REF, plan="season",
+                          seen_at="1791500000", subscription_id="sub_OWNERTEST")
+
+    def answer(**fields):
+        return lambda key: PaidList(emails=frozenset(), source="stripe",
+                                    status_column="active", subscription_ids=frozenset(),
+                                    **fields)
+    monkeypatch.setattr(subscriptions, "load_paid_from_stripe",
+                        answer(refunded=frozenset({"sub_OWNERTEST"})))
+    send = dict(processed_dir=tmp_path / "processed", first_plans=tmp_path / "first",
+                out_dir=tmp_path / "out", api_key="sk_test")
+    assert intake._send_first_files([signup], data, season, **send) == 0
+    assert up.sent == [], "a refunded purchase was mailed its first report"
+    assert "1 purchase(s) refunded or cancelled" in capsys.readouterr().out
+
+    def down(key):
+        raise SubscriptionError("Stripe is down")
+    monkeypatch.setattr(subscriptions, "load_paid_from_stripe", down)
+    intake._send_first_files([signup], data, season, **send)
+    assert [m.key for m in up.sent] == [f"{season}-w{week:02d}-{signup.slug}"], \
+        "a Stripe hiccup withheld a paid buyer's report"
+    assert "could not check for refunds" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("module", ["run/intake.py", "run/sync.py", "run/updates.py",
