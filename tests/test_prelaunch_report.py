@@ -11,6 +11,7 @@ line), M5 (the free report's price and refund terms).
 from __future__ import annotations
 
 import csv
+import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -784,9 +785,11 @@ def test_a_tossup_in_the_text_email_keeps_the_name_capitalised() -> None:
     report = _solo()
     report["regret"] = dict(report["regret"], confidence=0.52, reason="")
     name = report["regret"]["start_name"]
-    assert f"THE WEEK'S CLOSEST CALL: {name} or " in text_summary(report)
+    # "WITH ODDS" when the card carries that label (launch review PROD-9).
+    head = r"THE WEEK'S CLOSEST CALL(?: WITH ODDS)?: "
+    assert re.search(head + re.escape(f"{name} or "), text_summary(report))
     report["regret"]["confidence"] = 0.72
-    assert f"THE WEEK'S CLOSEST CALL: start {name} over " in text_summary(report)
+    assert re.search(head + re.escape(f"start {name} over "), text_summary(report))
 
 
 # F6/P2 — a zero tag says what its sentence says.

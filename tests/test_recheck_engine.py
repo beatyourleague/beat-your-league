@@ -761,3 +761,73 @@ def test_a_monday_night_questionable_is_checked_at_his_own_inactives() -> None:
     for name, page in _surfaces(report).items():
         assert "Sunday morning: check Terry Monday" not in page, name
         assert "check on Sunny Doubt and Terry Monday" not in page, name
+
+
+# --------------------------------------------------------------------- #
+# PROD-1 — a plan timed by the ruling it waits for (launch review, Nov 2026)
+# --------------------------------------------------------------------- #
+
+def _monday_flex_pair() -> dict:
+    """Report C's shape: two Monday-night questionables at FLEX, one Sunday
+    4:25 PM bench back to cover them."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC"),
+              WR2: ("Dee Monday", "WR", "WAS"), WR3: ("Kay Monday", "WR", "WAS"),
+              RB2: ("Henry Sunday", "RB", "BAL")}
+    return _report(roster, slots=("QB", "RB", "WR", "TE", "FLEX", "FLEX"),
+                   yards={WR2: 90, WR3: 85, RB2: 40},
+                   designations={WR2: "Questionable", WR3: "Questionable"},
+                   listed={WR2: ("questionable", "ankle"), WR3: ("questionable", "knee")},
+                   schedule=_schedule(WAS=_game("SF", MON, "20:15"),
+                                      SF=_game("WAS", MON, "20:15", home=True),
+                                      BAL=_game("CLE", SUN, "16:25")))
+
+
+def test_a_monday_starter_whose_only_plan_needs_a_sunday_cover_is_checked_sunday() -> None:
+    """Reproduction (report C, launch review PROD-1): DJ Moore and Dalton
+    Kincaid both started at FLEX, both Monday night, and TreVeyon Henderson
+    (Sunday 4:25 PM) was the bench cover for each. Kincaid's game-day plan
+    took Henderson, so Moore's one plan was "ruled out before game day: move
+    TreVeyon Henderson into FLEX", and the game plan said "Monday: check DJ
+    Moore's status (by Monday 6:45 PM ET)", a day after Henderson locked.
+    Both now land on Sunday morning."""
+    report = _monday_flex_pair()
+    [before, gameday] = _plans(report, "Kay Monday")
+    assert before["condition"] == "Kay Monday (FLEX) is ruled out before game day"
+    assert before["action"].startswith("Move Henry Sunday into FLEX"), before
+    assert "take a zero" in gameday["action"], gameday
+    actions = {i["action"]: i for i in report["checklist"]}
+    sunday = actions.get("Sunday morning: check on Dee Monday and Kay Monday")
+    assert sunday and sunday["deadline"] == "gameday morning", report["checklist"]
+    assert not any(a.startswith("Monday:") for a in actions), report["checklist"]
+    for name, page in _surfaces(report).items():
+        assert "Monday: check Kay Monday" not in page, name
+        assert "by Monday 6:45 PM ET" not in page, name
+
+
+def test_a_ruling_before_game_day_and_one_at_the_inactives_each_get_their_day() -> None:
+    """The skeptic's dual case (PROD-1): a Monday-night receiver whose best
+    cover plays Sunday at 1:00 PM and whose game-day cover is in his own
+    game. Timed by the game-day cover alone it said only "Monday: check …
+    by 6:45 PM ET", too late for the Sunday move; timed by the earliest it
+    would say only "Sunday morning" and drop the Monday deadline RQ2-07
+    added. It says both."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC"),
+              WR2: ("Dee Monday", "WR", "WAS"), WR3: ("Sunny Bench", "WR", "BAL"),
+              WR4: ("Monty Samegame", "WR", "SF")}
+    report = _report(roster, slots=("QB", "RB", "WR", "WR", "TE"),
+                     yards={WR2: 90, WR3: 60, WR4: 30},
+                     designations={WR2: "Questionable"},
+                     listed={WR2: ("questionable", "ankle")},
+                     schedule=_schedule(WAS=_game("SF", MON, "20:15"),
+                                        SF=_game("WAS", MON, "20:15", home=True),
+                                        BAL=_game("CLE", SUN, "16:25")))
+    [before, gameday] = _plans(report, "Dee Monday")
+    assert before["action"].startswith("Move Wade Wideout into WR"), before
+    assert gameday["action"].startswith("Move Monty Samegame into WR"), gameday
+    actions = {i["action"]: i for i in report["checklist"]}
+    sunday = actions.get("Sunday morning: check Dee Monday's status")
+    assert sunday and sunday["deadline"] == "gameday morning", report["checklist"]
+    monday = actions.get("Monday: check Dee Monday's status")
+    assert monday and monday["deadline"] == "by Monday 6:45 PM ET", report["checklist"]

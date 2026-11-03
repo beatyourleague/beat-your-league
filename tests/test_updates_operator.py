@@ -86,7 +86,20 @@ def test_the_intake_applies_the_operators_row_like_any_confirmed_update(
     [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
     assert row.player_ids == tuple(NEW_IDS) and row.scoring == "ppr"
     assert row.slug == updates.slug_of(REF), "the subscription's identity moved"
-    assert row.roster_as_of == datetime.now(timezone.utc).date().isoformat()
+    from zoneinfo import ZoneInfo
+    # Eastern, like the welcome's purchase date (launch review PUR-8).
+    assert row.roster_as_of == datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+
+def test_a_roster_change_is_dated_on_the_buyers_clock() -> None:
+    """Launch review PUR-8, reproduced: a change at 01:55 UTC on Nov 3 is 8:55
+    PM ET on Nov 2, the date the welcome prints, and the report said "This
+    report used your roster as of Nov 3." by the UTC date."""
+    assert updates.roster_day("2026-11-03T01:55:00+00:00") == "2026-11-02"
+    assert updates.roster_day("2026-11-03T15:00:00+00:00") == "2026-11-03"
+    assert updates.roster_day("2026-11-03T01:55:00") == "2026-11-02", "naive is UTC"
+    assert updates.roster_day("2026-11-03") == "2026-11-03"
+    assert updates.roster_day("") == "" and updates.roster_day("garbage") == ""
 
 
 def test_the_command_posts_through_the_worker_and_prints_no_address(

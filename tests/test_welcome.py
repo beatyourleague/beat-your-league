@@ -345,3 +345,69 @@ def test_a_seat_link_that_is_not_https_is_never_an_href(monkeypatch) -> None:
     msg = welcome_message("c@example.com", "league_pass", "abc123def0", "2026",
                           seat_link=link)
     assert link not in msg.text and 'href="http://localhost:8000/join' not in msg.html
+
+
+def test_the_welcome_leads_with_the_self_serve_roster_update(monkeypatch) -> None:
+    """Launch review EM-3/PUR-6 (Nov 2026). With the site, the form backend and
+    the secret all set, the welcome said only "Reply to any report with your
+    updated roster", a `make roster-update` by hand for each one, while every
+    report ends with a link to do it yourself. The link leads now; the reply
+    stays as the second route, as the landing's FAQ gives them."""
+    from render.welcome import welcome_message
+    monkeypatch.setenv("UPDATE_SECRET", "s")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    text = welcome_message("a@example.com", "monthly", "abc123def0", "2026").text
+    assert "Every weekly report ends with a link to update it yourself" in text
+    assert text.index("link to update it yourself") < text.index("Reply to any report")
+    monkeypatch.delenv("SITE_URL")
+    text = welcome_message("a@example.com", "monthly", "abc123def0", "2026").text
+    assert "link to update it yourself" not in text and "Reply to any report" in text
+
+
+def _epoch(iso: str) -> str:
+    from datetime import datetime
+    return str(int(datetime.fromisoformat(iso).timestamp()))
+
+
+@pytest.mark.skipif(not (Path(__file__).resolve().parent.parent / "data" / "raw"
+                         / "nflverse" / "games.csv").is_file(),
+                    reason="no cached nflverse schedule (data/ is gitignored)")
+def test_a_late_monthly_buyer_is_told_this_is_the_only_charge() -> None:
+    """Launch review EM-6 (Nov 2026), reproduced: welcomes for purchases on
+    Nov 20, Nov 24 and Dec 1 2026 differed only in the date, all saying "It
+    bills $14.99 USD each month until you cancel". Week 16's report is Dec 23
+    (run.billing.last_charge_send), so a buyer after about Nov 23 22:17 UTC
+    renews after it, run/billing stops the plan on its first run, and the
+    purchase is the only charge. The consented sentence stays; one follows
+    it."""
+    from render.welcome import ONLY_CHARGE, welcome_message
+    for iso, once in (("2026-11-20T15:00:00+00:00", False),
+                      ("2026-11-23T22:00:00+00:00", False),
+                      ("2026-11-24T15:00:00+00:00", True),
+                      ("2026-12-01T15:00:00+00:00", True)):
+        text = welcome_message("a@example.com", "monthly", "abc123def0", "2026",
+                               purchased_at=_epoch(iso)).text
+        assert "It bills $14.99 USD each month until you cancel" in text, iso
+        assert "won't renew after Week 16's report goes out" in text, iso
+        assert (ONLY_CHARGE in text) is once, iso
+    # Never from today's clock: no purchase time, no sentence.
+    assert ONLY_CHARGE not in welcome_message("a@example.com", "monthly",
+                                              "abc123def0", "2026").text
+
+
+def test_the_acknowledgment_comes_before_the_offer_of_another_team(monkeypatch) -> None:
+    """Launch review EM-11: the first card under "You're in." was "Another
+    team? Your plan covers up to 3 teams…", above what the buyer gets, when,
+    and the terms, in the email the law requires as their acknowledgment."""
+    from render.welcome import TEAMS_HEAD, welcome_message
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    monkeypatch.setenv("UPDATE_SECRET", "s")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
+    message = welcome_message("a@example.com", "monthly", "abc123def0", "2026")
+    for words, after in ((message.text, TEAMS_HEAD.upper()),
+                         (message.html, f"{TEAMS_HEAD}")):
+        assert after in words
+        for before in ("What happens next", "The terms, in writing", "Done with this?"):
+            spot = words.find(before) if before in words else words.find(before.upper())
+            assert 0 <= spot < words.index(after), (before, after)

@@ -27,7 +27,8 @@ import re
 from typing import Any, Mapping
 
 from render.sender import sender_line
-from render.report import cancel_html, cancel_lines, is_seat, stop_route
+from render.report import (cancel_html, cancel_lines, forwards, is_seat, stop_route,
+                           way_out_html, way_out_lines)
 from render.report import SATURDAY_LINE, SATURDAY_LINE_HEAD, saturday_line
 from render.report import (NOT_CALLING_IT, ODDS_DEFINITION, RISING_HEAD,
                            bar_from_even, rising_intro)
@@ -39,8 +40,8 @@ from render.report import (
     EMAIL_META,
     sender_html,
     SEASON_END_HEAD,
-    EARLY_LOOK,
     EARLY_LOOK_HEAD,
+    early_look_text,
     season_end_lines,
     preheader_html,
     AS_SET_BODY,
@@ -95,6 +96,9 @@ from render.anatomy import short_usage  # noqa: F401  (its long-standing home)
 # for labels only; gold is a FILL, never text on paper; brick flags and unmet
 # deadlines; turf met ones.
 NAVY = "#101E33"
+# Every footer link's inline colour: a client draws a bare anchor in its
+# default blue (launch review PROD-7).
+LINK = f"color:{NAVY};"
 PAPER = "#F6F4EE"
 CARD = "#FFFFFF"
 LINE = "#E2DDD0"          # a card's border
@@ -384,6 +388,38 @@ def masthead_html(label: str, big: str, meta_html: str, stamp: str | None = None
         + (f'<div style="font-family:{FONT};font-size:12px;line-height:1.45;'
            f'color:{MUTED_ON_NAVY};padding-top:2px;">{esc(stamp)}</div>' if stamp else "")
         + '</td></tr>')
+
+
+def note_html(subject: str, preheader: str, body_html: str,
+              footer_html: str = "") -> str:
+    """A short note's whole document (a confirmation, a notice, the Trade
+    Check): the report's own masthead over one white card, then
+    ``footer_html`` (escaped by the caller) on the paper.
+
+    The notes drew their own square header, a gold rule and a letter-spaced
+    wordmark, while the report, the welcome and the Saturday check open on
+    this lockup, so the product read as two (launch review EM-10)."""
+    foot = (f'<tr><td style="background:{PAPER};padding:16px 4px 8px 4px;">'
+            f'<p style="{SMALL}margin:0;">{footer_html}</p></td></tr>'
+            if footer_html else "")
+    return (
+        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        f'{EMAIL_META}<title>{esc(subject)}</title></head>'
+        f'<body style="margin:0;padding:0;background:{PAPER};">'
+        f'{preheader_html(preheader)}'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{PAPER};"><tr><td align="center" '
+        f'style="padding:18px 8px;"><table role="presentation" width="560" '
+        f'cellpadding="0" cellspacing="0" border="0" '
+        f'style="max-width:560px;width:100%;background:{PAPER};">'
+        + masthead_html("", subject, "", big_size=24)
+        + f'<tr><td style="padding:10px 0 0 0;">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{CARD};border:1px solid {LINE};border-radius:12px;">'
+        f'<tr><td style="padding:22px 26px;">{body_html}</td></tr></table></td></tr>'
+        + foot
+        + '</table></td></tr></table></body></html>\n')
 
 
 def _header(meta: Mapping[str, Any], team: str | None = None) -> str:
@@ -952,6 +988,8 @@ def _forward_lines(meta: Mapping[str, Any] | None = None) -> list[str]:
     if seats:
         label, _, rest = seats.partition(": ")
         return ["", f"{label.upper()}: {rest}"]
+    if not forwards(meta):
+        return []
     words = _forward_text(meta)
     if not words:
         return []
@@ -971,6 +1009,17 @@ def text_summary(report: Mapping[str, Any]) -> str:
     return _solo_text(report)
 
 
+def _closest_head(regret: Mapping[str, Any]) -> tuple[str, str]:
+    """(the heading, the label after the call) for the text half. A label
+    that is itself "Closest call with odds" becomes the heading: "THE WEEK'S
+    CLOSEST CALL: … either is fine (50%) — closest call with odds" said it
+    twice (launch review PROD-9)."""
+    label = str(regret.get("label") or "")
+    if label.lower().startswith("closest call"):
+        return f"THE WEEK'S {label.upper()}", ""
+    return "THE WEEK'S CLOSEST CALL", (f" — {label.lower()}" if label else "")
+
+
 def _closest_text(regret: Mapping[str, Any]) -> list[str]:
     """The closest call's plain-text lines, today's words."""
     if "gate" in regret:
@@ -980,9 +1029,8 @@ def _closest_text(regret: Mapping[str, Any]) -> list[str]:
         # "Start X" reads "start X" after the colon; a toss-up's head is
         # the bare NAME, which keeps its capital ("george Pickens or ...").
         before = before[:1].lower() + before[1:]
-    lines = [f"THE WEEK'S CLOSEST CALL: {before} {joiner} "
-             f"{after} ({regret['confidence']:.0%})"
-             + (f" — {regret['label'].lower()}" if regret.get("label") else "")]
+    head, tail = _closest_head(regret)
+    lines = [f"{head}: {before} {joiner} {after} ({regret['confidence']:.0%}){tail}"]
     drivers = " · ".join(f"{d['label']} {d['value']}" for d in regret.get("drivers") or [])
     if drivers:
         lines.append(f"  {drivers}")
@@ -1005,7 +1053,7 @@ def _solo_text(report: Mapping[str, Any]) -> str:
                             if trial_join_url(meta) else ""))
         lines.append("")
     if meta.get("early_look"):
-        lines += [f"{EARLY_LOOK_HEAD.upper()}. {EARLY_LOOK}", ""]
+        lines += [f"{EARLY_LOOK_HEAD.upper()}. {early_look_text(meta)}", ""]
     if season_end_lines(meta):
         lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     for item in report.get("checklist") or []:
@@ -1108,12 +1156,13 @@ def _solo_text(report: Mapping[str, Any]) -> str:
                   *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
     # 07 — the receipts.
-    lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
-    if report["receipts"].get("last_week_calls"):
+    receipts = anatomy.receipts_data(report)
+    lines += ["", f"RECEIPTS: {receipts.get('note', '')}"]
+    if receipts.get("last_week_calls"):
         from engine.own_record import call_line
-        lines += [f"  - {call_line(c)}" for c in report["receipts"]["last_week_calls"]]
-    if report["receipts"].get("ask"):
-        lines.append(report["receipts"]["ask"])
+        lines += [f"  - {call_line(c)}" for c in receipts["last_week_calls"]]
+    if receipts.get("ask"):
+        lines.append(receipts["ask"])
     lines += ["", NO_BETTING_LINE,
               source_line(meta),
               availability_basis(meta),
@@ -1121,7 +1170,7 @@ def _solo_text(report: Mapping[str, Any]) -> str:
               *update_lines(meta), *team_lines(meta),
               *_forward_lines(meta),
               "",
-              *cancel_lines(stop_route(meta)),
+              *way_out_lines(meta),
               *([sender_line()] if sender_line() else [])]
     return "\n".join(lines) + "\n"
 
@@ -1151,7 +1200,7 @@ def _league_text(report: Mapping[str, Any]) -> str:
                             if trial_join_url(meta) else ""))
         lines.append("")
     if meta.get("early_look"):
-        lines += [f"{EARLY_LOOK_HEAD.upper()}. {EARLY_LOOK}", ""]
+        lines += [f"{EARLY_LOOK_HEAD.upper()}. {early_look_text(meta)}", ""]
     if season_end_lines(meta):
         lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     lines += ["GAME PLAN"]
@@ -1283,10 +1332,9 @@ def _league_text(report: Mapping[str, Any]) -> str:
             # "Start X" reads "start X" after the colon; a toss-up's head is
             # the bare NAME, which keeps its capital ("george Pickens or ...").
             before = before[:1].lower() + before[1:]
-        lines.append(
-            f"THE WEEK'S CLOSEST CALL: {before} {joiner} "
-            f"{after} ({regret['confidence']:.0%})"
-            + (f" — {regret['label'].lower()}" if regret.get("label") else ""))
+        head, tail = _closest_head(regret)
+        lines.append(f"{head}: {before} {joiner} {after} "
+                     f"({regret['confidence']:.0%}){tail}")
         for key in ("definition", "reason", "closer"):
             if regret.get(key):
                 lines.append(f"  {regret[key]}")
@@ -1318,12 +1366,13 @@ def _league_text(report: Mapping[str, Any]) -> str:
                   availability_basis(meta),
                   *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
-    lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
-    if report["receipts"].get("last_week_calls"):
+    receipts = anatomy.receipts_data(report)
+    lines += ["", f"RECEIPTS: {receipts.get('note', '')}"]
+    if receipts.get("last_week_calls"):
         from engine.own_record import call_line
-        lines += [f"  - {call_line(c)}" for c in report["receipts"]["last_week_calls"]]
-    if report["receipts"].get("ask"):
-        lines.append(report["receipts"]["ask"])
+        lines += [f"  - {call_line(c)}" for c in receipts["last_week_calls"]]
+    if receipts.get("ask"):
+        lines.append(receipts["ask"])
     # The gap list is operator bookkeeping (field names, internal reasons) and
     # never goes in a subscriber's email — the report already says, in place and
     # in plain words, wherever it declined to call something.
@@ -1379,6 +1428,19 @@ def preheader_for(report: Mapping[str, Any]) -> str:
                  if (item.get("zero") or {}).get("certain")), None)
     if hole is not None:
         return f"{str(hole['action']).rstrip('.')}. Your whole lineup is inside."
+    # A zero that waits on somebody's news outranks a close call too (launch
+    # review EM-9): card 01 opened "Heads up: no projected total — your QB
+    # can't play this week…" under a preview leading with a 57% FLEX call.
+    # Not the subject's "empty spot" (that counts certain zeros only), so it
+    # says "may".
+    maybe = next((item for item in report.get("checklist") or []
+                  if (item.get("zero") or {}).get("slots")), None)
+    if maybe is not None:
+        slots = [SLOT_DISPLAY.get(slot, slot)
+                 for slot in dict.fromkeys(maybe["zero"]["slots"])]
+        named = (slots[0] if len(slots) == 1 else
+                 ", ".join(slots[:-1]) + " and " + slots[-1])
+        return f"Heads up: your {named} may score zero. The plan is inside."
     regret = report.get("regret") or {}
     if "gate" not in regret and regret.get("start_name") and \
             regret.get("over_name") and regret.get("confidence") is not None:
@@ -1435,7 +1497,7 @@ def subject_for(report: Mapping[str, Any]) -> str:
         team = team_name(report)
         week = f"Week {meta['week']}" + (f" — {team}" if team else "")
         if meta.get("early_look"):
-            return f"{week}: your early look, before waivers"
+            return f"{week}: your early look"
         # The subject leads with an empty spot when there is one (F6): it is
         # the one thing in the report that costs points if left unread.
         holes = empty_spots(report)
@@ -1467,14 +1529,14 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'<p style="{SMALL}margin:0;overflow-wrap:anywhere;word-break:break-word;">'
         f'<b>Beat Your League</b> — '
         f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
-        f'{read_line(meta)}'
-        f'{update_line(meta)}{team_line(meta)}'
-        f'{seats_line(meta)}'
-        f'{_forward_line(meta)}'
+        f'{read_line(meta, LINK)}'
+        f'{update_line(meta, LINK)}{team_line(meta, LINK)}'
+        f'{seats_line(meta, LINK)}'
+        f'{_forward_line(meta, LINK)}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         f'{sender_html()}'
-        f'{cancel_html(stop_route(meta), f"color:{NAVY};")}'
+        f'{way_out_html(meta, LINK)}'
         '</p></td></tr>'
     )
 

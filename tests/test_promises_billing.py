@@ -325,6 +325,25 @@ def test_one_notice_per_entitled_mailbox_with_a_way_out(monkeypatch) -> None:
     assert message.unsubscribe
 
 
+def test_the_notices_way_out_is_set_like_the_rest_of_it(monkeypatch) -> None:
+    """Launch review EM-4, reproduced: the cancel block sat bare in the shell's
+    body cell ("…at the bottom of this email.</p><b>Done with this?</b>…"),
+    which sets no font, so Apple Mail and Outlook drew it in serif with a
+    default-blue link; and the text half had three blank lines between
+    "CANCEL: your billing page — …" and "DONE WITH THIS?"."""
+    from render.email import BASE
+    from run import notice
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/login/test")
+    person = notice.recipients([_row(subscription_ids=("sub_bbbb2222",))], _paid())[0]
+    message = notice.notice_message(person, "terms", date(2026, 11, 1), "x",
+                                    "https://beatyourleague.com")
+    assert f'<p style="{BASE}margin:0;"><b>Done with this?</b>' in message.html
+    assert ('href="https://billing.stripe.com/p/login/test" style="color:#101E33;"'
+            in message.html)
+    assert "\n\n\n" not in message.text
+    assert "CANCEL: your billing page — https://billing.stripe.com/p/login/test" in message.text
+
+
 # --------------------------------------------------------------------- #
 # launch gates and workflows
 # --------------------------------------------------------------------- #

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from render.email import BASE, CARD, DISPLAY, FLAG, FONT, NAVY, PAPER, SMALL
-from render.report import EMAIL_META, esc, preheader_html
+from render.email import BASE, FLAG, FONT, NAVY, SMALL
+from render.report import esc
 from render.roster_update import setting_words
 from run.delivery import Message
 from run.plans import TEAMS_INCLUDED
@@ -34,24 +34,9 @@ ADDED_BODY = ("It's included in your plan at no extra charge. It gets its own re
 
 
 def _shell(subject: str, preheader: str, body: str) -> str:
-    return (
-        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
-        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        f'{EMAIL_META}<title>{esc(subject)}</title></head>'
-        f'<body style="margin:0;padding:0;background:{PAPER};">'
-        f'{preheader_html(preheader)}'
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'border="0" style="background:{PAPER};"><tr><td align="center" '
-        f'style="padding:18px 8px;"><table role="presentation" width="560" '
-        f'cellpadding="0" cellspacing="0" border="0" '
-        f'style="max-width:560px;width:100%;background:{CARD};">'
-        f'<tr><td style="background:{NAVY};padding:20px 26px;border-left:4px solid {FLAG};">'
-        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
-        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">Beat Your League</div>'
-        f'<div style="font-family:{DISPLAY};font-size:24px;font-weight:bold;'
-        f'text-transform:uppercase;color:{CARD};padding-top:6px;">{esc(subject)}</div>'
-        f'</td></tr><tr><td style="padding:22px 26px;">{body}</td></tr></table>'
-        f'</td></tr></table></body></html>\n')
+    """The report's masthead over the body (render.email.note_html)."""
+    from render.email import note_html
+    return note_html(subject, preheader, body)
 
 
 def _setup_words(settings: Any) -> str:

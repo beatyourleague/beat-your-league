@@ -1128,3 +1128,38 @@ def test_a_row_with_nobody_to_compare_reads_as_settled_and_stays_true() -> None:
                        ("FLEX", "no other FLEX on your bench")):
         assert only_option(slot) == text
         assert row_label({"confidence_gate": gate, "status": "active", "slot": slot}) == text
+
+
+@pytest.mark.parametrize("starter_time, cover_time", [("13:00", "16:25"),
+                                                      ("16:25", "13:00")])
+def test_a_plan_that_moves_in_a_questionable_cover_says_so(starter_time, cover_time) -> None:
+    """Reproduction (report C, launch review PROD-2): the if/then said "Move
+    A.J. Brown into WR (projects 5.9)" and "Move TreVeyon Henderson into
+    FLEX" while both bench rows read "Questionable in Week 8 … didn't play".
+    Saturday's check says "He's questionable too" of its own swaps; Tuesday's
+    plan said nothing, so a reader acting on it Sunday morning could move in
+    a player who was out as well. Both clocks: the one-row plan (the cover
+    plays later) and the game-day "Decide before then" row (he plays first).
+    No number moves."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              WR1: ("Wade Doubt", "WR", "BUF"), TE1: ("Tate Tightend", "TE", "KC"),
+              RB2: ("Flex Back", "RB", "SF"), WR2: ("Hurt Bench", "WR", "LV")}
+    report = _report(roster, yards={WR1: 90, RB2: 60, WR2: 40},
+                     designations={WR1: "Questionable", WR2: "Questionable"},
+                     listed={WR1: ("questionable", "ankle"), WR2: ("questionable", "knee")},
+                     schedule=_schedule(BUF=_game("MIA", SUN, starter_time),
+                                        LV=_game("DEN", SUN, cover_time)))
+    clause = "Hurt Bench was questionable in Week 4 too, so check he's playing."
+    rows = _plans(report, "Wade Doubt")
+    assert rows and all(row["action"].endswith(clause) for row in rows), rows
+    assert rows[0]["action"].startswith("Move Hurt Bench into WR (projects 5.2)")
+    for name, page in _surfaces(report).items():
+        assert clause in page, name
+    # A healthy cover carries no such clause.
+    calm = _report(roster, yards={WR1: 90, RB2: 60, WR2: 40},
+                   designations={WR1: "Questionable"},
+                   listed={WR1: ("questionable", "ankle")},
+                   schedule=_schedule(BUF=_game("MIA", SUN, starter_time),
+                                      LV=_game("DEN", SUN, cover_time)))
+    assert not any("questionable in Week" in row["action"]
+                   for row in _plans(calm, "Wade Doubt"))

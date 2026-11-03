@@ -422,6 +422,30 @@ def test_the_preheader_is_true_of_the_report_it_previews() -> None:
             f"the inbox preview promises {absent!r}, which a solo report has not got"
 
 
+def test_the_preheader_leads_with_a_spot_that_may_score_zero() -> None:
+    """Launch review EM-9 (Nov 2026), reproduced: the preview read "Closest
+    call: start Khalil Shakir over Rome Odunze, 57%. Your whole lineup is
+    inside." while card 01 opened "Heads up: no projected total — your QB
+    can't play this week, and nobody on your bench is cleared to replace him
+    yet". The checklist's zero item waited on a bench player's news, so it
+    was not "certain", and only certain zeros led the preview."""
+    from render.email import preheader_for
+    report = _solo_report()
+    before = preheader_for(report)
+    assert "may score zero" not in before
+    report["checklist"] = [{"action": "Brock Purdy (QB) isn't playing this week, and the "
+                            "only bench player who could start there was out.",
+                            "urgency": "now",
+                            "zero": {"slots": ["QB"], "wait_on": ["00-1"]}},
+                           *report["checklist"]]
+    assert preheader_for(report) == "Heads up: your QB may score zero. The plan is inside."
+    report["checklist"][0]["zero"]["slots"] = ["QB", "FLEX", "SUPER_FLEX"]
+    assert preheader_for(report).startswith("Heads up: your QB, FLEX and SFLEX may")
+    # A certain zero still leads with its own sentence.
+    report["checklist"][0]["zero"]["certain"] = True
+    assert preheader_for(report).startswith("Brock Purdy (QB) isn't playing")
+
+
 def test_the_solo_subject_names_no_rival() -> None:
     """"the file on None" would be the subject line — the single most visible
     string the product produces."""
@@ -629,3 +653,27 @@ def test_a_subscribers_report_links_the_glossary_and_the_samples_do_not(monkeypa
         assert read_line(meta) == "" and read_lines(meta) == [], meta
     monkeypatch.delenv("SITE_URL")
     assert read_line(real) == "" and read_lines(real) == []
+
+
+def test_the_text_half_says_closest_call_with_odds_once() -> None:
+    """Launch review PROD-9(d), reproduced: "THE WEEK'S CLOSEST CALL: Michael
+    Wilson or Zay Flowers — either is fine (50%) — closest call with odds"."""
+    from render.email import text_summary
+    report = _solo_report()
+    report["regret"] = dict(report["regret"], label="Closest call with odds")
+    text = text_summary(report)
+    assert "THE WEEK'S CLOSEST CALL WITH ODDS: " in text
+    assert "— closest call with odds" not in text
+
+
+def test_the_withheld_total_names_one_subject() -> None:
+    """Launch review PROD-9(b), reproduced: "your K can't play this week and
+    your roster had nobody eligible to replace him. Any total we showed would
+    count points they cannot score." The gate test still finds "cannot
+    score" (tests/test_week_report.py)."""
+    from engine.week_report import TEAM_RANGE_ABSENT_STARTER
+    one = TEAM_RANGE_ABSENT_STARTER.format(slots="K", them="him")
+    assert one == ("no projected total — your K can't play this week and nobody on "
+                   "your roster can replace him. Any total we showed would count "
+                   "points your K cannot score. The lineup below flags who.")
+    assert " they " not in one

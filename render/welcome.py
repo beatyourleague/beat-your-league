@@ -135,6 +135,45 @@ SEAT_RESET_NOTE = ("If whoever paid for your league's pass resets its seats, "
 BILLING_STOPS = ("billing stops on its own: it won't renew after Week 16's report "
                  "goes out, and your reports still run through the season's last "
                  "week.")
+# A monthly plan renews a month after purchase. From about Nov 23 that date
+# falls after Week 16's report, so run/billing gives the plan its stop on its
+# first run (needs_stop) and the purchase is the only charge, while the email
+# said only "it bills each month" (launch review EM-6). Added after the
+# consented sentence, never in place of it.
+ONLY_CHARGE = ("Your next billing date would fall after Week 16's report, so "
+               "this purchase is the only charge.")
+
+
+def only_charge(season: str, purchased_at: str) -> bool:
+    """Is a monthly purchase made at ``purchased_at`` its plan's only charge?
+    From the PURCHASE clock (never today's, so the sentence stays the same on
+    a retry) and the cached schedule only; anything unreadable says no, and
+    the sentence above it stays true either way."""
+    import calendar
+    raw = str(purchased_at or "").strip()
+    if not raw:
+        return False
+    try:
+        stamp = (datetime.fromtimestamp(int(raw), timezone.utc) if raw.isdigit()
+                 else datetime.fromisoformat(raw))
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        from run.billing import last_charge_send
+        from run.plans import bills_all_year
+        from run.solo import CACHE_DIR
+        from run.watchdog import tuesday_due_at
+        if bills_all_year() or not (CACHE_DIR / "games.csv").is_file():
+            return False
+        send = last_charge_send(CACHE_DIR, str(season), live=False)
+        if send is None:
+            return False
+        # Stripe renews on the same day next month, or that month's last.
+        year, month = stamp.year + stamp.month // 12, stamp.month % 12 + 1
+        renews = stamp.replace(year=year, month=month,
+                               day=min(stamp.day, calendar.monthrange(year, month)[1]))
+        return renews > tuesday_due_at(send)
+    except Exception:               # no cache, no schedule, a bad clock
+        return False
 
 
 def first_renewal_words() -> str:
@@ -189,7 +228,8 @@ def _season_2027_terms() -> tuple[str, list[str]]:
 
 
 def _plan_terms(plan: str, one_time: bool = False, playoff: bool = False,
-                season_2027: bool = False) -> tuple[str, list[str]]:
+                season_2027: bool = False, season: str = "",
+                purchased_at: str = "") -> tuple[str, list[str]]:
     """(what you bought, the disclosures that purchase legally requires).
 
     ``playoff``: bought through the $19 Playoff Pass link (contract C4: the
@@ -201,7 +241,10 @@ def _plan_terms(plan: str, one_time: bool = False, playoff: bool = False,
     ``season_2027``: bought through the ``y:`` link. A season row with a
     subscription, so without it the purchase falls through to the bottom of
     this function: "$29, renews on the anniversary", two false statements in
-    the disclosure the law requires."""
+    the disclosure the law requires.
+
+    ``season`` and ``purchased_at``: a monthly purchase late enough to be its
+    plan's only charge says so (``only_charge``)."""
     if season_2027 and plan not in ("monthly", "seat", *PAYER_PLANS):
         return _season_2027_terms()
     if one_time and plan in PAYER_PLANS:
@@ -216,18 +259,20 @@ def _plan_terms(plan: str, one_time: bool = False, playoff: bool = False,
         return ("the Rest-of-Season Pass — every weekly report from now through "
                 "this season's last, for one payment",
                 [ONCE_LINE, REFUND_TERMS])
+    once = ([ONLY_CHARGE] if plan in ("monthly", *PAYER_PLANS)
+            and only_charge(season, purchased_at) else [])
     if plan == "monthly":
         return (
             f"the monthly plan — {MONTHLY_PRICE} USD a month",
             [f"It bills {MONTHLY_PRICE} USD each month until you cancel, and "
-             f"{BILLING_STOPS}",
+             f"{BILLING_STOPS}", *once,
              REFUND_TERMS],
         )
     if plan in PAYER_PLANS:
         return (
             f"the League Pass — {PASS_PRICE} USD a month for your whole league",
             [f"It bills {PASS_PRICE} USD each month until you cancel, and "
-             f"{BILLING_STOPS}",
+             f"{BILLING_STOPS}", *once,
              REFUND_TERMS_LEAGUE,
              SEATS_END],
         )
@@ -556,6 +601,31 @@ def _block(title: str, inner: str) -> str:
                                                    f'{inner}</div>'))
 
 
+# Launch review EM-3/PUR-6: the welcome sent every roster change to our inbox
+# ("Reply to any report … from the next Wednesday"), a `make roster-update` by
+# hand each time, while every report carries a link to do it yourself. The
+# link leads now, and the reply stays as the second route, as the landing's
+# FAQ gives them. No deadline here: the report's own line gives it, and it
+# moves in a week whose report goes Wednesday morning (render.report.
+# update_body), which this email cannot see.
+ROSTER_SELF_SERVE = ("Roster changed? Every weekly report ends with a link to "
+                     "update it yourself, and says when the change counts. Reply "
+                     "to any report with your updated roster if that's easier.")
+ROSTER_REPLY_ONLY = ("Roster changed? Reply to any report with your updated "
+                     "roster and your report follows it from the next Wednesday.")
+
+
+def roster_change_line() -> str:
+    """How a buyer changes their roster, or "" when no route can be applied:
+    an emailed roster goes in through ``make roster-update``, and the self-
+    serve link renders only when the site, the form backend and the secret all
+    exist (run.updates.public_update_url)."""
+    if not reply_update_works():
+        return ""
+    return (ROSTER_SELF_SERVE if os.environ.get("SITE_URL", "").strip()
+            else ROSTER_REPLY_ONLY)
+
+
 TEAMS_HEAD = "Another team?"
 TEAMS_BODY = (f"Your plan covers up to {TEAMS_INCLUDED} teams at no extra charge: redraft, "
               f"keeper or dynasty, each with its own report.")
@@ -594,7 +664,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     that renews each August, so the email states both seasons and the date."""
     if playoff and plan not in ("monthly", "seat", *PAYER_PLANS):
         one_time = True
-    bought, terms = _plan_terms(plan, one_time, playoff, season_2027)
+    bought, terms = _plan_terms(plan, one_time, playoff, season_2027,
+                                season=season, purchased_at=purchased_at)
     if week is None and not season_over:
         week = week_at(season, purchased_at)
     today = NEXT_TODAY if season_over else today_text(season, now)
@@ -627,9 +698,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
 
     when = None if seat else _purchase_date(purchased_at)
     opener = f"You {verb} {bought}." + (f" Purchased {when}." if when else "")
-    roster_line = ("Roster changed? Reply to any report with your updated roster "
-                   "and your report follows it from the next Wednesday."
-                   if reply_update_works() else "")
+    roster_line = roster_change_line()
     share = _share(plan, seat_link)
     site = _site()
     terms_url = f"{site}/terms.html" if site.startswith("https://") else ""
@@ -676,10 +745,6 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         twice_text = twice + (f" Where to cancel: {label}: {href}" if href else "")
         blocks.append(_block(TWICE_HEAD, f"{para}{esc(twice)}{link_html}</p>"))
     teams_url = _add_team_link(plan, season_over)
-    if teams_url:
-        blocks.append(_block(TEAMS_HEAD, (
-            f'{para}{esc(TEAMS_BODY)} <a href="{esc(teams_url)}" style="color:{NAVY};">'
-            f'Add a team</a>.</p>')))
     if share:
         lead, link, paste = share
         inner = para + esc(lead) + "</p>"
@@ -717,6 +782,13 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                    + '</p>')
     blocks.append(_block("The terms, in writing", terms_html))
     blocks.append(_block(CANCEL_HEAD, f'{para}{stop_html}</p>'))
+    if teams_url:
+        # After what they bought, when it comes and the terms: this email is
+        # the acknowledgment the law requires, and the offer of another team
+        # led it, above all three (launch review EM-11).
+        blocks.append(_block(TEAMS_HEAD, (
+            f'{para}{esc(TEAMS_BODY)} <a href="{esc(teams_url)}" style="color:{NAVY};">'
+            f'Add a team</a>.</p>')))
     footer = (
         (f'<tr><td style="padding:12px 4px 0 4px;"><p style="{BASE}font-size:13px;'
          f'color:{SLATE};margin:0;">{esc(roster_line)}</p></td></tr>'
@@ -747,8 +819,6 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     text_lines = ["BEAT YOUR LEAGUE", "YOU'RE IN.", "", opener]
     if twice_text:
         text_lines += ["", TWICE_HEAD.upper(), twice_text]
-    if teams_url:
-        text_lines += ["", TEAMS_HEAD.upper(), f"{TEAMS_BODY} {teams_url}"]
     if share:
         lead, link, paste = share
         text_lines += ["", "SEND YOUR LEAGUE THIS", lead]
@@ -763,6 +833,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                    "", "THE TERMS, IN WRITING", *terms,
                    f"{terms_ref}: " + (terms_url or "on our site's terms page."),
                    "", CANCEL_HEAD.upper(), stop_text,
+                   *(["", TEAMS_HEAD.upper(), f"{TEAMS_BODY} {teams_url}"]
+                     if teams_url else []),
                    *(["", roster_line] if roster_line else []),
                    "", f"Beat Your League — questions? Write to {CONTACT}.",
                    *([sender] if sender else [])]

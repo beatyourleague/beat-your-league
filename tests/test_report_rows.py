@@ -458,7 +458,11 @@ def test_usage_is_shortened_without_dropping_a_fact() -> None:
     assert line == "last 4 games: 34 targets (8.5 a game), 21 carries"
     assert short_usage(line) == "last 4: 8.5 targets · 5.2 carries a game"
     one = usage_line(Usage(1, 1, None, None, None, 1))
-    assert short_usage(one) == "last 1: 1.0 targets · 1.0 carries a game"
+    # One game is a count (launch review PROD-9: "last 1: 7.0 targets · 1.0
+    # carries a game" on a row).
+    assert short_usage(one) == "last game: 1 target · 1 carry"
+    assert short_usage(usage_line(Usage(1, 7, None, None, None, 2))) == \
+        "last game: 7 targets · 2 carries"
     receiver = usage_line(Usage(4, 34, None, None, None, 1))
     assert short_usage(receiver) == "last 4: 8.5 targets a game"
     # A line never empties: the larger of two tiny clauses stays.

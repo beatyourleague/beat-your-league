@@ -287,21 +287,22 @@ def build_solo_report(
     # if/then has an answer only if that player is elevated, so the late-news
     # line may not say "the answer either way".
     elevation: dict[str, str] = {}
-    # When each player's news must be acted on (RQ2-07), for the late-news line.
-    decide_at: dict[str, datetime] = {}
+    # When each player's news must be acted on (RQ2-07), for the late-news
+    # line: one moment per ruling that has its own plan (``ruling_moments``).
+    decide_at: dict[str, list[datetime]] = {}
     for name, pick, is_starter, pid in news:
         if not is_starter:
             moment = decision_moment(pid, game_of, before=pick.player_id)
             if moment is not None:
-                decide_at[pid] = moment
+                decide_at[pid] = [moment]
             continue
         options = covers(pick, spec, picks, players, model, availability, week,
                          unconfirmed)
         found = stand_in(pick, options, game_of, sunday, taken)
         final, late, early = found.final, found.late, found.too_early
-        moment = decision_moment(pid, game_of, cover=None if found.late else found.early)
-        if moment is not None:
-            decide_at[pid] = moment
+        moments = ruling_moments(pid, found, game_of)
+        if moments:
+            decide_at[pid] = moments
         rows = starter_plans(name, pick, found, options, players, game_of, taken)
         gameday = found.late or found.early
         if gameday is not None:
@@ -393,6 +394,9 @@ def build_solo_report(
                               and all(p.projection is None for p in picks)),
             "gaps": gaps,
             "llm_tokens": 0,
+            # Present only in a week whose report goes Wednesday morning, so
+            # every other week's report is byte-identical to before.
+            **({"report_morning": True} if report_goes_morning(schedule) else {}),
         },
         # None, not (): we have never seen their lineup, and an empty tuple would
         # read as "they started nobody" and produce a full list of changes — or
@@ -950,6 +954,10 @@ class Cover:
     mover: str | None = None
     flex_slot: str | None = None
     practice_squad: bool = False   # plays only if elevated (method §15 C9)
+    # The injury report's week, when it listed the incoming player
+    # questionable too (launch review PROD-2): ranked after the healthy, and
+    # named so on the plan that moves him in.
+    questionable_in: int | None = None
 
     @property
     def moving(self) -> tuple[str, ...]:
@@ -1008,10 +1016,14 @@ def covers(pick: SlotPick, spec: RosterSpec, picks: Sequence[SlotPick],
         practice_squad=lambda pid: pid in unconfirmed,
         incoming_ok=lambda pid: playing(pid) and model.project(pid, week) is not None,
         mover_ok=playing)
+    # The gate reads week W-1's injury report (method §15 C3), so that is the
+    # week a questionable cover was listed on.
     return [Cover(incoming, _printed(model, incoming, week),
                   slots[via][1] if via is not None else None,
                   slots[via][0] if via is not None else None,
-                  incoming in unconfirmed)
+                  incoming in unconfirmed,
+                  (week - 1 if availability.classify(incoming).status
+                   is Status.QUESTIONABLE else None))
             for incoming, via in ranked]
 
 
@@ -1066,13 +1078,27 @@ def stand_in(pick: SlotPick, options: Sequence[Cover],
     return StandIn(final, late, early, list(dict.fromkeys(too_early)), held)
 
 
+def doubt_note(cover: Cover, players: PlayerIndex) -> str:
+    """". A.J. Brown was questionable in Week 8 too, so check he's playing" —
+    when the player a plan moves in was on last week's report himself.
+
+    Launch review PROD-2: report C's if/then said "Move A.J. Brown into WR"
+    and "Move TreVeyon Henderson into FLEX" while both bench rows read
+    "Questionable in Week 8 … didn't play". Saturday's check already says it
+    of its own swaps ("He's questionable too"); Tuesday's plan did not."""
+    if cover.questionable_in is None:
+        return ""
+    return (f". {players.name(cover.incoming)} was questionable in Week "
+            f"{cover.questionable_in} too, so check he's playing")
+
+
 def cover_action(cover: Cover, slot: str, players: PlayerIndex) -> str:
     """"Move Sam LaPorta into FLEX (projects 9.5)" — or, for a slide, "Move
     Rome Odunze to WR and start Devin Neal at FLEX" (Saturday's own words)."""
     number = (f" (projects {cover.value:.1f})" if cover.value is not None
               else " (no games this season yet)")
     squad = (f". {elevation_note(players.name(cover.incoming))}"
-             if cover.practice_squad else "")
+             if cover.practice_squad else doubt_note(cover, players))
     if cover.mover is None:
         return f"Move {players.name(cover.incoming)} into {slot}{number}{squad}"
     return (f"Move {players.name(cover.mover)} to {slot} and start "
@@ -1179,7 +1205,9 @@ def starter_plans(name: str, pick: SlotPick, found: StandIn,
     move = (f"start {who}" if early.mover is None else
             f"move {players.name(early.mover)} to {slot} and start {who} at "
             f"{early.flex_slot}")
-    squad = f" {elevation_note(who)}." if early.practice_squad else ""
+    squad = (f" {elevation_note(who)}." if early.practice_squad
+             else f"{doubt_note(early, players)[1:]}." if early.questionable_in
+             else "")
     rows.append({"condition": f"{name} ({slot}) is still questionable on game day",
                  "action": (f"{players.name(first_id) if first_id else who} kicks "
                             f"off{clock}. Decide before then: {move}, or keep "
@@ -1206,6 +1234,40 @@ def decision_moment(player_id: str,
         theirs = kickoff(game_of(before))
         moments += [theirs] if theirs is not None else []
     return min(moments) if moments else None
+
+
+def ruling_moments(player_id: str, found: StandIn,
+                   game_of: Callable[[str], Mapping[str, Any] | None]
+                   ) -> list[datetime]:
+    """When a questionable starter's news must be acted on, once per ruling
+    whose plan acts at a different time (launch review PROD-1, Nov 2026).
+
+    Report C: DJ Moore and Dalton Kincaid, both Monday night, shared one
+    Sunday 4:25 PM bench back. Kincaid's game-day plan took him, so Moore's
+    only plan was "ruled out before game day: move TreVeyon Henderson in",
+    and the game plan said "Monday: check DJ Moore's status (by Monday 6:45
+    PM ET)", a day after Henderson had locked. The moment was timed by the
+    game-day cover alone, and Moore had none.
+
+    - A game-day plan at the inactives (``late``) is acted on then. When the
+      plan for a ruling BEFORE game day needs a cover who kicks off earlier,
+      that is a second, earlier moment, and the reader is told both: Sunday
+      morning for the final report, Monday's inactives for the game-day call.
+    - No game-day plan at the inactives: the earliest kickoff any plan needs,
+      the final-report cover's or the game-day cover's who kicks off first.
+      A starter whose game-day answer is "keep him and take a zero" has
+      nothing to do at his inactives, so he gets no second line.
+    - No plan at all: his own inactives."""
+    if found.late is not None:
+        moments = [decision_moment(player_id, game_of)]
+        if found.final is not None and found.final != found.late:
+            moments.append(decision_moment(player_id, game_of, cover=found.final))
+    else:
+        timed = [decision_moment(player_id, game_of, cover=cover)
+                 for cover in (found.final, found.early) if cover is not None]
+        timed = [moment for moment in timed if moment is not None]
+        moments = [min(timed)] if timed else [decision_moment(player_id, game_of)]
+    return sorted(set(moment for moment in moments if moment is not None))
 
 
 def no_stand_in_line(name: str, slot: str, early: Sequence[str],
@@ -2171,6 +2233,21 @@ def _week_sunday(schedule: Mapping[str, Mapping[str, Any]]) -> date | None:
     sundays = [day for day in (_game_day(g) for g in schedule.values())
                if day is not None and day.weekday() == 6]
     return min(sundays) if sundays else None
+
+
+def report_goes_morning(schedule: Mapping[str, Mapping[str, Any]]) -> bool:
+    """Does this week's report go Wednesday MORNING? Only in a week with a
+    game on its opening Wednesday (2026: Weeks 1 and 12), which is the day the
+    report is sent: weekly.yml's morning slot runs then and only then
+    (run/report_slot.due). Every surface that says "Wednesday evening" or
+    "that evening's report" reads this (launch review EM-1/PROD-M1).
+
+    The Wednesday before the week's Sunday: a game postponed to the Wednesday
+    after it (BAL@PIT, 2020) is not the report's day."""
+    sunday = _week_sunday(schedule)
+    return any(day is not None and day.weekday() == 2
+               and (sunday is None or day < sunday)
+               for day in (_game_day(g) for g in schedule.values()))
 
 
 def practice_squad_items(picks: Sequence[SlotPick], unconfirmed: Mapping[str, str],

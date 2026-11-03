@@ -672,3 +672,15 @@ def test_a_rookie_report_held_for_its_sender_address_is_red_once_a_year(
     monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 9, Toronto ON")
     assert rookie_runner.main(args) == 0
     assert [m.to for m in handed] == ["fan@example.com"]
+
+
+def test_the_season_review_credits_nflverse_and_carries_the_disclaimer() -> None:
+    """Launch review LEG-3, reproduced: review_message(REVIEW_SAMPLE) printed
+    "32.1 to 9.4" and "Josh Allen: 240.5 points" with no CC-BY-4.0 credit in
+    either half (RULE N1, a licence term)."""
+    import html as _html
+    from render.report import NFLVERSE_LINE, NO_BETTING_LINE
+    from render.season_review import REVIEW_SAMPLE, review_message
+    message = review_message("a@example.com", "2026", [("Your Team", REVIEW_SAMPLE)], "k")
+    for words in (message.text, _html.unescape(message.html)):
+        assert NFLVERSE_LINE in words and NO_BETTING_LINE in words

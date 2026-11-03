@@ -837,8 +837,16 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     report's card layout (contract C3); every link to it waits for that, so a
     page kept from before the card stack is never offered beside the phone
     that shows the cards (review BUYER-1). Written only when true: an older
-    clock lacks it, and the links stay on the pinned sample."""
+    clock lacks it, and the links stay on the pinned sample.
+
+    ``total`` is written only when FALSE: card 01 printed no projected total
+    (an absent or missing starter withheld it), so the page meant to prove the
+    product opens on "Heads up: no projected total". Week 8 of 2026 did, and
+    the landing still linked it as "this week's report" (launch review
+    DES-1); every rule that reveals a link to it checks ``total !== false``,
+    so an older clock, which lacks the key, links as before."""
     import json
+    from render import anatomy
     meta = report["meta"]
     odds = sum(1 for slot in report.get("lineup") or []
                if slot.get("confidence") is not None)
@@ -858,6 +866,8 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
         **({"closest": dict(closest)} if keep_closest else {}),
         **({"byes_left": bool(byes_left)} if byes_left is not None else {}),
         **({"cards": True} if cards else {}),
+        **({"total": False} if report.get("lineup")
+           and not anatomy.lineup(report).get("week") else {}),
     }, separators=(",", ":")) + "\n", encoding="utf-8")
 
 

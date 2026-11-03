@@ -234,6 +234,16 @@ def test_receipt_card_escapes_names_and_refuses_pending() -> None:
         receipt_card_svg(_settled_call(status=PENDING, outcome=None))
 
 
+def test_a_roster_products_receipt_card_credits_nflverse() -> None:
+    """Launch review LEG-3: a card is posted as an image, away from the page
+    that carries the credit, and prints box-score points. RULE N1 makes the
+    CC-BY-4.0 credit a licence term on it; a Sleeper-era card, graded on the
+    league's own record, carries none."""
+    from render.cards import CREDIT
+    assert CREDIT in receipt_card_svg(_settled_call(league_id="typed-ppr-12-2026"))
+    assert "nflverse" not in receipt_card_svg(_settled_call())
+
+
 def test_receipt_cards_written_only_for_settled(tmp_path: Path) -> None:
     calls = [_settled_call(),
              _settled_call(call_id="d4", status=PENDING, outcome=None)]

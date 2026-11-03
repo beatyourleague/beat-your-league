@@ -91,9 +91,17 @@ def notice_message(sub, page: str, effective: date, summary: str, site_url: str)
                f'date at the top: <a href="{esc(url)}" style="color:{NAVY};">'
                f'{esc(url)}</a></p>' if url
                else _para(read))
-            + _para(leave) + cancel_html(seat=seat))
+            + _para(leave)
+            # In a paragraph of its own: bare in the shell's body cell it fell
+            # back to the client's serif with a default-blue link (launch
+            # review EM-4).
+            + f'<p style="{BASE}margin:0;">'
+            f'{cancel_html(seat=seat, link_style=f"color:{NAVY};")}</p>')
+    # cancel_lines ends its URL line on "", which the blank-line join turned
+    # into three blank lines.
     text = "\n\n".join([lede, f"What changes: {summary}", read, leave,
-                        *cancel_lines(seat=seat), *_footer_lines()]) + "\n"
+                        *[line for line in cancel_lines(seat=seat) if line],
+                        *_footer_lines()]) + "\n"
     return Message(to=sub.email, subject=subject,
                    html=_shell(subject, f"{name.capitalize()} change on {when}", body),
                    text=text, key=notice_key(page, effective, sub.email),
