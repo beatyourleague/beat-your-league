@@ -769,13 +769,16 @@ one email. Without the code the run refuses and sends nothing — so the Worker'
 token, which can start any workflow, can't mail every subscriber words of its own.
 
 **How's demand?** Pull, then `make stats`: counts and dollars only, never an address —
-traffic and the signup funnel (step 5b), waitlist, free-report requests, roster updates,
-seat claims and seats filled per League Pass, sends by week, passes sold this season by type
-with gross, refunded, net and the refund rate, free report → paid within 14 days, and paid
-signups by `?via=` tag. It needs `FORM_ENDPOINT` and `FORM_API_KEY` for the form rows, the
-step 5b pair in `.env` for traffic and, for payments, the `owner-stats` key from step 3 in
-`STRIPE_API_KEY` (the cron key can't read refunds). The Stripe Dashboard's phone app is the
-live view of money; `make stats` is the funnel around it. It never runs in CI.
+traffic and the signup funnel (step 5b), waitlist, free-report and Trade Check requests,
+roster updates, seat claims and seats filled per League Pass, sends by week, plans sold this
+season by type with gross, refunded, net and the refund rate, free report → paid within 14
+days, and paid signups by `?via=` tag. It reads `FORM_ENDPOINT` and `FORM_API_KEY` for the
+form rows and the step 5b pair for traffic from this shell, else `.env`. For payments it
+needs the `owner-stats` key from step 3 in `STRIPE_API_KEY` (the cron key can't read
+refunds). Put `STRIPE_PAYMENT_LINKS` in `.env` too: the same `m:…,p:…` map as the GitHub
+secret. It holds link ids, not a key, and without it a sale is named by its price instead of
+the link that took the money. The Stripe Dashboard's phone app is the live view of money;
+`make stats` is the funnel around it. It never runs in CI.
 
 **The dashboard.** `make dashboard` is the same data as `make stats`, plus the cron health
 from GitHub, the launch check's quick gates and this season's record, as one private page that
@@ -788,6 +791,16 @@ insights, switchable between 7 days, 30 days and all. It reads the same `.env` a
 it in public. A source you haven't connected shows its LAUNCH step instead of numbers.
 `make dashboard-registry` adds subscribers and seats the way `make stats-registry` does. It
 never runs in CI.
+
+The launch gates on the page read the same shell and `.env`. With `STRIPE_PAYMENT_LINKS` in
+`.env` it checks each sale against its plan; without it, it says plans can't be checked here
+rather than calling a served sale unattributable. Once the USD payout account exists (step
+1.8), `STRIPE_PAYOUT_CURRENCY=usd` in `.env` clears the payout warning. Until checkout can
+complete, a "Where launch stands" card says what is on and the step next. PLAN §6's gates
+count from D, the day checkout opens, once D is written there (section 10). Before that they
+count from the season's start, so a test purchase of your own counts in them, and a refund of
+it shows in the refund rate. `.env` holds the read keys, so keep it to yourself:
+`chmod 600 .env`.
 
 **Keep it fresh.** `make dashboard-live` does the same, then rebuilds every 15 minutes while
 it runs, and the open tab reloads itself after each rebuild without losing your place. Leave
