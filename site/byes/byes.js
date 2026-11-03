@@ -331,8 +331,34 @@
     };
   }
 
+  // The static table's "played" marks follow byes.json's build stamp
+  // (render/bye_index.played_before), and the file is rebuilt only by the
+  // Wednesday run, so on a Tuesday the week just finished still read as ahead
+  // (SITE-10). From today's date, every listed week before the one being
+  // played gets the same mark; a mark is never taken off. Once the season is
+  // over (no current week) nothing is added, as played_before does. Text
+  // nodes and classList only. Returns the weeks it marked.
+  function markPlayed(root, byes, todayIso) {
+    const current = currentWeek(byes, todayIso);
+    const marked = [];
+    if (current === null || !root || !root.querySelectorAll) return marked;
+    root.querySelectorAll(".byetable li").forEach((li) => {
+      const head = li.querySelector("b");
+      const match = /^Week (\d+)$/.exec(head ? head.textContent.trim() : "");
+      if (!match || Number(match[1]) >= current || li.classList.contains("played")) return;
+      li.classList.add("played");
+      const tag = li.ownerDocument.createElement("span");
+      tag.className = "tag pl";
+      tag.textContent = "played";
+      li.append(" ", tag);
+      marked.push(Number(match[1]));
+    });
+    return marked;
+  }
+
   const B = { byeCollisions, unfillableSlots, thinSlots, structural, FLEX_ELIGIBILITY,
-              slotWords, joinWords, currentWeek, rosterRows, rowMeta, describe, etDay };
+              slotWords, joinWords, currentWeek, rosterRows, rowMeta, describe, etDay,
+              markPlayed };
   if (typeof module !== "undefined" && module.exports) module.exports = B;
   else globalThis.B = B;
 })();

@@ -171,6 +171,43 @@ def test_the_thank_you_page_waits_for_monday_night_with_the_join_page() -> None:
     assert "usually lands within the hour" in prose(THANKS)
 
 
+def test_the_landing_waits_for_monday_night_with_join_and_thanks() -> None:
+    """SITE-3, reproduced at 09:20 UTC Tue Nov 3 2026: thanks.html and join/
+    said the first report waits for Monday night's box score, and at the same
+    moment the landing's price card and FAQ said "Your first report usually
+    lands within the hour." The landing carries thanks.html's mondayNight()
+    to the letter and, inside its window, rewrites both sentences in
+    thanks.html's words. The static text (and the structured data) stays the
+    general case."""
+    landing = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    # Inside the clock's IIFE (the tests that run it extract only that), so
+    # compared line by line without its indent.
+    start = landing.index("function mondayNight(")
+    nested = landing[start:landing.index("\n    }\n", start) + 6]
+    flat = lambda src: [line.strip() for line in src.strip().splitlines()]  # noqa: E731
+    assert flat(nested) == flat(_js_function(THANKS, "mondayNight"))
+    wait = ("Your first report lands once Monday night's game is scored, "
+            "usually by Tuesday morning.")
+    code = re.sub(r'"\s*\+\s*"', "", _js_code(landing))
+    handler = code.split('mondayNight(w, Date.now(), Date.parse(w.first_kickoff || ""))) {')[1]
+    handler = handler.split("\n        }\n")[0]
+    assert '["first-lands", "faq-first-lands"]' in handler and f'"{wait}"' in handler
+    assert wait in re.sub(r'"\s*\+\s*"', "", _js_code(THANKS))
+    for anchor in ('<li id="first-lands">Your first report usually lands within the hour.</li>',
+                   '<span id="faq-first-lands">Your first report usually lands within the '
+                   'hour.</span>'):
+        assert anchor in landing, anchor
+    # The window is join's "overnight", as the thanks test checks: Monday 23:59
+    # UTC no, Tuesday 01:55 and 09:00 yes, Tuesday 16:00 no.
+    wk8 = {**WEEK, "week": 8, "lands_on": "2026-11-04", "first_kickoff": "2026-10-30T00:15:00Z"}
+    got = _node(nested + "\nconsole.log(JSON.stringify(" +
+                json.dumps(["2026-11-02T23:59:00Z", "2026-11-03T01:55:00Z",
+                            "2026-11-03T09:00:00Z", "2026-11-03T16:00:00Z"]) +
+                ".map((now) => mondayNight(" + json.dumps(wk8) +
+                ", Date.parse(now), Date.parse('2026-10-30T00:15:00Z')))));")
+    assert got == [False, True, True, False]
+
+
 def test_the_season_closes_when_no_weekly_report_is_left() -> None:
     """D9: "over", the last week from its first kickoff, and past the last
     week's lands_on (ET) all close; preseason is open for checkout and closed

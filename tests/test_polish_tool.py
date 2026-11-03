@@ -1190,3 +1190,58 @@ def test_make_index_and_make_byes_build_the_planners_data() -> None:
     index = make.split("\nindex:\n", 1)[1].split("\n\n", 1)[0]
     assert "render.player_index" in index and "render.bye_index" in index
     assert "\nbyes:\n\t$(PY) -m render.bye_index --season $(SEASON)" in make
+
+
+@needs_node
+def test_the_bye_table_marks_a_finished_week_from_todays_date(tmp_path) -> None:
+    """SITE-10, reproduced Nov 3 2026: the static list tagged Weeks 5-7
+    "played" (from byes.json's Oct 27 build stamp, and the file is rebuilt
+    only by the Wednesday run) and left Week 8 untagged after its games were
+    over, while the check beside it already started at Week 9. byes.js marks
+    every listed week before currentWeek(today) the way the generator does,
+    never unmarks one, and adds nothing once the season is over. The page
+    calls it as soon as byes.json is in."""
+    block = PAGE.split("<!-- byes:start -->")[1].split("<!-- byes:end -->")[0]
+    items = re.findall(r'<li( class="played")?><b>Week (\d+)</b>', block)
+    rows = [{"week": int(w), "played": bool(c)} for c, w in items]
+    script = (f"const B = require({json.dumps(str(BYES_JS))});\n"
+              f"const byes = JSON.parse(require('fs').readFileSync("
+              f"{json.dumps(str(BYES_JSON))}, 'utf8'));\n"
+              f"const rows = {json.dumps(rows)};\n"
+              "function table() {\n"
+              "  const doc = { createElement: (tag) => ({ tag, className: '', textContent: '' }) };\n"
+              "  return rows.map((r) => { const cls = new Set(r.played ? ['played'] : []);\n"
+              "    const li = { week: r.week, kids: [], ownerDocument: doc, cls,\n"
+              "      classList: { add: (c) => cls.add(c), contains: (c) => cls.has(c) },\n"
+              "      querySelector: (s) => (s === 'b' ? { textContent: 'Week ' + r.week } : null),\n"
+              "      append: (...k) => li.kids.push(...k) };\n"
+              "    return li; });\n"
+              "}\n"
+              "const out = {};\n"
+              "for (const day of ['2026-11-03', '2026-10-20', '2027-02-01']) {\n"
+              "  const lis = table();\n"
+              "  const root = { querySelectorAll: (s) => (s === '.byetable li' ? lis : []) };\n"
+              "  const marked = B.markPlayed(root, byes, day);\n"
+              "  out[day] = { marked, played: lis.filter((l) => l.cls.has('played'))\n"
+              "    .map((l) => l.week), tags: lis.flatMap((l) => l.kids\n"
+              "    .filter((k) => typeof k === 'object').map((k) => k.className + ':' + k.textContent)) };\n"
+              "}\n"
+              "console.log(JSON.stringify(out));")
+    got = _node(tmp_path, script)
+    current = next(w["week"] for w in json.loads(BYES_JSON.read_text())["weeks"]
+                   if w["ends"] >= "2026-11-03")
+    listed = [r["week"] for r in rows]
+    already = {r["week"] for r in rows if r["played"]}
+    assert current == 9 and 8 in listed and 8 not in already
+    nov3 = got["2026-11-03"]
+    assert nov3["played"] == [w for w in listed if w < current]
+    assert nov3["marked"] == [w for w in listed if w < current and w not in already]
+    assert 8 in nov3["marked"] and nov3["tags"] == ["tag pl:played"] * len(nov3["marked"])
+    # Before the build: a mark already there stays, nothing is added.
+    assert got["2026-10-20"]["marked"] == []
+    assert got["2026-10-20"]["played"] == sorted(already)
+    # The season over: nothing added (render.bye_index.played_before's rule).
+    assert got["2027-02-01"]["marked"] == []
+    assert "B.markPlayed(document, byes, today());" in _inline_script(PAGE)
+    body = BYES_JS.read_text(encoding="utf-8").split("function markPlayed")[1].split("\n  }\n")[0]
+    assert "innerHTML" not in body and "textContent = \"played\"" in body

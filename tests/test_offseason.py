@@ -260,6 +260,46 @@ def test_a_season_so_far_counts_games_played_only() -> None:
     assert rookies.this_season("9", weekly, RULE) is None
 
 
+def test_a_week_still_being_played_waits_for_its_last_game() -> None:
+    """SITE-5, reproduced on Nov 3 2026: the stat release's Week 8 held 26 of
+    its 28 teams (CHI@SEA, Monday night, not in yet), and the live page said
+    "2026 games are through Week 8" while every Bears and Seahawks rookie was
+    a game short. A week counts once every team the schedule has playing in
+    it appears in its rows (run.solo's rule); a week the schedule doesn't
+    list never counts; no schedule keeps the old reading."""
+    def row(team: str, yards: str = "100") -> dict:
+        return {"team": team, "receiving_yards": yards}
+    current = {7: {"1": row("CHI"), "2": row("DEN")},
+               8: {"2": row("DEN", "50")}}                       # CHI@SEA not in
+    playing = {7: {"CHI", "DEN"}, 8: {"CHI", "SEA", "DEN", "KC"}}
+    assert rookies.complete_through(current, playing) == 7
+    assert rookies.complete_through(current, {7: {"CHI", "DEN"}}) == 7
+    assert rookies.complete_through(current, {}) is None
+    current[8].update({"1": row("CHI"), "3": row("SEA"), "4": row("KC")})
+    assert rookies.complete_through(current, playing) == 8
+    # A defense row carries its team but is not a box score.
+    assert rookies.complete_through({7: {"DEF-CHI": row("CHI"), "2": row("DEN")}},
+                                    playing) is None
+    players = [player("2", "B", "WR")]
+    partial = {7: {"2": row("DEN")}, 8: {"2": row("DEN", "50")}}
+    report = rookies.build(players, {}, {}, RULE, 2026, current=partial,
+                           playing={7: {"DEN"}, 8: {"DEN", "SEA"}})
+    assert report["through_week"] == 7
+    assert report["rookies"][0]["season"] == {"games": 1, "per_game": 10.0, "recent": [10.0]}
+    unread = rookies.build(players, {}, {}, RULE, 2026, current=partial)
+    assert unread["through_week"] == 8 and unread["rookies"][0]["season"]["games"] == 2
+    # The page's schedule: REG games of the class's season only.
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "games.csv").write_text(
+            "season,game_type,week,away_team,home_team\n2026,REG,8,CHI,SEA\n"
+            "2026,REG,8,KC,DEN\n2026,POST,19,BUF,KC\n2025,REG,8,NYJ,NE\n", encoding="utf-8")
+        assert render_rookies.schedule_teams(Path(tmp), 2026) == {
+            8: {"CHI", "SEA", "KC", "DEN"}}
+    assert "playing=schedule_teams(cache, year, live=live)" in Path(
+        render_rookies.__file__).read_text(encoding="utf-8")
+
+
 def test_the_season_line_reads_plainly() -> None:
     assert _season({"season": None}, 2026) == "2026: no games yet."
     assert _season({"season": {"games": 1, "per_game": 2.2, "recent": [2.2]}}, 2026) == "2026: 1 game, 2.2 points."

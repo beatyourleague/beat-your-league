@@ -1801,6 +1801,30 @@ def test_compare_lists_our_own_weaknesses_like_everyone_elses() -> None:
             f"our own weaknesses column lost {admission!r}"
 
 
+def test_compare_describes_the_product_that_ships() -> None:
+    """SITE-4, reproduced on the live page Nov 3 2026: our row said "One
+    roster per plan" (a plan covers up to 3 teams, run/plans.py, terms §1),
+    "the odds on every call" and "the odds on every call worth making" (odds
+    print only where both players are playing, contract C5), "typing or
+    pasting your players once" (managers update after waivers), and "our 2026
+    record fills in ... from the first subscriber's first report" while the
+    public ledger already held the live sample's 2026 calls. The page is
+    noindex and unlinked, so it may still mention the backtest; it may not
+    say false things about us."""
+    from run.plans import TEAMS_INCLUDED
+    ours = prose(COMPARE.split('class="us"')[1].split("</tr>")[0])
+    picks = prose(COMPARE.split("Which one, honestly")[1].split('class="cta"')[0])
+    both = re.sub(r"\s+", " ", ours + " " + picks)
+    assert f"Up to {TEAMS_INCLUDED} teams on one plan" in both
+    for false in ("One roster per", "odds on every call", "players once",
+                  "first subscriber's first report"):
+        assert false not in both, false
+    assert both.count("odds where both players are playing, off the injury report and "
+                      "have enough games on record (never on team defenses)") == 2
+    assert "and again when it changes" in both
+    assert "sample roster's weekly calls" in ours
+
+
 def test_compare_includes_the_free_answer() -> None:
     """Recommending "pay nobody" where it's true is what separates this page
     from every self-ranking listicle in the niche — it is the honesty principle
@@ -1841,7 +1865,7 @@ def test_compare_never_denies_a_rival_feature_we_verified_they_have() -> None:
         "their per-roster tool must be acknowledged, not quietly dropped"
     # Our own row carries the mirror admission.
     our_row = COMPARE.split('class="us"')[1].split("</tr>")[0]
-    assert re.search(r"you enter it yourself|type or past", our_row, re.I), \
+    assert re.search(r"you enter (?:it|them) yourself|paste your roster", our_row, re.I), \
         "we advertise a rival's one-tap sync without admitting our own typing"
     # And the guidance section still sends the sync-wanters to them by name.
     picks = COMPARE.split("Which one, honestly")[1]
@@ -4917,6 +4941,60 @@ def test_every_link_to_the_live_report_waits_for_the_heros_rule(name: str) -> No
             and "</span>" not in enclosing), f"{name}: an ungated link to this-week.html"
     assert _live_week_gate(page), f"{name} never applies the three-odds rule"
     assert re.search(r'href="/?sample-report\.html"', body), f"{name} lost its pinned fallback"
+
+
+_PLAYED_RULE = ('Date.parse(w.last_kickoff || "")', "lastKick + 8 * 3600 * 1000")
+_WEEK8 = {"season": "2026", "week": 8, "last_week": 18, "lands_on": "2026-11-04",
+          "first_kickoff": "2026-10-30T00:15:00Z", "last_kickoff": "2026-11-03T01:15:00Z",
+          "phase": "season", "odds": 3, "closest_call": True, "cards": True}
+# Sunday night (Monday night still to play), Monday night's game underway,
+# Tuesday morning once its box score is due, and the same without the key.
+_PLAYED_CASES = [[_WEEK8, "2026-11-02T03:00:00Z"], [_WEEK8, "2026-11-03T05:00:00Z"],
+                 [_WEEK8, "2026-11-03T09:15:00Z"],
+                 [{k: v for k, v in _WEEK8.items() if k != "last_kickoff"},
+                  "2026-11-03T09:15:00Z"]]
+
+
+def test_no_link_calls_a_finished_week_this_weeks_report() -> None:
+    """SITE-2, reproduced Tue Nov 3 2026: every Week 8 game was over, but
+    lands_on is the next report's Wednesday, so for about two days a week the
+    hero, the footer, How it works and the 404 page offered a page about games
+    already played as "this week's report", whose card still said "Set this
+    lineup before this week's first kickoff". Every reader now stops eight
+    hours after the week's last kickoff (run/solo.BOX_SCORE_LAG, when its box
+    score is due), one rule in every copy; a clock without last_kickoff keeps
+    the lands_on rule."""
+    from datetime import timedelta
+    from run.solo import BOX_SCORE_LAG
+    assert BOX_SCORE_LAG == timedelta(hours=8)
+    footer = (SITE / "footer.js").read_text(encoding="utf-8")
+    for name, code in (("index.html", _js_code(LANDING)), ("404.html", _js_code((SITE / "404.html").read_text(encoding="utf-8"))),
+                       ("how-it-works.html", _js_code(HOW)), ("footer.js", footer)):
+        for piece in _PLAYED_RULE:
+            assert piece in code, f"{name} lacks the last-kickoff rule ({piece})"
+    assert re.search(r'phase === "season" && fresh && !played && Number\.isInteger\(w\.odds\)',
+                     LANDING), "the hero's link ignores the last kickoff"
+    for name, page in (("404.html", (SITE / "404.html").read_text(encoding="utf-8")),
+                       ("how-it-works.html", HOW)):
+        fn = _js_function(page, "easternToday") + _js_function(page, "weekPhase")
+        got = _node(fn + "\nconsole.log(JSON.stringify(" + json.dumps(_PLAYED_CASES) +
+                    ".map(([w, now]) => { const real = Date.now; Date.now = () => Date.parse(now);"
+                    " try { return weekPhase(w).current; } finally { Date.now = real; } })));")
+        # easternToday reads the real clock, so only the last-kickoff half is
+        # under test here: each case is on or before lands_on in every zone.
+        assert got == [True, True, False, True], (name, got)
+    harness = ("const cases = " + json.dumps(_PLAYED_CASES) + "; const out = [];\n"
+               "(async () => { for (const [w, now] of cases) {\n"
+               "  const link = { hidden: true };\n"
+               "  global.document = { querySelectorAll: () => [link] };\n"
+               "  global.window = { fetch: true };\n"
+               "  global.fetch = () => Promise.resolve({ ok: true, json: () => w });\n"
+               "  const real = Date.now; Date.now = () => Date.parse(now);\n"
+               "  eval(" + json.dumps(footer) + ");\n"
+               "  await new Promise((r) => setTimeout(r, 5)); Date.now = real;\n"
+               "  out.push(!link.hidden); }\n"
+               "  console.log(JSON.stringify(out)); })();")
+    assert _node(harness) == [True, True, False, True]
 
 
 def test_how_it_works_asks_for_the_one_action_it_leads_to() -> None:

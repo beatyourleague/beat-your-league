@@ -46,7 +46,7 @@ def _row(entry: Mapping[str, Any]) -> str:
         result = f"{'+' if margin >= 0 else ''}{margin:.1f}"
     else:
         result = "—"
-    regret = ' <span class="tag">regret call</span>' if entry.get("regret") else ""
+    regret = ' <span class="tag">closest call</span>' if entry.get("regret") else ""
     # The SETUP the call was made under. public_entries has carried `scoring`
     # and `league_size` since the store split, and its docstring says why —
     # "without the preset the two render as identical duplicate rows" — but

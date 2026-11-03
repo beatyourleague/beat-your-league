@@ -345,7 +345,36 @@ def load_report(cache: Path, year: int, *, live: bool = False) -> dict[str, Any]
     except NflverseError:
         current = {}                 # no stats file until the class has played
     return build(players, seasons[year - 1], seasons, preset("ppr"), year,
-                 as_of=data_date(players_csv), current=current)
+                 as_of=data_date(players_csv), current=current,
+                 playing=schedule_teams(cache, year, live=live))
+
+
+def schedule_teams(cache: Path, year: int, *, live: bool = False) -> dict[int, set[str]] | None:
+    """week -> the teams with a regular-season game that week, from games.csv,
+    or None when the schedule can't be read (engine.rookies.build then counts
+    every week with rows, as it did before SITE-5)."""
+    import csv
+    from ingest.nflverse import NflverseError, fetch
+    try:
+        path = fetch("schedules", "games.csv", cache, live=live)
+    except NflverseError:
+        return None
+    weeks: dict[int, set[str]] = {}
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if str(row.get("season") or "") != str(year):
+                continue
+            if (row.get("game_type") or "REG").upper() != "REG":
+                continue
+            try:
+                week = int(row.get("week") or 0)
+            except ValueError:
+                continue
+            for side in ("home_team", "away_team"):
+                team = (row.get(side) or "").strip()
+                if week and team:
+                    weeks.setdefault(week, set()).add(team)
+    return weeks
 
 
 def main(argv: list[str] | None = None) -> int:

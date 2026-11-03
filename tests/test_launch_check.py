@@ -884,6 +884,25 @@ def test_the_season_clock_check_carries_the_recorded_odds_gate(site) -> None:
     assert _status(lc.check_week_json(), "only recorded odds") == "PASS"
 
 
+def test_a_sample_with_no_total_is_not_linked_without_the_key(site) -> None:
+    """SITE-1, reproduced on the live site Nov 3 2026: this-week.html opened
+    on "Heads up: no projected total" (Purdy out on a 49ers bye) while the
+    committed week.json, written Oct 27 before the writer learned the key,
+    had no "total", so the hero and every footer linked it. The committed
+    pair passes now; take the key away and it fails."""
+    import json
+    assert _status(lc.check_week_json(), "card 01 has a total") == "PASS"
+    clock = json.loads((site / "week.json").read_text(encoding="utf-8"))
+    assert clock.get("total") is False
+    del clock["total"]
+    (site / "week.json").write_text(json.dumps(clock), encoding="utf-8")
+    assert _status(lc.check_week_json(), "card 01 has a total") == "FAIL"
+    gate = lc.total_gate
+    assert gate({}, "<p>Week total 112.4</p>").status == "PASS"
+    assert gate({"total": False}, "Heads up: no projected total").status == "PASS"
+    assert gate({}, "Heads up: no projected total").status == "FAIL"
+
+
 def test_an_empty_record_warns_once_odds_could_have_been_recorded(tmp_path, monkeypatch) -> None:
     """G25, reproduced on Oct 17 2026 (Week 6): no typed-* store existed, so
     not one published % was on the record — and nothing said so, because no

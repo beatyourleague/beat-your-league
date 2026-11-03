@@ -809,7 +809,8 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
                     first_kickoff: str | None = None, *, recorded: bool = False,
                     after_kickoff: bool = False, phase: str = "season",
                     closest: Mapping[str, Any] | None = None,
-                    byes_left: bool | None = None, cards: bool = False) -> None:
+                    byes_left: bool | None = None, cards: bool = False,
+                    last_kickoff: str | None = None) -> None:
     """The season clock the landing page reads (site/week.json): the week this
     report covers, the season's last week, and the day the next report lands,
     so the hero can say "Week 7's report lands Tuesday" from the schedule
@@ -844,7 +845,14 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     product opens on "Heads up: no projected total". Week 8 of 2026 did, and
     the landing still linked it as "this week's report" (launch review
     DES-1); every rule that reveals a link to it checks ``total !== false``,
-    so an older clock, which lacks the key, links as before."""
+    so an older clock, which lacks the key, links as before.
+
+    ``last_kickoff`` (ISO-8601 UTC) is the week's LAST regular-season kickoff.
+    ``lands_on`` is the Wednesday the NEXT report goes out, so from Monday
+    night to Wednesday evening a page about games already played passed
+    every "this week's report" rule (launch review SITE-2). Every reader
+    stops calling the page current ``BOX_SCORE_LAG`` after it. Written only
+    when known: an older clock keeps the lands_on rule alone."""
     import json
     from render import anatomy
     meta = report["meta"]
@@ -860,6 +868,7 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
         # left it with nothing).
         "odds": odds, "closest_call": "gate" not in (report.get("regret") or {"gate": 1}),
         "first_kickoff": first_kickoff,
+        **({"last_kickoff": last_kickoff} if last_kickoff else {}),
         **({"recorded": True} if recorded else {}),
         **({"after_kickoff": True} if after_kickoff else {}),
         "phase": phase,
@@ -1367,6 +1376,8 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:  # noqa: BLE001 — no date means the page says nothing new
         lands_on = None
     first_kickoff = first.strftime("%Y-%m-%dT%H:%M:%SZ") if first else None
+    last = max(starts.values()) if starts else None
+    last_kickoff = last.strftime("%Y-%m-%dT%H:%M:%SZ") if last else None
     # The clock's closest call (C9): only from a recorded week before kickoff,
     # and through recorded_only, so the % is the one the ledger holds.
     closest = (closest_for_clock(recorded_only(copy.deepcopy(report), args.processed_dir),
@@ -1375,7 +1386,7 @@ def main(argv: list[str] | None = None) -> int:
     write_week_json(report, week_json, lands_on, first_kickoff,
                     recorded=recorded, after_kickoff=kicked_off,
                     closest=closest, byes_left=byes_left,
-                    cards='class="card"' in page)
+                    cards='class="card"' in page, last_kickoff=last_kickoff)
     called = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"this week's sample -> {args.out} · {report['meta']['season']} week "
           f"{report['meta']['week']} · {called}/{len(report['lineup'])} with odds")

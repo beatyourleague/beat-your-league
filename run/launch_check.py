@@ -612,7 +612,29 @@ def check_week_json() -> list[Gate]:
                  f"week {w.get('week')}, next report lands {lands or 'unknown'}"
                  + (" — stale until the next Wednesday build (the hero shows its static sentence)"
                     if stale else "")),
-            recorded_odds_gate(w), closest_gate(w)]
+            recorded_odds_gate(w), closest_gate(w), total_gate(w)]
+
+
+def total_gate(week: dict, page: str | None = None) -> Gate:
+    """SITE-1 / DES-1: a this-week.html whose card 01 opens on "no projected
+    total" must not be linked as "this week's report", and every link waits
+    for week.json's ``total: false`` to know it. A clock written before that
+    key existed (Oct 27 2026, Week 8: Purdy out on a 49ers bye) let the hero
+    and every footer link the page anyway."""
+    name = "This week's sample is linked only when card 01 has a total"
+    if page is None:
+        try:
+            page = (SITE / "this-week.html").read_text(encoding="utf-8")
+        except OSError:
+            return Gate("Site", name, "PASS", "no this-week.html")
+    if "no projected total" in page and week.get("total") is not False:
+        return Gate("Site", name, "FAIL",
+                    "site/this-week.html opens on \"no projected total\" but week.json "
+                    "lacks \"total\": false, so the hero and footer link it — add the "
+                    "key or rebuild through render.live_sample")
+    return Gate("Site", name, "PASS",
+                "held back: card 01 has no total" if week.get("total") is False
+                else "card 01 prints a total")
 
 
 def _instant(stamp: Any) -> datetime | None:

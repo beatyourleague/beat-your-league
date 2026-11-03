@@ -550,6 +550,11 @@ def test_the_samples_rebuilt_date_is_eastern() -> None:
     stamp = rr._generated_stamp({"historical_demo": True, "season": "2024",
                                  "generated_at": "2026-10-17T03:35:00+00:00"})
     assert stamp == "Rebuilt Oct 16, 2026 from the 2024 season archive"
+    # SITE-8: a single-digit day is not zero-padded ("Rebuilt Nov 03, 2026"
+    # sat beside "Data as of Nov 2, 2026" and "Built Tue Oct 27").
+    stamp = rr._generated_stamp({"historical_demo": True, "season": "2024",
+                                 "generated_at": "2026-11-03T15:00:00+00:00"})
+    assert stamp == "Rebuilt Nov 3, 2026 from the 2024 season archive"
 
 
 # --------------------------------------------------------------------- #

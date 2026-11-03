@@ -436,7 +436,10 @@ def test_the_mid_season_answer_is_the_stronger_one_in_both_places() -> None:
     """Copy review: "Yes, it's built for it" was weak; the answer names what a
     playoff-push buyer gets, and the JSON-LD carries the same words."""
     faq = LANDING.split("<summary>Is it worth joining mid-season?</summary>")[1]
-    answer = html.unescape(re.search(r'<div class="a">(.*?)</div>', faq, re.S).group(1))
+    # Text as read: the last sentence sits in a span the week clock rewrites in
+    # the Monday-night window (SITE-3).
+    answer = html.unescape(re.sub(r"<[^>]+>", "", re.search(
+        r'<div class="a">(.*?)</div>', faq, re.S).group(1)))
     graph = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>',
                                  LANDING, re.S).group(1))["@graph"]
     faqs = next(n for n in graph if n["@type"] == "FAQPage")["mainEntity"]

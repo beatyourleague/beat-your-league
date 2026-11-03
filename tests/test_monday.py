@@ -428,6 +428,23 @@ def test_the_public_record_shows_which_setup_decided_each_call() -> None:
     assert "None" not in old
 
 
+def test_the_flagged_call_wears_the_reports_own_name() -> None:
+    """SITE-9: the live record tagged the week's flagged call "REGRET CALL",
+    the retired rival product's word, while every report, email and the
+    landing call the same call "Closest call with odds"."""
+    from render.ledger_site import _row
+    row = _row(dict(season="2026", week=7, slot="FLEX", pick="Rome Odunze",
+                    over="Rashid Shaheed", status="graded", outcome="hit", margin=8.8,
+                    void_reason=None, regret=True, scoring="ppr", league_size=12,
+                    confidence=0.61))
+    assert '<span class="tag">closest call</span>' in row
+    assert "regret" not in row.lower()
+    from pathlib import Path
+    page = (Path(__file__).resolve().parent.parent / "site" / "ledger" / "index.html"
+            ).read_text(encoding="utf-8")
+    assert "regret call" not in page.lower()
+
+
 def test_the_public_record_does_not_sell_a_rival_the_product_has_not_got() -> None:
     """The generator closed every Monday republish with "Your league's version
     starts when you pick a rival" above a "Pick your rival" button. The product
