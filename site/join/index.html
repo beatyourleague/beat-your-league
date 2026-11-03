@@ -2533,10 +2533,13 @@ function firstReportTiming(w, now) {
   // the intake moves to next week, and a buyer's first report is that week's,
   // which waits for Monday night's box score (run/solo.py BOX_SCORE_LAG).
   // That usually lands overnight, so until Tuesday 16:00 UTC (late morning
-  // ET) the page names the wait, never "today".
+  // ET) the page names the wait, never "today". Only once the week has kicked
+  // off: before Week 1 (the preseason clock, whose lands_on is Week 1's own
+  // report day) there is no Monday night game to wait for, and the buyer's
+  // first report is the roster report, today.
   const [y, m, d] = w.lands_on.split("-").map(Number);
   const nextWeek = Date.UTC(y, m - 1, d - 1);
-  if (!(Number.isInteger(w.last_week) && w.week >= w.last_week) &&
+  if (!(Number.isInteger(w.last_week) && w.week >= w.last_week) && now >= kickoff &&
       now >= nextWeek && now < nextWeek + 16 * 3600 * 1000) {
     return { when: "overnight" };
   }

@@ -117,6 +117,25 @@ def test_a_monday_night_buyer_is_not_promised_a_report_today() -> None:
     assert "your Wednesday report from" not in after
 
 
+PRESEASON = {"season": "2026", "week": 1, "last_week": 18, "lands_on": "2026-09-09",
+             "first_kickoff": "2026-09-10T00:20:00Z", "phase": "preseason"}
+
+
+def test_no_monday_night_wait_before_the_season_has_a_game() -> None:
+    """PUR-2's window, reproduced on the preseason clock (render/live_sample
+    preseason_clock: week 1, lands_on Week 1's own report day): at 01:00Z Sep
+    8 (Labor Day, 9 PM ET) the window opened and the page said "This week's
+    report lands once Monday night's game is scored" with no game anywhere.
+    A seat claim shows that line in the preseason (canStartToday is the form
+    endpoint). The wait is named only once the week has kicked off; before
+    that the first report is the roster report, today."""
+    got = _node(PHASE + "\nconsole.log(JSON.stringify(" + json.dumps([
+        [PRESEASON, "2026-09-08T01:00:00Z"],
+        [{**PRESEASON, "phase": "season"}, "2026-09-08T01:00:00Z"],
+    ]) + ".map(([w, now]) => firstReportTiming(w, new Date(now)))));")
+    assert [g and g["when"] for g in got] == ["after", "after"]
+
+
 def test_the_thank_you_page_waits_for_monday_night_with_the_join_page() -> None:
     """PUR-2's other half, reproduced on the page a Monday-night buyer lands on
     after Stripe: join had come to say "lands once Monday night's game is
@@ -132,12 +151,13 @@ def test_the_thank_you_page_waits_for_monday_night_with_the_join_page() -> None:
     cases = [[wk8, "2026-11-02T23:59:00Z"], [wk8, "2026-11-03T01:55:00Z"],
              [wk8, "2026-11-03T09:00:00Z"], [wk8, "2026-11-03T16:00:00Z"],
              [last, "2026-11-03T01:55:00Z"], [{**wk8, "first_kickoff": "2026-11-05T01:15:00Z"},
-                                              "2026-11-03T01:55:00Z"]]
+                                              "2026-11-03T01:55:00Z"],
+             [PRESEASON, "2026-09-08T01:00:00Z"]]
     got = _node(fn + "\n" + PHASE + "\nconsole.log(JSON.stringify(" + json.dumps(cases) +
                 ".map(([w, now]) => { const t = firstReportTiming(w, new Date(now));"
                 " return [mondayNight(w, Date.parse(now), Date.parse(w.first_kickoff)),"
                 " Boolean(t && t.when === 'overnight')]; })));")
-    assert [g[0] for g in got] == [False, True, True, False, False, False]
+    assert [g[0] for g in got] == [False, True, True, False, False, False, False]
     assert [g[0] for g in got] == [g[1] for g in got], "thanks.html and join disagree"
     handler = _js_code(THANKS).split("mondayNight(w, Date.now(), kick)) {")[1].split("} else if")[0]
     words = " ".join(s for s in re.findall(r'"((?:[^"\\]|\\.)*)"',
