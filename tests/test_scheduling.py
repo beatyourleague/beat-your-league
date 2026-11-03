@@ -147,6 +147,29 @@ def test_no_backup_cron_fires_at_the_top_of_the_hour_and_the_watchdog_agrees() -
         f"the watchdog says the Wednesday run is due at {due:%H:%M}, the cron {tuesday}"
 
 
+def test_the_owners_weekly_table_names_the_times_the_crons_run() -> None:
+    """Sweep OPS-5: LAUNCH.md section 8 still read "UTC: Tue 12:17 and 16:17"
+    and "the 12:17pm retry builds" a week after the report moved to Wednesday
+    evening, weekly.yml documented the retired 2026 one-time link map, and the
+    failure issue said "the Tuesday pipeline failed". Every cron's UTC time
+    is on the table's UTC line, and the retired words are gone."""
+    launch = (ROOT / "LAUNCH.md").read_text(encoding="utf-8")
+    section = launch.split("## 8. Every week from here", 1)[1].split("\n## ", 1)[0]
+    utc = re.search(r"^UTC: (.*?)\n\n", section, re.S | re.M)
+    assert utc, "section 8 lost its UTC line"
+    for name in SCHEDULED:
+        for cron in _crons(name):
+            minute, hour = cron.split()[:2]
+            clock = f":{minute}" if hour == "*" else f"{int(hour):02d}:{minute}"
+            assert clock in utc.group(1), (name, cron)
+    for retired in ("Tue 12:17", "12:17pm retry", "ET until Nov 1", "an hour earlier"):
+        assert retired not in section, retired
+    weekly = (ROOT / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
+    assert "s:plink_A" not in weekly and "m:<$14.99" in weekly
+    assert "the Tuesday pipeline failed" not in weekly
+    assert "the Wednesday pipeline failed" in weekly
+
+
 @needs_node
 def test_the_worker_dispatches_exactly_what_the_workflows_schedule(tmp_path) -> None:
     """A week of half-hour ticks through the real `scheduled()`: at every tick
@@ -173,6 +196,8 @@ def test_the_worker_dispatches_exactly_what_the_workflows_schedule(tmp_path) -> 
     assert got["2026-10-14T13:17:00.000Z"] == ["weekly.yml"]     # ...and the morning slot
     assert got["2026-10-17T16:17:00.000Z"] == ["saturday.yml"]
     assert got["2026-10-12T13:17:00.000Z"] == ["monday.yml"]
+    # ...and again Tuesday, once Monday night's box score is in (sweep OPS-7).
+    assert got["2026-10-13T13:17:00.000Z"] == ["monday.yml"]
     assert sum(1 for names in got.values() if "daily.yml" in names) == 7 * 25
 
 

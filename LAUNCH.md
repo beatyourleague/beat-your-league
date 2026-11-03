@@ -666,16 +666,17 @@ win-loss totals, nothing about betting.
 
 ## 8. Every week from here
 
-| When (ET until Nov 1) | What runs | What you do |
+| When (ET) | What runs | What you do |
 |---|---|---|
-| Wednesday about 5:17pm ET, retry about 7:17pm (9:17am in a week with a Wednesday game) | **weekly-report:** new signups, every subscriber's report, this week's live sample (its odds are recorded before kickoff) | Open your own report |
-| Daily 10:17am, plus every hour at :47 | **daily-intake:** purchases, welcomes, first reports, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
-| Saturday 12:17pm | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
-| Monday 9:17am | **monday-receipts:** grades last week's calls, republishes the record | Nothing, unless it goes red |
+| Wednesday about 5:17pm, retry about 7:17pm (8:17am in a week with a Wednesday game) | **weekly-report:** new signups, every subscriber's report, this week's live sample (its odds are recorded before kickoff) | Open your own report |
+| Daily 9:17am, plus every hour at :47 | **daily-intake:** purchases, welcomes, first reports, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
+| Saturday 11:17am | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
+| Monday 8:17am, again Tuesday 8:17am | **monday-receipts:** grades last week's calls, republishes the record; Tuesday's run settles the Monday-night calls | Nothing, unless it goes red |
 
-UTC: Tue 12:17 and 16:17, daily 14:17 and :47 hourly, Sat 16:17, Mon 13:17. The Worker
-starts each on time (`17,47 * * * *`); GitHub's schedules are the backup. From Nov 1 the ET
-times are an hour earlier.
+UTC: Wed 22:17 and Thu 00:17 (Wed 13:17 in a week with a Wednesday game), daily 14:17 and
+:47 hourly, Sat 16:17, Mon and Tue 13:17. The Worker starts each on time (`17,47 * * * *`);
+GitHub's schedules are the backup. Cron has no time zone, so on daylight time (until early
+November, and from March) every ET time above is an hour later.
 
 A red run opens a GitHub issue and GitHub emails you. The same failure again comments on the
 open issue instead, so close each once it's fixed.
@@ -685,7 +686,7 @@ kickoff, run that workflow by hand from Actions (nobody is mailed twice). After 
 don't: the Wednesday run refuses a week already underway.
 
 **A red Wednesday run saying "box scores are not all in"** names a game. Usually Monday night
-just isn't published yet and the 12:17pm retry builds: do nothing. If that game was
+just isn't published yet and the evening retry (about 7:17pm ET) builds: do nothing. If that game was
 **postponed or suspended** (the news says so — BUF@CIN in 2022 is the precedent), the report
 would wait for a score that isn't coming, and so would first reports and free reports. Then:
 1. GitHub → repo Settings → Secrets and variables → Actions → **Variables** → New repository

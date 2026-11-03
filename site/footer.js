@@ -1,8 +1,9 @@
 // The footer map's "This week's report" link. It waits for the landing hero's
 // rule, as every link to that page does (launch review PC-01): a current week
 // in the season, at least three odds and a closest call, on a page built in
-// the report's card layout. Anything else leaves it hidden; the sample report
-// is always one link away. Reads the site's own week.json and nothing else.
+// the report's card layout, before the week's last game is over. Anything
+// else leaves it hidden; the sample report is always one link away. Reads the
+// site's own week.json and nothing else.
 (function () {
   "use strict";
   var links = document.querySelectorAll("footer [data-live-week]");
@@ -18,8 +19,10 @@
         .forEach(function (x) { part[x.type] = x.value; });
       var today = part.year + "-" + part.month + "-" + part.day;
       if (!/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "") || today > w.lands_on) return;
+      // A week whose last game is over (`ends`, its last kickoff, plus 4
+      // hours) is not "this week's" while the next report is pending (OPS-1).
       if (Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call && w.cards === true &&
-          w.total !== false) {
+          w.total !== false && !(Date.now() >= Date.parse(w.ends || "") + 4 * 3600 * 1000)) {
         links.forEach(function (a) { a.hidden = false; });
       }
     })

@@ -809,7 +809,8 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
                     first_kickoff: str | None = None, *, recorded: bool = False,
                     after_kickoff: bool = False, phase: str = "season",
                     closest: Mapping[str, Any] | None = None,
-                    byes_left: bool | None = None, cards: bool = False) -> None:
+                    byes_left: bool | None = None, cards: bool = False,
+                    ends: str | None = None) -> None:
     """The season clock the landing page reads (site/week.json): the week this
     report covers, the season's last week, and the day the next report lands,
     so the hero can say "Week 7's report lands Tuesday" from the schedule
@@ -844,7 +845,15 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     product opens on "Heads up: no projected total". Week 8 of 2026 did, and
     the landing still linked it as "this week's report" (launch review
     DES-1); every rule that reveals a link to it checks ``total !== false``,
-    so an older clock, which lacks the key, links as before."""
+    so an older clock, which lacks the key, links as before.
+
+    ``ends`` (ISO-8601 UTC) is the week's LAST kickoff, from the same schedule
+    as ``first_kickoff``. Once its game is over (``ends`` plus
+    ``WEEK_ENDS_GRACE_HOURS``) the page is a finished week, and every link
+    that calls it "this week's report" hides until the next build replaces
+    the file (sweep OPS-1: with the report on Wednesday evening, Week 8's
+    finished page stayed linked from Monday night to Wednesday). Written
+    when known; a clock without it links as before."""
     import json
     from render import anatomy
     meta = report["meta"]
@@ -868,7 +877,14 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
         **({"cards": True} if cards else {}),
         **({"total": False} if report.get("lineup")
            and not anatomy.lineup(report).get("week") else {}),
+        **({"ends": ends} if ends else {}),
     }, separators=(",", ":")) + "\n", encoding="utf-8")
+
+
+# How long after the week's last kickoff its game is surely over: a game runs
+# about three and a half hours. Every reader of week.json's ``ends`` uses this
+# figure (site/index.html, footer.js, 404.html, how-it-works.html).
+WEEK_ENDS_GRACE_HOURS = 4
 
 
 # --------------------------------------------------------------------- #
@@ -1367,6 +1383,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:  # noqa: BLE001 — no date means the page says nothing new
         lands_on = None
     first_kickoff = first.strftime("%Y-%m-%dT%H:%M:%SZ") if first else None
+    ends = max(starts.values()).strftime("%Y-%m-%dT%H:%M:%SZ") if starts else None
     # The clock's closest call (C9): only from a recorded week before kickoff,
     # and through recorded_only, so the % is the one the ledger holds.
     closest = (closest_for_clock(recorded_only(copy.deepcopy(report), args.processed_dir),
@@ -1375,7 +1392,7 @@ def main(argv: list[str] | None = None) -> int:
     write_week_json(report, week_json, lands_on, first_kickoff,
                     recorded=recorded, after_kickoff=kicked_off,
                     closest=closest, byes_left=byes_left,
-                    cards='class="card"' in page)
+                    cards='class="card"' in page, ends=ends)
     called = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"this week's sample -> {args.out} · {report['meta']['season']} week "
           f"{report['meta']['week']} · {called}/{len(report['lineup'])} with odds")

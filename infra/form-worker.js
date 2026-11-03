@@ -429,6 +429,7 @@ const SCHEDULE = [
   { cron: "47 * * * *", workflow: "daily.yml", inputs: { daily: "false" } },
   { cron: "17 16 * * 6", workflow: "saturday.yml" },   // the final check
   { cron: "17 13 * * 1", workflow: "monday.yml" },     // grading
+  { cron: "17 13 * * 2", workflow: "monday.yml" },     // ...the Monday-night calls
 ];
 
 // Plain numbers, comma lists and `*` — the only syntax the workflows use. A

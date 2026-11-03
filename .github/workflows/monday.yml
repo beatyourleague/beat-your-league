@@ -23,14 +23,21 @@ name: monday-receipts
 
 on:
   schedule:
-    # Mondays 13:17 UTC — 09:17 ET on daylight time, 08:00 ET from Nov 1 2026.
+    # Mondays 13:17 UTC — 09:17 ET on daylight time, 08:17 ET from Nov 1 2026.
     # Deliberately BEFORE Monday Night Football: the Sunday slate settles now
     # and the MNF calls settle next week, because RULE L1 refuses to grade a
     # call whose game is not final rather than guessing at it.
     - cron: "17 13 * * 1"
-  # The form Worker (infra/form-worker.js) also dispatches this at 13:17 UTC
-  # on Mondays, because GitHub's scheduler runs late or not at all; the cron
-  # above is the backup.
+    # Tuesdays 13:17 UTC (08:17 ET from Nov 1, 09:17 on daylight time): the
+    # Monday-night box score lands about 09:15 UTC, so this run settles the MNF
+    # calls the Monday run had to leave pending. Before it they waited a whole
+    # week for the next Monday (sweep OPS-7). Grading twice is harmless: RULE
+    # L4 makes a settled call immutable, and this run only settles what the
+    # first could not. 13:17, not 14:17, keeps it off the daily run's minute.
+    - cron: "17 13 * * 2"
+  # The form Worker (infra/form-worker.js) also dispatches both at 13:17 UTC,
+  # because GitHub's scheduler runs late or not at all; the crons above are
+  # the backup.
   workflow_dispatch: {}
 
 # One run at a time, queued rather than cancelled. Grading twice is harmless —

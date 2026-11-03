@@ -1442,7 +1442,7 @@
 </main>
 
 <footer>
-  <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a><a href="rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a><a href="dynasty/">Dynasty</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=6c2efd9b19" defer></script>
+  <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a><a href="rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a><a href="dynasty/">Dynasty</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=d5a1be040c" defer></script>
   <b style="color:var(--dusk2)">Beat Your League</b> — analysis, not betting picks.<br>
   Samples shown are real reports.
   NFL data: nflverse (nflverse-data), CC-BY-4.0. Projections are analysis, not guarantees.
@@ -2289,8 +2289,12 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
         // build or the offseason leaves an old week.json behind, and it must
         // not be called "this week's"; a page from before the card stack must
         // not be offered beside a phone that shows the cards (review BUYER-1).
+        // And never once the week's last game is over (`ends`, its last
+        // kickoff, plus 4 hours): a finished week is not "this week's" while
+        // the next report is pending (sweep OPS-1).
         if (phase === "season" && fresh && Number.isInteger(w.odds) &&
-            w.odds >= 3 && w.closest_call && w.cards === true && w.total !== false) {
+            w.odds >= 3 && w.closest_call && w.cards === true && w.total !== false &&
+            !(Date.now() >= Date.parse(w.ends || "") + 4 * 3600 * 1000)) {
           document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
           // The hero keeps one link: in a week like this it opens this week's
           // real report rather than the 2024 sample, and never a third link.

@@ -521,3 +521,39 @@ def test_the_clock_says_when_card_01_printed_no_total(tmp_path, week) -> None:
     report["matchup"]["range_gate"] = "no projected total — your QB can't play this week."
     live.write_week_json(report, path)
     assert json.loads(path.read_text(encoding="utf-8"))["total"] is False
+
+
+def test_the_clock_says_when_the_weeks_last_game_kicks_off(
+        tmp_path, monkeypatch, week) -> None:
+    """Sweep OPS-1: with the report on Wednesday evening, Week 8's finished
+    page (every game played by Monday night) stayed linked as "this week's
+    report" until Wednesday's build, about a day and three quarters a week.
+    The build writes the week's LAST kickoff (``ends``) from the schedule it
+    already reads, and every reader hides the link four hours after it. A
+    clock written without it (an older build) carries no such key."""
+    starts = {"KC": datetime(2026, 10, 30, 0, 15, tzinfo=timezone.utc),
+              "SEA": datetime(2026, 11, 3, 1, 15, tzinfo=timezone.utc),
+              "GB": datetime(2026, 11, 1, 17, 0, tzinfo=timezone.utc)}
+    monkeypatch.setattr(live, "_kickoffs", lambda season, wk: dict(starts))
+    code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False)
+    assert code == 0
+    clock = json.loads((out.parent / "week.json").read_text(encoding="utf-8"))
+    assert clock["ends"] == "2026-11-03T01:15:00Z"
+    assert clock["first_kickoff"] == "2026-10-30T00:15:00Z"
+    plain = tmp_path / "plain.json"
+    live.write_week_json(week(), plain)
+    assert "ends" not in json.loads(plain.read_text(encoding="utf-8"))
+    assert live.WEEK_ENDS_GRACE_HOURS == 4
+
+
+def test_the_published_week_8_clock_hides_its_finished_page() -> None:
+    """Sweep OPS-1's stopgap: the committed Week 8 clock was built before
+    ``total`` existed, so the landing linked a page whose card 01 opened on
+    "no projected total". Both facts are on it now; Wednesday's build replaces
+    the file."""
+    site = Path(__file__).resolve().parent.parent / "site"
+    clock = json.loads((site / "week.json").read_text(encoding="utf-8"))
+    if clock.get("season") != "2026" or clock.get("week") != 8:
+        pytest.skip("the Week 8 clock has been replaced by a later build")
+    assert clock["total"] is False and clock["ends"] == "2026-11-03T01:15:00Z"
+    assert "no projected total" in (site / "this-week.html").read_text(encoding="utf-8")

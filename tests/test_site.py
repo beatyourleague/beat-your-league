@@ -4890,9 +4890,21 @@ def _live_week_gate(page: str) -> bool:
     # with nobody cleared behind him opened on "no projected total", on the
     # page linked as "this week's report"). week.json writes `total` only
     # when it is false, so an older build still passes.
+    # And not once the week's last game is over (sweep OPS-1): `ends` is its
+    # last kickoff, and four hours on the page is a finished week.
     return re.search(r"w\.odds >= 3 && w\.closest_call &&\s*w\.cards === true"
-                     r" && w\.total !== false", page) \
+                     r" && w\.total !== false &&\s*" + re.escape(WEEK_ENDS_RULE), page) \
         is not None and 'querySelectorAll("[data-live-week]")' in page
+
+
+# One expression in every reader of week.json's `ends`, held to the build's
+# figure (render.live_sample.WEEK_ENDS_GRACE_HOURS).
+WEEK_ENDS_RULE = '!(Date.now() >= Date.parse(w.ends || "") + 4 * 3600 * 1000)'
+
+
+def test_the_week_ends_rule_uses_the_builds_grace() -> None:
+    from render.live_sample import WEEK_ENDS_GRACE_HOURS
+    assert f"+ {WEEK_ENDS_GRACE_HOURS} * 3600 * 1000)" in WEEK_ENDS_RULE
 
 
 @pytest.mark.parametrize("name", ("index.html", "how-it-works.html", "404.html"))
