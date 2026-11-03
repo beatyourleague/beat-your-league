@@ -401,6 +401,9 @@
   #step-league{margin:14px 0;}
   #step-league > .note:first-child{margin-top:0;}
   #settings-intro{margin:6px 0 0;font-size:14px;}
+  /* The open panel's first note says the same thing in full (FUN-14). A
+     class, not hidden: seat, update and free-report modes set that. */
+  #step-league.settings-open #settings-intro{display:none;}
   @media (prefers-reduced-motion:reduce){
     #rows.fresh .row,.tally.good::before,.ok::before,#step-email,.checkmail,.err,.ok,.suggest,
     .opts label{animation:none!important;}
@@ -2011,6 +2014,7 @@ function drawSettingsLine() {
 function settingsOpen() { return !$("settings-body").hidden; }
 function showSettings(open) {
   $("settings-body").hidden = !open;
+  $("step-league").classList.toggle("settings-open", open);
   $("settings-change").setAttribute("aria-expanded", open ? "true" : "false");
   $("settings-change").textContent = open ? "Done" : "Change";
   drawShapeNote();
@@ -2525,8 +2529,19 @@ function firstReportTiming(w, now) {
   // Inside that window either report may come, so the page names neither.
   if (w.week > 1 && now < kickoff.getTime() - 75 * 60 * 1000) return { when: "before" };
   if (w.week > 1 && now < kickoff) return null;
+  // PUR-2: at 00:00 UTC the day before the next report (Monday evening ET)
+  // the intake moves to next week, and a buyer's first report is that week's,
+  // which waits for Monday night's box score (run/solo.py BOX_SCORE_LAG).
+  // That usually lands overnight, so until Tuesday 16:00 UTC (late morning
+  // ET) the page names the wait, never "today".
+  const [y, m, d] = w.lands_on.split("-").map(Number);
+  const nextWeek = Date.UTC(y, m - 1, d - 1);
+  if (!(Number.isInteger(w.last_week) && w.week >= w.last_week) &&
+      now >= nextWeek && now < nextWeek + 16 * 3600 * 1000) {
+    return { when: "overnight" };
+  }
   return { when: "after", tuesday: lands.toLocaleDateString("en-US",
-    { weekday: "short", month: "short", day: "numeric" }) };
+    { month: "short", day: "numeric" }) };
 }
 // D9: site/week.json's "phase" (render/live_sample.py). A missing phase is
 // "season". Checkout, seats and the free report close once there is no weekly
@@ -2611,9 +2626,15 @@ function drawFirst() {
   } else if (FIRST && FIRST.when === "before") {
     side.replaceChildren(b("This week's report today"), t(", then a new one every Wednesday evening"));
     note.replaceChildren(t("This week's report lands "), b("today"), t("."));
+  } else if (FIRST && FIRST.when === "overnight") {
+    side.replaceChildren(b("This week's report once Monday night's game is scored"),
+      t(" (usually by Tuesday morning), then a new one every Wednesday evening"));
+    note.replaceChildren(t("This week's report lands "),
+      b("once Monday night's game is scored"), t(", usually by Tuesday morning."));
   } else if (FIRST && FIRST.when === "after") {
+    // DES-10: the date carries no weekday, so the line says Wednesday once.
     side.replaceChildren(b("Your first report today"),
-      t(", then your Wednesday report from " + FIRST.tuesday));
+      t(", then a new one every Wednesday from " + FIRST.tuesday));
     note.replaceChildren(t("Your first report lands "), b("today"),
       t("; your Wednesday report starts " + FIRST.tuesday + "."));
   } else {

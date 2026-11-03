@@ -87,6 +87,36 @@ def test_today_switches_off_an_hourly_run_before_kickoff() -> None:
     assert got == [[False, "this", "before"], [False, None, None], [False, "next", "after"]]
 
 
+def test_a_monday_night_buyer_is_not_promised_a_report_today() -> None:
+    """PUR-2, reproduced: a purchase at 01:55Z Nov 3 (Mon 8:55 PM ET), week.json
+    on week 8 with lands_on Nov 4. The page said "Your first report lands
+    today", but current_week had moved to 9 at 00:00Z, so the first report was
+    week 9's early look, held by the intake until Monday night's box score
+    landed ("CHI@SEA is not over"): only the welcome went out that night. From
+    00:00 UTC the day before lands_on until 16:00 UTC that day the page names
+    the wait instead; outside it, and in the season's last week, nothing
+    changes. DES-10 rides along: the date drops its weekday, so the line no
+    longer reads "your Wednesday report from Wed, Nov 4"."""
+    wk8 = {**WEEK, "week": 8, "lands_on": "2026-11-04", "first_kickoff": "2026-10-30T00:15:00Z"}
+    last = {**wk8, "week": 18}
+    got = _node(PHASE + "\nconsole.log(JSON.stringify(" + json.dumps([
+        [wk8, "2026-11-02T23:59:00Z"],     # Monday 6:59 PM ET: the roster report today
+        [wk8, "2026-11-03T01:55:00Z"],     # Monday 8:55 PM ET
+        [wk8, "2026-11-03T09:00:00Z"],     # Tuesday 4 AM ET, box score maybe not in
+        [wk8, "2026-11-03T16:00:00Z"],     # Tuesday 11 AM ET: today again
+        [last, "2026-11-03T01:55:00Z"],    # the last week: no next week to wait for
+    ]) + ".map(([w, now]) => firstReportTiming(w, new Date(now)))));")
+    assert [g and g["when"] for g in got] == ["after", "overnight", "overnight", "after", None]
+    assert got[0]["tuesday"] == "Nov 4"
+    draw = _js_function(JOIN, "drawFirst")
+    night = prose(draw.split('FIRST.when === "overnight"')[1].split("} else if")[0])
+    assert "once Monday night's game is scored" in night and "usually by Tuesday morning" in night
+    assert "today" not in night
+    after = prose(draw.split('FIRST.when === "after"')[1].split("} else {")[0])
+    assert "then a new one every Wednesday from" in after
+    assert "your Wednesday report from" not in after
+
+
 def test_the_season_closes_when_no_weekly_report_is_left() -> None:
     """D9: "over", the last week from its first kickoff, and past the last
     week's lands_on (ET) all close; preseason is open for checkout and closed
