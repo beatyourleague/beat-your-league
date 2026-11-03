@@ -453,18 +453,55 @@ def paid_subscribers(subscribers: list[RosterSubscriber], paid_list: Path,
         print(f"Skipping {len(dropped)} subscriber(s) who are no longer "
               f"paying: " + ", ".join(s.slug for s in dropped))
     if not subscribers:
-        # Everyone in a non-empty registry failing at once is far more
-        # likely to be a broken entitlement source than a business that lost
-        # every customer in a week. Exiting 0 made that a green cron with an
-        # empty inbox — the failure nobody notices until somebody asks.
+        if ended_by_stripe(dropped, paid):
+            # Stripe itself names every plan on file as refunded or ended: the
+            # owner's refunded test purchase, alone in the registry, or the
+            # offseason once the last plan has run out. Nobody is owed a
+            # report, so the run is not a failure (launch review OPS-1: it
+            # went red every Wednesday and Saturday, and the watchdog with it,
+            # until a second buyer existed).
+            print(f"Nobody to mail: Stripe lists all {had_registry} "
+                  f"subscriber(s) on file as refunded or cancelled. Nothing "
+                  f"is wrong.")
+            return []
+        # Everyone in a non-empty registry failing at once, with nothing in
+        # Stripe's own answer to explain it, is far more likely to be a broken
+        # entitlement source than a business that lost every customer in a
+        # week. Exiting 0 made that a green cron with an empty inbox — the
+        # failure nobody notices until somebody asks.
         print(f"NOTHING TO SEND: all {had_registry} registry entries failed "
               f"the paid check against {paid.source}.", file=sys.stderr)
-        print("  If that is genuinely everyone cancelling, re-run with "
-              "--no-paid-check to confirm. Otherwise the entitlement source "
-              "is wrong or stale — check it before next Wednesday.",
-              file=sys.stderr)
+        # Never "re-run with --no-paid-check": that flag mails everyone in the
+        # registry, the people the check just excluded included (OPS-M1).
+        print("  If they really were all refunded or cancelled, nothing is "
+              "wrong and nothing should be sent. Do NOT re-run with "
+              "--no-paid-check: it mails everyone in the registry, them "
+              "included. Otherwise the entitlement source is wrong or stale — "
+              "check it before next Wednesday.", file=sys.stderr)
         return None
     return subscribers
+
+
+def ended_by_stripe(dropped: Iterable[RosterSubscriber], paid) -> bool:
+    """Did Stripe's own answer end every one of ``dropped``? Pure.
+
+    True only on the Stripe path (the CSV cannot tell one subscription from
+    another), and only when every dropped row names the subscription(s) it
+    lives on — a seat, its pass — and Stripe lists each of them as refunded
+    in full or cancelled for good. A row naming nothing, or one subscription
+    Stripe did not account for, keeps the alarm: that is what a wrong key or
+    a stale account looks like."""
+    if getattr(paid, "subscription_ids", None) is None:
+        return False
+    gone = set(getattr(paid, "refunded", ()) or ()) | set(getattr(paid, "ended", ()) or ())
+    dropped = list(dropped)
+    for subscriber in dropped:
+        own = set(getattr(subscriber, "subscription_ids", ()) or ())
+        if not own and getattr(subscriber, "pass_id", None):
+            own = {subscriber.pass_id}
+        if not own or not own <= gone:
+            return False
+    return bool(dropped)
 
 
 def _mails_for_real(args) -> bool:
@@ -503,6 +540,12 @@ def _mark_nobody_to_mail(args) -> None:
         if not args.week and season_over(args.cache, season):
             return
         week = int(args.week or current_week(args.cache, season))
+        # D8's Week 1 in May: no run is due, so none is marked. A marker left
+        # now would answer for September's Week 1 Wednesday, and the watchdog
+        # would stay quiet if that run never started. Every plan on file has
+        # ended by May, so this is the usual offseason, not an edge.
+        if not args.week and not week_one_due(args.cache, season, week):
+            return
     except Exception as exc:  # noqa: BLE001 — a marker never fails the run
         print(f"could not tell which week this was, so no marker was left "
               f"({exc})", file=sys.stderr)
@@ -569,6 +612,13 @@ def main(argv: list[str] | None = None) -> int:
                                    args.no_paid_check)
     if subscribers is None:
         return 1
+    if not subscribers:
+        # Everyone on file refunded or cancelled, by Stripe's own account: the
+        # run happened and owed nobody a report, which is the empty registry's
+        # case, marker included — without it the watchdog reads a Wednesday
+        # that ran as one GitHub never started.
+        _mark_nobody_to_mail(args)
+        return 0
 
     # D8: a DERIVED Week 1 is not built before it is due. current_week
     # answers 1 from the day next season's schedule lands (about May), and a

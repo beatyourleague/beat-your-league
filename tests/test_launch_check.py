@@ -156,6 +156,50 @@ def test_the_secrets_gate_asks_for_every_secret_the_mail_needs() -> None:
         assert name in lc.REQUIRED_SECRETS, name
 
 
+def test_only_a_week_still_coming_in_softens_the_report_gates(monkeypatch) -> None:
+    """Reproduction (launch review OPS-2): the launch step widened four catches
+    from SeasonOver to every SoloError, so a broken player directory or a
+    failed stat download read "WARN not yet" on the report gate and SKIP on
+    the battery, the 390px and the sender gates, and the check stayed green.
+    Only last week's box scores not being in yet (WeekIncomplete, Monday
+    night) is "not yet"; any other SoloError is still a FAIL."""
+    import render.live_sample as live
+    from run.solo import SoloError, WeekIncomplete
+
+    def raising(exc):
+        def build(*a, **k):
+            raise exc
+        return build
+    monkeypatch.setattr(live, "build", raising(SoloError("could not load the player directory: x")))
+    [gate] = lc.check_product()
+    assert gate.status == "FAIL" and "player directory" in gate.detail, gate
+    with pytest.raises(SoloError):           # run_all turns this into a FAIL
+        lc.check_email_senders()
+    with pytest.raises(SoloError):
+        lc.check_email_widths()
+
+    monkeypatch.setattr(live, "build", raising(WeekIncomplete("week 8's box scores are not all in")))
+    assert [g.status for g in lc.check_product()] == ["WARN"]
+    assert [g.status for g in lc.check_email_senders()] == ["SKIP"]
+    assert [g.status for g in lc.check_email_widths()] == ["SKIP"]
+
+
+def test_the_box_score_guard_raises_the_week_incomplete_kind(tmp_path) -> None:
+    """The one refusal the launch check reads as "not yet" is the one the
+    completeness guard raises: Monday night's game still being played. Every
+    runner still catches it as the SoloError it also is."""
+    from datetime import datetime, timezone
+
+    from run import solo
+    from test_prelaunch_report import WEEK7, _games, _rows
+    in_progress = WEEK7[:2] + [(7, "2026-10-26", "20:15", "DAL", "PHI", False)]
+    during = datetime(2026, 10, 27, 0, 47, tzinfo=timezone.utc)
+    with pytest.raises(solo.WeekIncomplete):
+        solo.assert_week_is_complete(_games(tmp_path, in_progress), "2026", 8,
+                                     {7: _rows("NE", "CHI", "SF", "ATL")}, now=during)
+    assert issubclass(solo.WeekIncomplete, solo.SoloError)
+
+
 def test_the_report_reads_and_the_verdict_follows_the_gates() -> None:
     gates = [lc.Gate("Site", "a", "PASS"), lc.Gate("Owner", "b", "OWNER", "do it")]
     assert "waiting on owner setup" in lc.render(gates)
@@ -514,7 +558,7 @@ def test_an_email_without_the_sender_block_fails_once_the_address_is_set(monkeyp
     FAILS; unset, the code is checked under a stand-in and the gate is OWNER."""
     from render.sender import sender_line
 
-    def samples():
+    def samples(**_):
         line = sender_line() or ""
         return [("weekly report", f"<p>Cancel any time.</p><p>{line}</p>", None),
                 ("renewal notice", "<p>Cancel any time.</p>", "https://billing.example")]
@@ -524,7 +568,7 @@ def test_an_email_without_the_sender_block_fails_once_the_address_is_set(monkeyp
     assert gates[0].status == "FAIL" and "renewal notice" in gates[0].detail
     monkeypatch.delenv("SENDER_POSTAL_ADDRESS")
     assert lc.check_email_senders()[0].status == "FAIL", "the code is broken either way"
-    monkeypatch.setattr(lc, "email_samples", lambda: [
+    monkeypatch.setattr(lc, "email_samples", lambda **_: [
         ("weekly report", f"<p>Cancel.</p><p>{sender_line()}</p>", None)])
     assert lc.check_email_senders()[0].status == "OWNER"
 
@@ -546,6 +590,74 @@ def test_the_real_emails_carry_the_sender_and_a_way_out(monkeypatch) -> None:
     if gates[0].status == "SKIP":
         pytest.skip(gates[0].detail)
     assert [g.status for g in gates] == ["PASS", "PASS"], gates
+
+
+def test_the_roster_report_is_audited_in_the_shape_a_buyer_gets_today(monkeypatch) -> None:
+    """Reproduction (launch review EM-12): the sender gate built the roster
+    report off last season's record with no season_started, from_week, byes or
+    roster_out, so it audited "Week 1 is under way, but one week isn't a
+    record…" while a mid-season buyer is sent "Your Week 9 report lands
+    Wednesday". It is built now as run/intake.py builds it, falls back to the
+    pre-season shape only when this week cannot be loaded, says which shape
+    it is, and an email that cannot be built is named instead of dropped."""
+    from types import SimpleNamespace
+
+    import engine.preseason as preseason
+    import run.solo as solo
+    built = []
+
+    def build(spec, directory, prior, season, cache, **kw):
+        built.append((season, kw))
+        return {"meta": {}}
+    monkeypatch.setattr(preseason, "build_preseason_report", build)
+    monkeypatch.setattr(preseason, "bye_by_team", lambda *a: {"KC": 10})
+    monkeypatch.setattr(solo, "current_season", lambda *a, **k: "2026")
+    from render.live_sample import LIVE_ROSTER
+    directory = SimpleNamespace(players=[SimpleNamespace(player_id=p) for p in LIVE_ROSTER])
+    live = SimpleNamespace(season="2026", week=9, directory=directory, prior={},
+                           roster_out={"00-1": "injured reserve"})
+    last = SimpleNamespace(season="2025", week=10, directory=directory, prior={})
+    state = {"live": live, "last": last}
+
+    def load(cache, season=None, week=None, **k):
+        got = state["live" if season is None else "last"]
+        if isinstance(got, Exception):
+            raise got
+        return got
+    monkeypatch.setattr(solo, "load_week_data", load)
+
+    got = lc.roster_report()
+    assert not isinstance(got, str), got
+    assert got[0] == "roster report (in-season)"
+    assert built[-1] == ("2026", {"season_started": True, "byes": {"KC": 10}, "from_week": 9,
+                                  "roster_out": {"00-1": "injured reserve"}})
+    state["live"] = solo.WeekIncomplete("week 8's box scores are not all in")
+    name, _ = lc.roster_report()
+    assert name == "roster report (pre-season)" and built[-1][1] == {"prior_season": "2025"}
+    state["last"] = OSError("no cache")
+    assert "could not be built" in lc.roster_report()
+    # A broken feed this week is named, not swapped for last season's shape.
+    state["live"], state["last"] = solo.SoloError("could not load the player directory"), last
+    assert "in-season roster report could not be built" in lc.roster_report()
+
+    import json
+    report = json.loads((REPO / "tests" / "fixtures" / "sample-report-w10.json")
+                        .read_text(encoding="utf-8"))
+    skipped: list[str] = []
+    names = [n for n, *_ in lc.email_samples(report, skipped=skipped)]
+    assert not any(n.startswith("roster report") for n in names)
+    assert skipped and "could not be built" in skipped[0]
+
+    from render.sender import sender_line
+
+    def samples(skipped=None, **_):
+        skipped.append("the roster report could not be built: OSError: no cache")
+        return [("weekly report", f"<p>Cancel.</p><p>{sender_line()}</p>", None)]
+    monkeypatch.setattr(lc, "email_samples", samples)
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 9, Toronto ON")
+    gates = lc.check_email_senders()
+    assert [g.status for g in gates] == ["PASS", "PASS", "WARN"], gates
+    assert "roster report" in gates[-1].detail
 
 
 # --------------------------------------------------------------------- #
@@ -673,6 +785,63 @@ def test_every_missing_secret_says_what_a_buyer_loses() -> None:
     assert "seat link" in off and "roster updates" in off
     assert "seat link" in lc.features_off(["SITE_URL"])
     assert lc.features_off([]) == "nothing a buyer sees"
+
+
+def test_a_missing_sender_address_names_what_it_holds_back(monkeypatch) -> None:
+    """Reproduction (launch review EM-S2/OPS-3): the secrets gate said a
+    missing SENDER_POSTAL_ADDRESS turned off "Sending any email". Reports,
+    welcomes, roster reports, the Saturday check and confirmations all send
+    without it; four sends refuse. The owner is launching without the mailbox
+    on purpose, so the gates name those four, and the sender gate says when
+    the two scheduled ones fall due."""
+    import run.solo as solo
+    off = lc.features_off(["SENDER_POSTAL_ADDRESS"])
+    assert "Sending any email" not in off
+    for held in ("waitlist launch email", "change notices", "season review", "rookie report"):
+        assert held in off, held
+    assert "Sending any email" in lc.features_off(["RESEND_API_KEY"])
+
+    monkeypatch.setattr(solo, "current_season", lambda *a, **k: "2026")
+    monkeypatch.setattr(solo, "season_ends", lambda *a, **k: {"2026": "2027-01-10"})
+    detail = lc.sender_held_detail()
+    assert "season review (due Jan 11 to Jan 31, 2027)" in detail
+    assert "rookie report (May to August 2027)" in detail
+    assert "reports, welcomes and confirmations go out without it" in detail
+
+    from render.sender import sender_line
+    monkeypatch.delenv("SENDER_POSTAL_ADDRESS", raising=False)
+    monkeypatch.setattr(lc, "email_samples", lambda **_: [
+        ("weekly report", f"<p>Cancel.</p><p>{sender_line()}</p>", None)])
+    gate = lc.check_email_senders()[0]
+    assert gate.status == "OWNER" and "season review (due Jan 11" in gate.detail, gate
+
+
+def test_the_held_sends_dates_are_true_all_year(monkeypatch) -> None:
+    """Skeptic of OPS-3: the dates came off ``current_season``, which stays on
+    the season just played until the next schedule lands. In February the line
+    gave the January review window that had already passed, and in June,
+    once next season's schedule was in, it put the rookie report in the
+    August of the year after, while this year's was the one waiting. The
+    review's window is named only while it is ahead; the rookie report's
+    is the calendar year's May to August."""
+    from datetime import date
+
+    import run.solo as solo
+    ends = {"2026": "2027-01-10", "2027": "2028-01-09"}
+    monkeypatch.setattr(solo, "season_ends", lambda *a, **k: ends)
+
+    def on(day, season):
+        monkeypatch.setattr(solo, "current_season", lambda *a, **k: season)
+        return lc.sender_held_detail(day)
+    autumn = on(date(2026, 11, 3), "2026")
+    assert "season review (due Jan 11 to Jan 31, 2027)" in autumn
+    assert "rookie report (May to August 2027)" in autumn
+    february = on(date(2027, 2, 15), "2026")
+    assert "the season review and" in february and "Jan 31, 2027" not in february
+    assert "rookie report (May to August 2027)" in february
+    june = on(date(2027, 6, 10), "2027")
+    assert "rookie report (May to August 2027)" in june, june
+    assert "season review (due Jan 10 to Jan 30, 2028)" in june
 
 
 def test_the_pass_welcome_carries_the_seat_link() -> None:

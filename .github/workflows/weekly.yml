@@ -247,6 +247,10 @@ jobs:
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
           # A rotated UPDATE_SECRET's old value (OPS-R10; run/updates.py).
           UPDATE_SECRET_PREVIOUS: ${{ secrets.UPDATE_SECRET_PREVIOUS }}
+          # Keys the forgotten list's codes (run/privacy.py). Not a mail secret:
+          # without it, the first privacy deletion made this intake raise on
+          # every paid session in the sweep window (launch review OPS-5).
+          LOG_SECRET: ${{ secrets.LOG_SECRET }}
           # A game postponed or suspended that the schedule still shows at its
           # old kickoff (run/solo.py POSTPONED_GAMES, LAUNCH.md section 8): a repo
           # variable set for one week, AWAY@HOME. Unset excuses nothing.
@@ -629,7 +633,9 @@ jobs:
           CACHE_KEY set and unchanged (the open and seal steps), any BLOCKED line
           in the intake log (a paid roster naming a player the directory does not
           have), email provider credentials, then whether
-          data/processed/sent.jsonl shows a partial send. If commit-record is the
+          data/processed/sent.jsonl shows a partial send. In January, a SEASON
+          REVIEW NOT SENT line is SENDER_POSTAL_ADDRESS not being set, and the
+          review waits for it (LAUNCH.md section 8). If commit-record is the
           job that failed, the reports went out but the record never reached the
           branch: before the next run, use Re-run failed jobs (commit-record pushes
           the same record again) or commit this run's weekly-record artifact by

@@ -159,8 +159,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Rookie report: {len(messages)} waiting — EMAIL_PROVIDER is not set.")
         return 0
     if not sender_line():
-        print("ROOKIE REPORT NOT SENT: SENDER_POSTAL_ADDRESS is not set.", file=sys.stderr)
-        return 1
+        # Never sent without the sender's postal address (CAN-SPAM, CASL). Red
+        # once a year, then green with a warning: this step runs every hour
+        # from May, and an hourly red about one unset secret would hide a
+        # blocked signup in the same job (OPS-3).
+        from run.watchdog import held_once
+        reason = (f"ROOKIE REPORT NOT SENT: SENDER_POSTAL_ADDRESS is not set. "
+                  f"{len(messages)} waiting; they go out on the first run after "
+                  f"it is set, until the end of August.")
+        print(reason, file=sys.stderr)
+        held = held_once("rookies", str(year), reason)
+        return 1 if read_failed else held
     sends = send_all(messages, provider=provider)
     failures = [r for r in sends if not r.ok]
     print(f"Rookie report via {provider.name}: "

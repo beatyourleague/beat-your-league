@@ -97,6 +97,13 @@ class PaidList:
     # without Disputes: Read). Such a charge is listed as "unknown" and stays
     # entitled: a missing permission never stops delivery.
     dispute_errors: tuple[str, ...] = ()
+    # Stripe only: subscriptions Stripe lists as CANCELED and no longer owed a
+    # report (not one we stopped for the season inside its grace). Not
+    # entitled, like a refund; listed so a run can tell "Stripe says every
+    # plan on file has ended" from "the entitlement source answered nothing"
+    # (launch review OPS-1: the owner's own refunded test plan, alone in the
+    # registry, turned Wednesday, Saturday and the watchdog red every week).
+    ended: frozenset[str] = frozenset()
 
     @property
     def disputes_needing_response(self) -> tuple[str, ...]:
@@ -516,6 +523,7 @@ def load_paid_from_stripe(api_key: str | None = None,
     covered_leagues: set[str] = set()
     subscription_ids: set[str] = set()
     refunded: list[str] = []
+    ended: set[str] = set()
     disputes: list[tuple[str, str]] = []
     lookup = DisputeLookup(key)
     now = datetime.now(timezone.utc)
@@ -537,6 +545,12 @@ def load_paid_from_stripe(api_key: str | None = None,
                 if not isinstance(subscription, dict):
                     continue
                 if status == "canceled" and not stopped_for_season(subscription, now):
+                    # Over, and owed nothing more. Named, never served: a
+                    # refunded plan that reached its period end lands here
+                    # rather than in `refunded`, and it is no less explained.
+                    sub_id = subscription.get("id")
+                    if isinstance(sub_id, str) and sub_id.startswith("sub_"):
+                        ended.add(sub_id)
                     continue
                 customer = subscription.get("customer")
                 if not isinstance(customer, dict) or customer.get("deleted"):
@@ -596,7 +610,8 @@ def load_paid_from_stripe(api_key: str | None = None,
                     refunded=frozenset(refunded),
                     subscription_ids=frozenset(subscription_ids),
                     disputes=tuple(sorted(set(disputes))),
-                    dispute_errors=tuple(dict.fromkeys(lookup.errors)))
+                    dispute_errors=tuple(dict.fromkeys(lookup.errors)),
+                    ended=frozenset(ended - subscription_ids))
 
 
 def resolve_paid_list(csv_path: Path | None = None) -> PaidList:

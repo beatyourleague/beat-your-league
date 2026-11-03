@@ -798,3 +798,47 @@ def test_a_quiet_saturday_still_leaves_proof_it_ran(tmp_path, monkeypatch, capsy
                           "--no-paid-check", "--now", SAT.isoformat()])
     assert code == 1 and "isn't in yet" in capsys.readouterr().err
     assert marker not in delivery.load_sent(log)
+
+
+def test_a_saturday_with_everyone_refunded_is_a_quiet_check_that_ran(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Reproduction (launch review OPS-1/PUR-1): with the owner's refunded test
+    plan alone in the registry, the shared paid check answered None, the
+    check exited 1 with no marker, and Sunday's watchdog reported a Saturday
+    that never ran. When Stripe names every plan on file as refunded, the
+    check has nobody to check: exit 0 and leave the marker, before it even
+    asks whether the week's injury report is in. An unexplained empty list
+    still fails."""
+    import run.delivery as delivery
+    import run.tuesday as tuesday
+    from run.subscriptions import PaidList
+    from run.watchdog import run_key
+    from test_tuesday import _registry, _row
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+
+    class Fake:
+        name = "fake"
+
+        def send(self, message, sender, reply_to):
+            raise AssertionError("a refunded buyer was mailed")
+    monkeypatch.setattr(saturday, "build_provider", lambda *a: Fake())
+    monkeypatch.setattr(saturday, "designations", lambda *a: ({}, set()))
+
+    def paid(**fields):
+        return lambda *a: PaidList(emails=frozenset(), source="stripe",
+                                   status_column="active", subscription_ids=frozenset(),
+                                   **fields)
+    args = ["--registry", str(_registry(tmp_path, _row(subscription_ids=["sub_OWNERTEST"]))),
+            "--season", "2024", "--week", "10", "--plans-dir", str(tmp_path / "plans"),
+            "--now", SAT.isoformat()]
+    monkeypatch.setattr(tuesday, "resolve_paid_list",
+                        paid(refunded=frozenset({"sub_OWNERTEST"})))
+    assert saturday.main(args) == 0
+    assert run_key("saturday", "2024", 10) in delivery.load_sent(log)
+
+    log.unlink()
+    monkeypatch.setattr(tuesday, "resolve_paid_list", paid())
+    assert saturday.main(args) == 1
+    assert "NOTHING TO SEND" in capsys.readouterr().err
+    assert not log.exists()

@@ -89,6 +89,16 @@ buyers. Anyone who buys before Thursday's 8:15pm ET kickoff gets Week 8's report
 week now costs about a tenth of what's left of 2026 (`.venv/bin/python -m run.economics` shows
 the arithmetic; its `OPENS` date is the assumption to move if this slips).
 
+**Opening without the sender address (Nov 3 2026).** Without `SENDER_POSTAL_ADDRESS`, reports,
+welcomes, roster reports, the Saturday check and confirmations go out without the sender
+line. Four sends refuse: the waitlist launch email (step 6), terms and privacy change notices,
+the season review (due Jan 11 to Jan 31, 2027, the three Wednesdays after Week 18) and the
+rookie report (May to August 2027, once anyone has asked). The season review turns the weekly
+run red once, the first Wednesday it holds; the rookie report turns the hourly run red once,
+the first hour it holds. After that each waits green with a warning and goes out on the first
+run after the secret is set. **Set it before Jan 11, 2027.** `make launch-check` lists all four
+on its sender line (OWNER).
+
 Done:
 - `beatyourleague.com` on GitHub Pages (moving: section 11);
   `hello@beatyourleague.com` forwards to your inbox.
@@ -391,9 +401,14 @@ Nobody else's money moves until you've watched your own go all the way through.
 5. **Wednesday:** the new week's report by about 5:30pm ET (6:30 before Nov 1), weekly-report
    green in Actions. The one case nothing has rehearsed is a Wednesday-to-Thursday buyer's
    same-day weekly report; if one fails, the hourly run retries it.
-6. **Keep the pass** (section 10, "Keep your own pass"). If you refund it instead, it's the
-   refund steps in section 8, and Stripe keeps its fee: about $1.18 on a $14.99 charge from a
-   Canadian account, or about $0.88 with a USD payout account.
+6. **Keep the plan** (section 10, "Keep your own pass"), at least through Wednesday's report
+   and Saturday's check: until a second buyer exists, your row is the only proof the weekly
+   path works with a real send. If you refund it instead, it's the refund steps in section 8,
+   and Stripe keeps its fee: about $1.18 on a $14.99 charge from a Canadian account, or about
+   $0.88 with a USD payout account. Refunded while you're the only subscriber, nothing goes
+   red: Wednesday's run and the Saturday check print "Nobody to mail: Stripe lists all 1
+   subscriber(s) on file as refunded or cancelled" and stay green, and an hourly run mails no
+   first report to a purchase already refunded.
 
 ### The monthly billing page, in test mode (15 min)
 
@@ -550,7 +565,9 @@ sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly t
    switch:** Worker → **Settings → Variables → Add** `TRIAL_OPEN` = `true` (plain text). The
    Worker refuses every free-report request while it is unset, and the launch check fails if
    the site and the Worker disagree.
-2. **The same morning, the waitlist's one email.**
+2. **The same morning, the waitlist's one email.** No mailbox yet? Skip this item: the send
+   refuses without `SENDER_POSTAL_ADDRESS`, and nothing else waits on it. Waitlist rows keep
+   about 13 months, so send it the day the mailbox address is in.
    - Copy every sign-up that came in by email (to hello@, subject about the launch) into a
      file `signups.csv` with one column headed `email`.
    - In Terminal, set the sending details for this window only (`read -s` keeps keys out of
@@ -675,6 +692,11 @@ would wait for a score that isn't coming, and so would first reports and free re
 2. Actions → **weekly-report** → **Run workflow** (before the week's first kickoff, like any
    hand run). The report says the game is postponed and counts it as a bye for both teams.
 3. **Delete the variable** after the next Wednesday's run is green.
+
+**A red run saying `SEASON REVIEW NOT SENT` (a Wednesday in January) or `ROOKIE REPORT NOT
+SENT` (an hour from May):** `SENDER_POSTAL_ADDRESS` is not set, and the email refuses without
+it. It goes red once; later runs stay green with a warning. Add the secret (a rented mailbox,
+step 2.6) and the next run sends while the window is open. Close the issue then.
 
 **A red hourly run with `PAID-UNATTRIBUTED`:** a payment the run can't tie to a roster or a
 plan — most often a payment link missing from `STRIPE_PAYMENT_LINKS` (step 3), or a payment
@@ -873,6 +895,14 @@ next. After the last game every weekly job exits quietly until the next schedule
 | 18 | Sun Jan 10, 1:00pm — Saturday games are usually added late; recheck |
 
 From the published NFL schedule the product reads. A flexed game can move a row.
+
+**If the refunded buyer was the only subscriber** (your own step-4 plan, or the first buyer),
+Wednesday's run and the Saturday check print "Nobody to mail: Stripe lists all N subscriber(s)
+on file as refunded or cancelled. Nothing is wrong." and stay green, and the watchdog stays
+quiet. A purchase refunded before its first report is not sent one. A red **NOTHING TO SEND**
+is different: everyone failed the paid check and Stripe's answer does not explain it, which
+is what a wrong or stale key looks like, so check the key before next Wednesday. **Never
+re-run with `--no-paid-check`**: it mails everyone in the registry, the refunded included.
 
 **A dispute (a chargeback).** Stripe emails you, the payment shows **Disputed**, and the next
 hourly run goes red with `DISPUTE NEEDS A RESPONSE: <pi_… or sub_…>` until it is answered. It

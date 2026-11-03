@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
                           season_ends)
     from run.subscriptions import DEFAULT_EXPORT
     from run.tuesday import paid_subscribers
-    from run.watchdog import not_configured
+    from run.watchdog import held_once, not_configured
 
     if not_configured(args.registry):
         print("Season review: nothing set up yet.")
@@ -204,8 +204,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Season review: {len(messages)} waiting — EMAIL_PROVIDER is not set.")
         return 0
     if not sender_line():
-        print("SEASON REVIEW NOT SENT: SENDER_POSTAL_ADDRESS is not set.", file=sys.stderr)
-        return 1
+        # Never sent without the sender's postal address (CAN-SPAM, CASL). Red
+        # once, then green with a warning: the window is three Wednesdays, and
+        # a weekly issue comment about one unset secret is noise (OPS-3).
+        end = season_ends(CACHE_DIR).get(season)
+        until = (f", until {date.fromisoformat(end) + timedelta(days=WINDOW_DAYS):%b %d}"
+                 if end else "")
+        reason = (f"SEASON REVIEW NOT SENT: SENDER_POSTAL_ADDRESS is not set. "
+                  f"{len(messages)} waiting; they go out on the first Wednesday "
+                  f"run after it is set{until}.")
+        print(reason, file=sys.stderr)
+        return held_once("review", season, reason)
     sends = send_all(messages, provider=provider)
     failures = [r for r in sends if not r.ok]
     print(f"Season review via {provider.name}: "

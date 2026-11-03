@@ -150,7 +150,11 @@ def test_entitlement_reads_a_stopped_plan_and_only_that(monkeypatch) -> None:
         {"id": "sub_cancelled", "status": "canceled", "ended_at": now - 86400, "metadata": {},
          "customer": _customer(), "latest_invoice": _paid()},
     ])
-    assert load_paid_from_stripe("sk_test").subscription_ids == frozenset({"sub_stopped"})
+    paid = load_paid_from_stripe("sk_test")
+    assert paid.subscription_ids == frozenset({"sub_stopped"})
+    # Not served, and named (launch review OPS-1): a run whose whole registry
+    # Stripe lists as ended is a quiet week, not a broken entitlement source.
+    assert paid.ended == frozenset({"sub_cancelled"})
 
 
 def test_a_refund_beats_the_grace(monkeypatch) -> None:
