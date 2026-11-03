@@ -519,6 +519,23 @@ def _mark_finished(args, season: str, week: int, summary: str = "") -> None:
               f"watchdog may report this week as missed", file=sys.stderr)
 
 
+def _mark_nobody_to_check(args, at: datetime) -> None:
+    """A Saturday with nobody to check still RAN: without the marker, a first
+    subscriber who joins on Saturday evening reads to the watchdog as a check
+    that never happened. Never fails the run."""
+    if not _could_mail(args):
+        return
+    try:
+        season = str(args.season or current_season(args.cache, today=at.date()))
+        if args.week or not season_over(args.cache, season, at.date()):
+            _mark_finished(args, season, int(
+                args.week or current_week(args.cache, season, today=at.date())),
+                "nobody to check")
+    except Exception as exc:  # noqa: BLE001 — a marker never fails the run
+        print(f"could not tell which week this was, so no marker was left "
+              f"({exc})", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--week", type=int, help="default: the current NFL week")
@@ -550,25 +567,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if not subscribers:
         print("roster registry is empty — nothing to do")
-        # It still ran: without the marker, a first subscriber who joins on
-        # Saturday evening reads to the watchdog as a check that never happened.
-        if not _could_mail(args):
-            return 0
-        try:
-            season = str(args.season or current_season(args.cache, today=at.date()))
-            if args.week or not season_over(args.cache, season, at.date()):
-                _mark_finished(args, season, int(
-                    args.week or current_week(args.cache, season, today=at.date())),
-                    "nobody to check")
-        except Exception as exc:  # noqa: BLE001 — a marker never fails the run
-            print(f"could not tell which week this was, so no marker was left "
-                  f"({exc})", file=sys.stderr)
+        _mark_nobody_to_check(args, at)
         return 0
 
     from run.tuesday import paid_subscribers
     subscribers = paid_subscribers(subscribers, args.paid_list, args.no_paid_check)
     if subscribers is None:
         return 1
+    if not subscribers:
+        # Stripe ended every plan on file (a refunded test purchase, alone):
+        # nobody to check, and the check still ran (launch review OPS-1).
+        _mark_nobody_to_check(args, at)
+        return 0
 
     season = str(args.season or current_season(args.cache, today=at.date()))
     if not args.week and season_over(args.cache, season, at.date()):

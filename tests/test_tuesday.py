@@ -418,7 +418,88 @@ def test_everyone_failing_the_paid_check_at_once_is_an_error(tmp_path,
                          "--out", str(tmp_path / "out"),
                          "--processed-dir", str(tmp_path / "processed")])
     assert code == 1
+    err = capsys.readouterr().err
+    assert "NOTHING TO SEND" in err
+    # OPS-M1: the old advice, "re-run with --no-paid-check to confirm", mails
+    # everyone in the registry, the people the check just excluded included.
+    assert "Do NOT re-run with --no-paid-check" in err
+
+
+def _stripe_paid(**fields):
+    from run.subscriptions import PaidList
+    return PaidList(emails=frozenset(), source="stripe", status_column="active,trialing",
+                    subscription_ids=frozenset(), **fields)
+
+
+def test_a_registry_stripe_says_was_all_refunded_is_a_quiet_run_not_a_failure(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Reproduction (launch review OPS-1/PUR-1): the owner's own test plan,
+    alone in the registry, refunded. Stripe answered "refunded: sub_OWNERTEST",
+    and the run printed NOTHING TO SEND, exited 1 and left no marker — so the
+    weekly job filed "Weekly run failed", the Saturday check failed the same
+    way, and the watchdog reported both runs as missing, every week until a
+    second buyer existed. When Stripe itself names every plan on file as
+    refunded (or cancelled for good), nobody is owed a report: exit 0, leave
+    the marker, mail nobody. Anything Stripe does not account for still fails."""
+    import run.delivery as delivery
+    from run.watchdog import run_key
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    sends = []
+
+    class Recorder(_Fake):
+        def send(self, message, sender, reply_to):
+            sends.append(message)
+            return "id-1"
+    monkeypatch.setattr(tuesday, "build_provider", lambda *a: Recorder())
+    registry = _registry(tmp_path, _row(subscription_ids=["sub_OWNERTEST"]))
+    args = ["--registry", str(registry), "--season", SEASON, "--week", str(WEEK),
+            "--cache", str(_cache(tmp_path)), "--out", str(tmp_path / "out"),
+            "--processed-dir", str(tmp_path / "processed")]
+
+    monkeypatch.setattr(tuesday, "resolve_paid_list",
+                        lambda *a: _stripe_paid(refunded=frozenset({"sub_OWNERTEST"})))
+    assert tuesday.main(args) == 0
+    out = capsys.readouterr()
+    assert "Nobody to mail" in out.out and "NOTHING TO SEND" not in out.err
+    assert run_key("tuesday", SEASON, WEEK) in delivery.load_sent(log)
+    assert not sends, "a refunded buyer was mailed"
+
+    # The same once the refunded plan reaches its period end and Stripe lists
+    # it as canceled rather than refunded.
+    log.unlink()
+    monkeypatch.setattr(tuesday, "resolve_paid_list",
+                        lambda *a: _stripe_paid(ended=frozenset({"sub_OWNERTEST"})))
+    assert tuesday.main(args) == 0
+    assert run_key("tuesday", SEASON, WEEK) in delivery.load_sent(log)
+
+    # Stripe says nothing about this subscription: a wrong key or a stale
+    # account looks exactly like this, so it stays the alarm it was.
+    log.unlink()
+    monkeypatch.setattr(tuesday, "resolve_paid_list", lambda *a: _stripe_paid())
+    assert tuesday.main(args) == 1
     assert "NOTHING TO SEND" in capsys.readouterr().err
+    assert not log.exists() or run_key("tuesday", SEASON, WEEK) not in delivery.load_sent(log)
+
+
+def test_only_stripe_can_explain_an_empty_paid_list() -> None:
+    """``ended_by_stripe`` answers yes only when every dropped row names the
+    subscription it lives on (a seat, its pass) and Stripe lists each one as
+    refunded or ended. The CSV path, a row naming nothing, or one id Stripe
+    never mentioned keeps the "everyone failed at once" alarm."""
+    from run.subscriptions import PaidList
+    owner = _subscriber(subscription_ids=("sub_A",))
+    gone = _stripe_paid(refunded=frozenset({"sub_A"}), ended=frozenset({"sub_B"}))
+    assert tuesday.ended_by_stripe([owner], gone)
+    assert tuesday.ended_by_stripe(
+        [owner, _subscriber(email="b@example.com", subscription_ids=("sub_B",))], gone)
+    assert not tuesday.ended_by_stripe(
+        [owner, _subscriber(email="c@example.com", subscription_ids=("sub_C",))], gone)
+    assert not tuesday.ended_by_stripe([_subscriber()], gone), "a row naming nothing"
+    assert not tuesday.ended_by_stripe([], gone)
+    csv = PaidList(emails=frozenset(), source="paid.csv", status_column="status",
+                   refunded=frozenset({"sub_A"}))
+    assert not tuesday.ended_by_stripe([owner], csv)
 
 
 def test_a_preview_never_writes_to_the_public_record(tmp_path, capsys,
