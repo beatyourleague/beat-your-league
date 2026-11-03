@@ -215,6 +215,7 @@ def _ordered_kinds(groups: Mapping[str, Mapping]) -> list[tuple[str, str, str]]:
 
 def render(groups: dict[str, dict[str, Entry]], now: datetime, unreadable: int,
            has_registry: bool, notes: Iterable[str] = ()) -> str:
+    from run.trials import is_test_address
     stamp = now.astimezone(EASTERN).strftime("%a %b %-d %Y, %-I:%M %p ET")
     lines = [f"WHO SIGNED UP — form Worker rows, as of {stamp}",
              "Private: these are people's email addresses. Keep this in your terminal. Don't",
@@ -230,8 +231,16 @@ def render(groups: dict[str, dict[str, Entry]], now: datetime, unreadable: int,
         lines.append("No address to show.")
     else:
         everyone = {box for boxes in groups.values() for box in boxes}
+        tests = {box for boxes in groups.values() for box, e in boxes.items()
+                 if is_test_address(e.address)}
         lines += [f"{len(everyone)} {'person' if len(everyone) == 1 else 'people'} in all "
-                  f"(one mailbox counted once, however it was spelled).", ""]
+                  f"(one mailbox counted once, however it was spelled)."]
+        if tests:
+            # make stats and the dashboard leave these out of every count.
+            lines += [f"{len(tests)} of them {'is a test' if len(tests) == 1 else 'are test'} "
+                      f"address{'es' if len(tests) != 1 else ''} (our own or a reserved "
+                      f"domain), marked [test] below."]
+        lines.append("")
     for kind, heading, use in shown:
         boxes = groups.get(kind) or {}
         if not boxes:
@@ -254,6 +263,8 @@ def render(groups: dict[str, dict[str, Entry]], now: datetime, unreadable: int,
             if has_registry:
                 row += f"  {(entry.subscriber or '-'):12}"
             row += f"  {entry.address}"
+            if is_test_address(entry.address):
+                row += "   [test]"
             if entry.stop == "stopped":
                 row += "   [asked us to stop: never email]"
             elif entry.stop == "unknown":

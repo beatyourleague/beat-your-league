@@ -298,3 +298,19 @@ def test_the_csv_never_replaces_a_file_it_did_not_write(tmp_path, capsys) -> Non
     target = tmp_path / "signups.csv"
     assert run(["--csv", str(target)], capsys)[0] == 0
     assert run(["--csv", str(target)], capsys)[0] == 0
+
+
+def test_a_test_address_is_marked_so_it_never_reads_as_a_real_signup(capsys) -> None:
+    """Sweep TOOLS-2: the Worker's only waitlist row was the business's own
+    address, and a list of one reads as one real person. make stats and the
+    dashboard leave such rows out; this view keeps them but says so."""
+    rows = [{"kind": "waitlist", "email": "hello@beatyourleague.com",
+             "received_at": "2026-11-02T05:02:58Z"},
+            {"kind": "waitlist", "email": "fan@gmail.com",
+             "received_at": "2026-11-02T06:00:00Z"}]
+    code, out = run([], capsys, rows=rows)[:2]
+    assert code == 0
+    line = next(l for l in out.splitlines() if "hello@beatyourleague.com" in l)
+    assert line.endswith("[test]")
+    assert "[test]" not in next(l for l in out.splitlines() if "fan@gmail.com" in l)
+    assert "1 of them is a test address" in out

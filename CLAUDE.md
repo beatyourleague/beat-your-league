@@ -1503,6 +1503,20 @@ without `SENDER_POSTAL_ADDRESS`. Rules it left:
 - **The dashboard reads the link map from `.env`**, counts its gates from D, and names a missing
   shell secret "check by hand", never "not done".
 
+**The post-push sweep (Nov 3 2026) — five areas, each fix re-attacked.** Rules it left:
+- **"This week's report" means a week not yet played.** `site/week.json` carries `week_ends` (the
+  Eastern date of the week's last regular game, `run.solo.week_end_day`); the hero, footer.js, How
+  it works and the 404 page link this-week.html only while Eastern today ≤ `week_ends`, and a
+  clock without it links nothing. Three branches built three versions of this rule; one shipped.
+- **A rookie page's "through Week N" counts only complete weeks** (`run.solo.last_complete_week`,
+  the report's own `assert_week_is_complete`, with relocated-team codes mapped).
+- **`make signups`** (`run/signups.py`) is the owner's private view of the addresses people gave
+  the form Worker, grouped by what each was given for. Terminal only, refuses in CI, marks stop-list
+  and test addresses (`run.trials.is_test_address`: our own or a reserved domain, which `make
+  stats` and the dashboard leave out of every count), and writes a CSV only to a new gitignored
+  file outside `site/`.
+- **`TRAFFIC_FROM`** (shell or `.env`) starts the traffic counts after the owner's own testing.
+
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
 30. You lost by four." and its answer is "Stop making that call five minutes before kickoff. Every
 Wednesday, one email decides your lineup." (owner decision, Nov 1 2026, replacing "Don't make that
@@ -1661,7 +1675,7 @@ adversarial reviewer per branch, a fix round, and one integration. Rules it left
   any non-token `?pass=` shows "ask whoever bought the pass for the league's seat link" and sends
   nothing; the Worker never stores `covered_by`; a typed payer address is never honoured or
   answered (that was a purchase oracle and a seat-squatting route). The buyer's report counts
-  seats and says to reply "reset seats": `make seat-reset PASS=pi_… EMAIL=…` appends to the
+  seats and says to reply "reset seats": `make seat-reset PASS=sub_… EMAIL=…` (a one-time `pi_` pass needs `--one-time`) appends to the
   committed `data/processed/seat-resets.txt`, which re-keys that pass's link and releases seats
   claimed before it.
 - **The form Worker fails closed:** site Origin or the read key on every POST, kind-prefixed keys,

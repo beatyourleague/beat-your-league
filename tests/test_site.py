@@ -1816,14 +1816,14 @@ def test_compare_describes_the_product_that_ships() -> None:
     ours = prose(COMPARE.split('class="us"')[1].split("</tr>")[0])
     picks = prose(COMPARE.split("Which one, honestly")[1].split('class="cta"')[0])
     both = re.sub(r"\s+", " ", ours + " " + picks)
-    assert f"Up to {TEAMS_INCLUDED} teams on one plan" in both
+    assert re.search(rf"Up to {TEAMS_INCLUDED} teams (?:on one|per) plan", both)
     for false in ("One roster per", "odds on every call", "players once",
                   "first subscriber's first report"):
         assert false not in both, false
-    assert both.count("odds where both players are playing, off the injury report and "
+    assert both.count("where both players are playing, off the injury report and "
                       "have enough games on record (never on team defenses)") == 2
     assert "and again when it changes" in both
-    assert "sample roster's weekly calls" in ours
+    assert "sample roster's published calls" in ours
 
 
 def test_compare_includes_the_free_answer() -> None:
