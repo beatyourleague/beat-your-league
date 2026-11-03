@@ -295,6 +295,50 @@ def test_an_early_look_says_which_report_is_graded(tmp_path, monkeypatch) -> Non
         assert EARLY_NOTE in words and EMPTY_NOTE not in words
 
 
+def test_an_early_look_keeps_every_note_that_promises_nothing() -> None:
+    """The PUR-4 fix, re-attacked: it replaced the receipts of EVERY early
+    look. In Week 18 (checkout stays open until its first kickoff) an early
+    look then said "its calls with odds show up in the report after it",
+    and no report follows Wednesday's last one. A subscriber whose roster
+    folds into a row with earlier weeks lost their own record, and a week
+    with no odds was promised a grading. Only the note that sent this
+    report's calls to "your next report" is replaced."""
+    from engine.own_record import EARLY_NOTE, EMPTY_NOTE, LAST_NOTE, NO_ODDS_NOTE
+    from render.anatomy import receipts_data
+    from render.email import text_summary
+
+    def early(receipts: dict, week: int = 9) -> dict:
+        return {"meta": {"solo": True, "week": week, "last_week": 18, "early_look": True},
+                "receipts": receipts}
+
+    empty = {"record": None, "note": EMPTY_NOTE, "stamp": "Results · from next week"}
+    assert receipts_data(early(empty))["note"] == EARLY_NOTE
+    assert receipts_data(early({}))["note"] == EARLY_NOTE
+    for kept in ({"record": None, "note": LAST_NOTE, "stamp": None},
+                 {"record": None, "note": NO_ODDS_NOTE, "stamp": None},
+                 {"record": {"graded": 4, "hits": 3, "first_week": 6, "last_week": 8},
+                  "note": "Your calls so far: 3 of 4 came in (weeks 6–8). Week 8: 1 of 1.",
+                  "stamp": None}):
+        assert receipts_data(early(kept, week=18)) == kept
+    # Not an early look: passed through untouched, as before.
+    assert receipts_data({"meta": {"solo": True}, "receipts": empty}) == empty
+    report = _solo_week_18_early_look()
+    assert LAST_NOTE in text_summary(report) and EARLY_NOTE not in text_summary(report)
+
+
+def _solo_week_18_early_look() -> dict:
+    """The test_email fixture as a Week 18 early look with odds and no record."""
+    from engine.own_record import LAST_NOTE
+    from test_email import _solo_report
+    report = _solo_report()
+    for key in ("historical_demo", "anonymized_demo", "live_demo", "trial"):
+        report["meta"].pop(key, None)
+    report["meta"].update({"week": 18, "last_week": 18, "early_look": True,
+                           "plan": "monthly"})
+    report["receipts"] = {"record": None, "note": LAST_NOTE, "stamp": None}
+    return report
+
+
 def test_an_early_look_goes_once_and_wednesdays_report_still_goes(tmp_path, monkeypatch) -> None:
     intake, data, season, week, sink = _env(tmp_path, monkeypatch)
     from run.tuesday import report_key

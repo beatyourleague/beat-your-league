@@ -471,11 +471,19 @@ def receipts(report: Mapping[str, Any]) -> dict[str, Any] | None:
 
 def receipts_data(report: Mapping[str, Any]) -> dict[str, Any]:
     """The section's data, every surface: an early look's own calls are never
-    graded, so it says which report's are (engine.own_record.EARLY_NOTE)."""
+    graded, so where the section promised them to the next report it says
+    which report's are (engine.own_record.EARLY_NOTE).
+
+    Only that note is replaced. A record of earlier weeks, a week with no
+    odds and the season's last week promise nothing about this report's
+    calls, and in the last week no report follows Wednesday's, so EARLY_NOTE's
+    "the report after it" would be false there (skeptic check, PUR-4)."""
+    data = dict(report.get("receipts") or {})
     if (report.get("meta") or {}).get("early_look"):
-        from engine.own_record import early_look_section
-        return early_look_section()
-    return dict(report.get("receipts") or {})
+        from engine.own_record import EMPTY_NOTE, early_look_section
+        if data.get("note") in (None, EMPTY_NOTE):
+            return early_look_section()
+    return data
 
 
 MODELS = {"lineup": lineup, "closest": closest, "plan": plan, "ifthen": ifthen,
