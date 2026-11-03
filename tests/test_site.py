@@ -4948,11 +4948,21 @@ _WEEK8 = {"season": "2026", "week": 8, "last_week": 18, "lands_on": "2026-11-04"
           "first_kickoff": "2026-10-30T00:15:00Z", "last_kickoff": "2026-11-03T01:15:00Z",
           "phase": "season", "odds": 3, "closest_call": True, "cards": True}
 # Sunday night (Monday night still to play), Monday night's game underway,
-# Tuesday morning once its box score is due, and the same without the key.
+# Tuesday morning once its box score is due, the same without the key, and
+# that older clock the day after lands_on (the lands_on rule still holds).
 _PLAYED_CASES = [[_WEEK8, "2026-11-02T03:00:00Z"], [_WEEK8, "2026-11-03T05:00:00Z"],
                  [_WEEK8, "2026-11-03T09:15:00Z"],
                  [{k: v for k, v in _WEEK8.items() if k != "last_kickoff"},
-                  "2026-11-03T09:15:00Z"]]
+                  "2026-11-03T09:15:00Z"],
+                 [{k: v for k, v in _WEEK8.items() if k != "last_kickoff"},
+                  "2026-11-05T15:00:00Z"]]
+# Every clock a reader looks at, frozen at NOW: Date.now() AND new Date() (the
+# Eastern "today" is read off new Date(), so mocking Date.now alone left the
+# lands_on half on the real clock and the test failing from Nov 5 2026).
+_FROZEN_CLOCK = ("const RealDate = Date; let NOW = RealDate.now();\n"
+                 "global.Date = class extends RealDate {\n"
+                 "  constructor(...a) { super(...(a.length ? a : [NOW])); }\n"
+                 "  static now() { return NOW; } };\n")
 
 
 def test_no_link_calls_a_finished_week_this_weeks_report() -> None:
@@ -4977,24 +4987,23 @@ def test_no_link_calls_a_finished_week_this_weeks_report() -> None:
     for name, page in (("404.html", (SITE / "404.html").read_text(encoding="utf-8")),
                        ("how-it-works.html", HOW)):
         fn = _js_function(page, "easternToday") + _js_function(page, "weekPhase")
-        got = _node(fn + "\nconsole.log(JSON.stringify(" + json.dumps(_PLAYED_CASES) +
-                    ".map(([w, now]) => { const real = Date.now; Date.now = () => Date.parse(now);"
-                    " try { return weekPhase(w).current; } finally { Date.now = real; } })));")
-        # easternToday reads the real clock, so only the last-kickoff half is
-        # under test here: each case is on or before lands_on in every zone.
-        assert got == [True, True, False, True], (name, got)
-    harness = ("const cases = " + json.dumps(_PLAYED_CASES) + "; const out = [];\n"
+        got = _node(_FROZEN_CLOCK + fn + "\nconsole.log(JSON.stringify(" +
+                    json.dumps(_PLAYED_CASES) + ".map(([w, now]) => { NOW = Date.parse(now);"
+                    " return weekPhase(w).current; })));")
+        assert got == [True, True, False, True, False], (name, got)
+    harness = (_FROZEN_CLOCK + "const cases = " + json.dumps(_PLAYED_CASES) +
+               "; const out = [];\n"
                "(async () => { for (const [w, now] of cases) {\n"
                "  const link = { hidden: true };\n"
                "  global.document = { querySelectorAll: () => [link] };\n"
                "  global.window = { fetch: true };\n"
                "  global.fetch = () => Promise.resolve({ ok: true, json: () => w });\n"
-               "  const real = Date.now; Date.now = () => Date.parse(now);\n"
+               "  NOW = Date.parse(now);\n"
                "  eval(" + json.dumps(footer) + ");\n"
-               "  await new Promise((r) => setTimeout(r, 5)); Date.now = real;\n"
+               "  await new Promise((r) => setTimeout(r, 5));\n"
                "  out.push(!link.hidden); }\n"
                "  console.log(JSON.stringify(out)); })();")
-    assert _node(harness) == [True, True, False, True]
+    assert _node(harness) == [True, True, False, True, False]
 
 
 def test_how_it_works_asks_for_the_one_action_it_leads_to() -> None:

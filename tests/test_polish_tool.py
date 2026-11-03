@@ -1201,12 +1201,19 @@ def test_the_bye_table_marks_a_finished_week_from_todays_date(tmp_path) -> None:
     every listed week before currentWeek(today) the way the generator does,
     never unmarks one, and adds nothing once the season is over. The page
     calls it as soon as byes.json is in."""
+    # The page's table is in the shape markPlayed reads (an li per week, its
+    # week in a <b>); the weeks themselves are built here, because the
+    # Wednesday run rewrites the table and byes.json every week.
     block = PAGE.split("<!-- byes:start -->")[1].split("<!-- byes:end -->")[0]
-    items = re.findall(r'<li( class="played")?><b>Week (\d+)</b>', block)
-    rows = [{"week": int(w), "played": bool(c)} for c, w in items]
+    assert re.findall(r'<li(?: class="played")?><b>Week (\d+)</b>', block)
+    from datetime import date, timedelta
+    week_one_ends = date(2026, 9, 14)                  # Monday night, Week 1
+    byes = {"weeks": [{"week": n, "bye": [],
+                       "ends": (week_one_ends + timedelta(weeks=n - 1)).isoformat()}
+                      for n in range(1, 19)]}
+    rows = [{"week": n, "played": n < 8} for n in (5, 6, 7, 8, 9, 10, 11, 12, 14)]
     script = (f"const B = require({json.dumps(str(BYES_JS))});\n"
-              f"const byes = JSON.parse(require('fs').readFileSync("
-              f"{json.dumps(str(BYES_JSON))}, 'utf8'));\n"
+              f"const byes = {json.dumps(byes)};\n"
               f"const rows = {json.dumps(rows)};\n"
               "function table() {\n"
               "  const doc = { createElement: (tag) => ({ tag, className: '', textContent: '' }) };\n"
@@ -1228,8 +1235,7 @@ def test_the_bye_table_marks_a_finished_week_from_todays_date(tmp_path) -> None:
               "}\n"
               "console.log(JSON.stringify(out));")
     got = _node(tmp_path, script)
-    current = next(w["week"] for w in json.loads(BYES_JSON.read_text())["weeks"]
-                   if w["ends"] >= "2026-11-03")
+    current = next(w["week"] for w in byes["weeks"] if w["ends"] >= "2026-11-03")
     listed = [r["week"] for r in rows]
     already = {r["week"] for r in rows if r["played"]}
     assert current == 9 and 8 in listed and 8 not in already

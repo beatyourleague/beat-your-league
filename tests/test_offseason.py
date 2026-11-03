@@ -296,6 +296,10 @@ def test_a_week_still_being_played_waits_for_its_last_game() -> None:
             "2026,REG,8,KC,DEN\n2026,POST,19,BUF,KC\n2025,REG,8,NYJ,NE\n", encoding="utf-8")
         assert render_rookies.schedule_teams(Path(tmp), 2026) == {
             8: {"CHI", "SEA", "KC", "DEN"}}
+        # The archive's old names, in the stat rows' spelling (2014-2019).
+        (Path(tmp) / "games.csv").write_text(
+            "season,game_type,week,away_team,home_team\n2019,REG,1,OAK,SD\n", encoding="utf-8")
+        assert render_rookies.schedule_teams(Path(tmp), 2019) == {1: {"LV", "LAC"}}
     assert "playing=schedule_teams(cache, year, live=live)" in Path(
         render_rookies.__file__).read_text(encoding="utf-8")
 

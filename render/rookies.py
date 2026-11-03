@@ -352,8 +352,11 @@ def load_report(cache: Path, year: int, *, live: bool = False) -> dict[str, Any]
 def schedule_teams(cache: Path, year: int, *, live: bool = False) -> dict[int, set[str]] | None:
     """week -> the teams with a regular-season game that week, from games.csv,
     or None when the schedule can't be read (engine.rookies.build then counts
-    every week with rows, as it did before SITE-5)."""
+    every week with rows, as it did before SITE-5). Codes in the stat rows'
+    spelling (OAK -> LV, engine.context.team_code): the schedule archive keeps
+    the old names for 2014-2019, and a 2019 class read "through Week 6"."""
     import csv
+    from engine.context import team_code
     from ingest.nflverse import NflverseError, fetch
     try:
         path = fetch("schedules", "games.csv", cache, live=live)
@@ -371,7 +374,7 @@ def schedule_teams(cache: Path, year: int, *, live: bool = False) -> dict[int, s
             except ValueError:
                 continue
             for side in ("home_team", "away_team"):
-                team = (row.get(side) or "").strip()
+                team = team_code(row.get(side))
                 if week and team:
                     weeks.setdefault(week, set()).add(team)
     return weeks

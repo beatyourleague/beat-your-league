@@ -888,12 +888,15 @@ def test_a_sample_with_no_total_is_not_linked_without_the_key(site) -> None:
     """SITE-1, reproduced on the live site Nov 3 2026: this-week.html opened
     on "Heads up: no projected total" (Purdy out on a 49ers bye) while the
     committed week.json, written Oct 27 before the writer learned the key,
-    had no "total", so the hero and every footer linked it. The committed
-    pair passes now; take the key away and it fails."""
+    had no "total", so the hero and every footer linked it. Built here, not
+    read from the committed pair: the Wednesday build rewrites both files."""
     import json
-    assert _status(lc.check_week_json(), "card 01 has a total") == "PASS"
+    (site / "this-week.html").write_text(
+        "<p class=\"gate\"><b>Heads up:</b> no projected total</p>", encoding="utf-8")
     clock = json.loads((site / "week.json").read_text(encoding="utf-8"))
-    assert clock.get("total") is False
+    clock["total"] = False
+    (site / "week.json").write_text(json.dumps(clock), encoding="utf-8")
+    assert _status(lc.check_week_json(), "card 01 has a total") == "PASS"
     del clock["total"]
     (site / "week.json").write_text(json.dumps(clock), encoding="utf-8")
     assert _status(lc.check_week_json(), "card 01 has a total") == "FAIL"
