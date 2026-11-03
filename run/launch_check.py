@@ -2377,7 +2377,8 @@ def sender_held_detail(today: date | None = None) -> str:
     them coming."""
     from run.season_review import WINDOW_DAYS
     from run.solo import CACHE_DIR, current_season, season_ends
-    review, rookies = "the season review", "the rookie report"
+    today = today or date.today()
+    review = "the season review"
     try:
         season = current_season(CACHE_DIR, today=today)
         end = season_ends(CACHE_DIR).get(str(season))
@@ -2386,8 +2387,15 @@ def sender_held_detail(today: date | None = None) -> str:
     if end:
         last = date.fromisoformat(end)
         first, close = last + timedelta(days=1), last + timedelta(days=WINDOW_DAYS)
-        review += f" (due {first:%b} {first.day} to {close:%b} {close.day}, {close.year})"
-        rookies += f" (May to August {close.year})"
+        # current_season stays on the season just played until the next
+        # schedule lands, so from February its window is behind us: no date
+        # then, rather than one that has passed.
+        if close >= today:
+            review += f" (due {first:%b} {first.day} to {close:%b} {close.day}, {close.year})"
+    # The rookie report goes May to August of the calendar year (run.rookies
+    # is_due), whatever season the schedule says it is: in June the window is
+    # this one, not next year's.
+    rookies = f"the rookie report (May to August {today.year + (today.month > 8)})"
     return ("Until then reports, welcomes and confirmations go out without it, and four "
             "sends refuse: the waitlist launch email, terms and privacy change notices, "
             f"{review} and {rookies}.")

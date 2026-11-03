@@ -816,6 +816,34 @@ def test_a_missing_sender_address_names_what_it_holds_back(monkeypatch) -> None:
     assert gate.status == "OWNER" and "season review (due Jan 11" in gate.detail, gate
 
 
+def test_the_held_sends_dates_are_true_all_year(monkeypatch) -> None:
+    """Skeptic of OPS-3: the dates came off ``current_season``, which stays on
+    the season just played until the next schedule lands. In February the line
+    gave the January review window that had already passed, and in June,
+    once next season's schedule was in, it put the rookie report in the
+    August of the year after, while this year's was the one waiting. The
+    review's window is named only while it is ahead; the rookie report's
+    is the calendar year's May to August."""
+    from datetime import date
+
+    import run.solo as solo
+    ends = {"2026": "2027-01-10", "2027": "2028-01-09"}
+    monkeypatch.setattr(solo, "season_ends", lambda *a, **k: ends)
+
+    def on(day, season):
+        monkeypatch.setattr(solo, "current_season", lambda *a, **k: season)
+        return lc.sender_held_detail(day)
+    autumn = on(date(2026, 11, 3), "2026")
+    assert "season review (due Jan 11 to Jan 31, 2027)" in autumn
+    assert "rookie report (May to August 2027)" in autumn
+    february = on(date(2027, 2, 15), "2026")
+    assert "the season review and" in february and "Jan 31, 2027" not in february
+    assert "rookie report (May to August 2027)" in february
+    june = on(date(2027, 6, 10), "2027")
+    assert "rookie report (May to August 2027)" in june, june
+    assert "season review (due Jan 10 to Jan 30, 2028)" in june
+
+
 def test_the_pass_welcome_carries_the_seat_link() -> None:
     assert lc.check_seat_link()[0].status == "PASS"
 
