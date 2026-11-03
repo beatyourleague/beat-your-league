@@ -477,11 +477,31 @@ def apply_updates(rows: list[dict], latest: Mapping[tuple[str, str], RosterUpdat
             # size, and keeping the old one would value every player in a
             # league the subscriber said they are no longer in.
             "league_size": roster.league_size,
-            **({"roster_as_of": update.seen_at[:10]}
-               if re.match(r"^\d{4}-\d{2}-\d{2}", update.seen_at or "") else {}),
+            **({"roster_as_of": roster_day(update.seen_at)}
+               if roster_day(update.seen_at) else {}),
         })
         applied += 1
     return out, applied
+
+
+def roster_day(seen_at: str | None) -> str:
+    """The Eastern date of a UTC stamp, as every other date the buyer sees
+    is (launch review PUR-8): a change confirmed at 9:55 PM ET on Nov 2 was
+    stamped Nov 3 by its UTC date, the day after the welcome's own date.
+    A stamp with no time keeps its date; anything else gives ""."""
+    raw = str(seen_at or "").strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}", raw):
+        return ""
+    try:
+        stamp = datetime.fromisoformat(raw)
+    except ValueError:
+        return raw[:10]
+    if len(raw) <= 10:
+        return stamp.date().isoformat()
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    from zoneinfo import ZoneInfo
+    return stamp.astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
 
 def _mask(email: str) -> str:
