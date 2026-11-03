@@ -659,6 +659,16 @@ def test_a_rookie_report_held_for_its_sender_address_is_red_once_a_year(
     assert "::warning::" in capsys.readouterr().out
     assert not handed, "a commercial email went out with no postal address"
 
+    import run.intake as intake
+
+    def unreadable(*a, **k):
+        raise intake.IntakeError("the form backend is down")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://forms.example.com/rows")
+    monkeypatch.setattr(intake, "fetch_seats", unreadable)
+    assert rookie_runner.main(args) == 1, "a failed read hid behind the held send"
+    monkeypatch.delenv("FORM_ENDPOINT")
+    capsys.readouterr()
+
     monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 9, Toronto ON")
     assert rookie_runner.main(args) == 0
     assert [m.to for m in handed] == ["fan@example.com"]
