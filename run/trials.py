@@ -125,6 +125,32 @@ def canonical_email(email: str) -> str:
     return f"{local}@{domain}"
 
 
+# Addresses that are never a buyer: our own domain (the owner trying a form)
+# and RFC 2606's reserved names, which no inbox answers. A row at one of them
+# is a test, so the demand counts and the launch list leave it out and say how
+# many they left out (TOOLS-2: one test row read as the whole waitlist).
+OWN_DOMAIN = "beatyourleague.com"
+RESERVED_DOMAINS = ("example.com", "example.net", "example.org")
+RESERVED_TLDS = ("test", "example", "invalid", "localhost")
+
+
+def is_test_address(email: object) -> bool:
+    """True for an address at our own domain or a reserved test domain
+    (subdomains included). Pure; anything that isn't an address is False."""
+    domain = str(email or "").strip().lower().rpartition("@")[2].rstrip(".")
+    if not domain or "@" not in str(email or ""):
+        return False
+    for name in (OWN_DOMAIN, *RESERVED_DOMAINS):
+        if domain == name or domain.endswith("." + name):
+            return True
+    return domain.rpartition(".")[2] in RESERVED_TLDS
+
+
+def count_test_rows(rows) -> int:
+    """How many form rows carry a test address (``is_test_address``)."""
+    return sum(1 for row in rows if is_test_address(row.get("email")))
+
+
 def free_reports_open(landing: Path | None = None) -> bool:
     """Whether the site offers the free report right now: the landing's ONE
     ``const TRIAL_OPEN = true;`` (the switch its button is gated on). A page

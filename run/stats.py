@@ -21,7 +21,8 @@ Everything it needs is already stored somewhere the owner can read:
 - **Channels.** A form row may carry a ``via`` tag (which link brought the
   person: a post, a reply, a profile). Counted per kind, so the owner can see
   which channel a sign-up came from.
-- **Stripe**, when ``STRIPE_API_KEY`` is set in this shell: the season's passes
+- **Stripe**, when ``STRIPE_STATS_KEY`` or ``STRIPE_API_KEY`` is in this shell
+  or ``.env`` (the dashboard's order): the season's passes
   sold by type (paid payment-mode sessions), gross, refunded and net of
   Stripe's modelled fee, the refund rate, free report → paid within 14 days,
   checkout sessions of the last 7 days by outcome, refunds of the last 30,
@@ -72,11 +73,15 @@ def _when(value: object) -> datetime | None:
 
 def form_summary(rows: Iterable[Mapping], now: datetime) -> dict[str, dict[str, int]]:
     """Per kind: rows ever, in the last 7 days, in the last day, and people
-    (distinct mailboxes, one spelling per mailbox as the free report counts them)."""
-    from run.trials import canonical_email
+    (distinct mailboxes, one spelling per mailbox as the free report counts them).
+    A row at our own domain or a reserved test domain is a test, never demand
+    (``run.trials.is_test_address``); ``left_out_line`` says how many."""
+    from run.trials import canonical_email, is_test_address
     out: dict[str, dict[str, int]] = {}
     people: dict[str, set[str]] = defaultdict(set)
     for row in rows:
+        if is_test_address(row.get("email")):
+            continue
         kind = str(row.get("kind") or "seat")
         counts = out.setdefault(kind, {"total": 0, "week": 0, "day": 0, "people": 0})
         counts["total"] += 1
@@ -102,9 +107,13 @@ BAD_VIA = "(unreadable tag)"
 
 def channel_summary(rows: Iterable[Mapping]) -> dict[str, Counter[str]]:
     """Per kind: rows by ``via`` tag. Rows, not people — a channel is credited
-    with every request it brought, the same count the "ever" column shows."""
+    with every request it brought, the same count the "ever" column shows.
+    Test rows are left out, as ``form_summary`` leaves them out."""
+    from run.trials import is_test_address
     out: dict[str, Counter[str]] = {}
     for row in rows:
+        if is_test_address(row.get("email")):
+            continue
         kind = str(row.get("kind") or "seat")
         via = row.get("via")
         if via is None or via == "":
@@ -115,6 +124,15 @@ def channel_summary(rows: Iterable[Mapping]) -> dict[str, Counter[str]]:
             tag = BAD_VIA
         out.setdefault(kind, Counter())[tag] += 1
     return out
+
+
+def left_out_line(n: int) -> str:
+    """One line naming how many form rows were left out as tests (``n``,
+    ``run.trials.count_test_rows``), or ""."""
+    if not n:
+        return ""
+    return (f"{n} test row{'s' if n != 1 else ''} from our own domain or a reserved "
+            f"test domain, not counted.")
 
 
 def _channel_lines(channels: Mapping[str, Counter[str]]) -> list[str]:
@@ -568,9 +586,12 @@ ACCOUNT_RE = re.compile(r"^[0-9a-f]{32}$")
 # blob1 event, blob2 page, blob3 via, blob4 referring host, blob5 device,
 # blob6 checkout state, blob7 country — the order the Worker writes (C1).
 # Counts are SUM(_sample_interval), never COUNT(): Analytics Engine samples.
+# ``{since}`` is empty, or TRAFFIC_FROM's bound (``since_clause``): Analytics
+# Engine rows can't be deleted, so the owner's own checks before opening day
+# are left out by time, never by guessing which views were theirs.
 TRAFFIC_SQL = ("SELECT blob1 AS e, blob2 AS p, blob3 AS v, blob4 AS r, blob5 AS d, "
                "blob6 AS s, blob7 AS c, SUM(_sample_interval) AS n FROM {dataset} "
-               "WHERE timestamp > NOW() - INTERVAL '{days}' DAY "
+               "WHERE timestamp > NOW() - INTERVAL '{days}' DAY{since} "
                "GROUP BY e, p, v, r, d, s, c ORDER BY n DESC LIMIT 10000 FORMAT JSON")
 COUNT_EVENTS = ("view", "roster", "checkout", "waitlist", "trial", "dynasty", "keeper")
 BUY_PAGES = ("join", "join-pass")
@@ -602,6 +623,41 @@ TRAFFIC_CAVEAT = ("  Counts of page views and signup steps, never of people: a r
                   "Track or some blockers are not counted.")
 
 
+# TRAFFIC_FROM: count page views from this UTC time on (LAUNCH.md section 8).
+# A strict shape, UTC only, so the value can go into the SQL as text and
+# nothing else can.
+TRAFFIC_FROM_RE = re.compile(
+    r"^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?(?:Z|\+00:00)?$")
+
+
+def parse_traffic_from(value: str | None) -> datetime | None:
+    """TRAFFIC_FROM as a UTC time, None when it is unset. Anything that is not
+    an ISO UTC time (``2026-11-03T19:00Z``, or a bare date for midnight)
+    raises, so a typo never quietly counts every view."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    m = TRAFFIC_FROM_RE.fullmatch(value)
+    if not m:
+        raise ValueError("TRAFFIC_FROM is not an ISO UTC time such as 2026-11-03T19:00Z")
+    try:
+        return datetime(*(int(x or 0) for x in m.groups()), tzinfo=timezone.utc)
+    except ValueError:
+        raise ValueError("TRAFFIC_FROM is not a real date and time") from None
+
+
+def since_clause(since: datetime | None) -> str:
+    """The extra WHERE condition for TRAFFIC_FROM, or nothing."""
+    if since is None:
+        return ""
+    return f" AND timestamp >= toDateTime('{since.astimezone(timezone.utc):%Y-%m-%d %H:%M:%S}')"
+
+
+def counting_from(since: datetime | None) -> str:
+    """What both views print when TRAFFIC_FROM is set."""
+    return f"Counting from {since:%b %-d %H:%M} UTC (TRAFFIC_FROM)" if since else ""
+
+
 def counter_endpoint(path: Path | None = None) -> str:
     """The ENDPOINT site/count.js posts to; empty while the counter is off."""
     try:
@@ -612,14 +668,16 @@ def counter_endpoint(path: Path | None = None) -> str:
     return found[0] if len(found) == 1 else ""
 
 
-def query_counts(account: str, token: str, days: int) -> list[dict]:
-    """The counter's rows for the last ``days`` days, grouped. One read-only
-    POST to Cloudflare's SQL API, whose token needs Account Analytics: Read
-    and nothing else — it can see these counts and change nothing."""
+def query_counts(account: str, token: str, days: int,
+                 since: datetime | None = None) -> list[dict]:
+    """The counter's rows for the last ``days`` days, grouped, from ``since``
+    on when TRAFFIC_FROM sets it. One read-only POST to Cloudflare's SQL API,
+    whose token needs Account Analytics: Read and nothing else — it can see
+    these counts and change nothing."""
     import urllib.request
     if not ACCOUNT_RE.fullmatch(account):
         raise ValueError("CF_ACCOUNT_ID is not a 32-character Cloudflare account id")
-    sql = TRAFFIC_SQL.format(dataset=COUNT_DATASET, days=int(days))
+    sql = TRAFFIC_SQL.format(dataset=COUNT_DATASET, days=int(days), since=since_clause(since))
     request = urllib.request.Request(
         AE_SQL.format(account=account), data=sql.encode("utf-8"), method="POST",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "text/plain"})
@@ -677,7 +735,7 @@ def traffic_lines(week: list[dict], month: list[dict]) -> list[str]:
             steps[row["v"] or NO_VIA][2] += row["n"]
     channels = sorted(steps.items(), key=lambda item: (-item[1][0], item[0]))[:6]
     lines += [TRAFFIC_CAVEAT,
-              "  Channels, 7 days (views → rosters → buy presses): "
+              "  Channels, 7 days (landing + buy-page views → rosters → buy presses): "
               + (", ".join(f"{v} {a} → {b} → {c}" for v, (a, b, c) in channels)
                  or "none yet"),
               "  Referrers, 7 days: " + _top(
@@ -690,9 +748,11 @@ def traffic_lines(week: list[dict], month: list[dict]) -> list[str]:
     return lines
 
 
-def traffic_summary(account: str, token: str, endpoint: str) -> list[str]:
+def traffic_summary(account: str, token: str, endpoint: str,
+                    traffic_from: str = "") -> list[str]:
     """The traffic half, failing soft like the Stripe half: an error says why
-    in one line, with the token masked wherever it appears."""
+    in one line, with the token masked wherever it appears. ``traffic_from``
+    is TRAFFIC_FROM: views before it are left out of every count."""
     if not endpoint:
         return ["  The counter is off: site/count.js has no ENDPOINT yet "
                 "(LAUNCH.md step 5b)."]
@@ -700,14 +760,25 @@ def traffic_summary(account: str, token: str, endpoint: str) -> list[str]:
         return ["  CF_ACCOUNT_ID / CF_ANALYTICS_TOKEN are not set in this shell or .env "
                 "— no traffic view (LAUNCH.md step 5b)."]
     try:
-        week, month = query_counts(account, token, 7), query_counts(account, token, 30)
+        since = parse_traffic_from(traffic_from)
+    except ValueError as exc:
+        return [f"  {exc} — no traffic view until it is fixed in this shell or .env."]
+    try:
+        week = query_counts(account, token, 7, since=since)
+        month = query_counts(account, token, 30, since=since)
     except Exception as exc:  # noqa: BLE001 — fail soft, say why
         reason = re.sub(r"Bearer\s+\S+", "Bearer ***", str(exc)).replace(token, "***")
         return [f"  Could not read the counter ({type(exc).__name__}: {reason[:160]})."]
     lines = traffic_lines(week, month)
-    if not week:
+    if not week and since is not None and since > datetime.now(timezone.utc) - timedelta(days=7):
+        # A bound set this week can leave a quiet week empty for real; the
+        # binding warning below would be a false alarm.
+        lines.insert(0, "  Nothing counted since TRAFFIC_FROM yet.")
+    elif not week:
         lines.insert(0, "  The counter returned nothing for 7 days although site/count.js "
                         "is on — check the Worker's COUNTS binding (LAUNCH.md step 5b).")
+    if since is not None:
+        lines.insert(0, f"  {counting_from(since)}: views before it are left out.")
     return lines
 
 
@@ -770,12 +841,13 @@ def send_summary(entries: Iterable[Mapping], season: str) -> dict:
 def conversions(rows: Iterable[Mapping], subscriber_emails: Iterable[str]) -> dict[str, tuple[int, int]]:
     """Of the people who asked for a free report / joined the waitlist, how many
     subscribe now: kind -> (subscribed, asked)."""
-    from run.trials import canonical_email
+    from run.trials import canonical_email, is_test_address
     held = {canonical_email(e) for e in subscriber_emails}
     asked: dict[str, set[str]] = defaultdict(set)
     for row in rows:
         kind = str(row.get("kind") or "")
-        if kind in ("trial", "waitlist") and row.get("email"):
+        if (kind in ("trial", "waitlist") and row.get("email")
+                and not is_test_address(row["email"])):
             asked[kind].add(canonical_email(str(row["email"])))
     return {kind: (len(seen & held), len(seen)) for kind, seen in asked.items()}
 
@@ -803,7 +875,8 @@ def seat_lines(registry: Iterable) -> list[str]:
 def render(form: dict | None, form_note: str, sends: dict, season: str,
            registry: list | None, registry_note: str, conv: dict | None,
            now: datetime, channels: Mapping[str, Counter[str]] | None = None,
-           payments: list[str] | None = None, traffic: list[str] | None = None) -> str:
+           payments: list[str] | None = None, traffic: list[str] | None = None,
+           left_out: str = "") -> str:
     lines = [f"Beat Your League — demand, {now:%a %b %d %Y %H:%M} UTC", ""]
     lines.append("TRAFFIC (the site's own page counter, privacy section 3)")
     lines += traffic if traffic is not None else [
@@ -820,6 +893,8 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
             c = c or {"total": 0, "week": 0, "day": 0, "people": 0}
             people = c["people"] if kind != "confirm" else "-"
             lines.append(f"  {label:30} {c['total']:>6} {c['week']:>7} {c['day']:>5} {people!s:>7}")
+        if left_out:
+            lines.append(f"  {left_out}")
     if channels is not None:
         lines += ["", "CHANNELS (form rows by via tag, ever)"] + _channel_lines(channels)
     lines += ["", f"SENT THIS SEASON ({season})"]
@@ -858,7 +933,8 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
         lines += seat_lines(registry)
     lines += ["", "PAYMENTS (Stripe, read-only)"]
     lines += payments if payments is not None else [
-        "  STRIPE_API_KEY is not set in this shell — no payment view."]
+        "  STRIPE_API_KEY is not set in this shell or .env (nor STRIPE_STATS_KEY) "
+        "— no payment view."]
     return "\n".join(lines) + "\n"
 
 
@@ -878,6 +954,11 @@ def _season_start(season: str) -> int | None:
 # .env (LAUNCH.md step 5b) — read by the command line only (`cli`), so a test
 # calling main() can never reach Cloudflare.
 CF_NAMES = ("CF_ACCOUNT_ID", "CF_ANALYTICS_TOKEN")
+# Where the traffic count starts (parse_traffic_from), from the same places.
+TRAFFIC_NAMES = ("TRAFFIC_FROM",)
+# The Stripe key: a dedicated read-only one first (STRIPE_STATS_KEY, LAUNCH.md
+# step 3's owner-stats key), else STRIPE_API_KEY. The dashboard's order too.
+STRIPE_NAMES = ("STRIPE_STATS_KEY", "STRIPE_API_KEY")
 # The form Worker's address and read key, and the payment-link map (link ids,
 # not a key), from the same two places: the dashboard reads them from .env
 # too, and the two views must not disagree about whether the Worker exists.
@@ -954,14 +1035,21 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
               "log would publish sales and traffic. Run it on your own machine.",
               file=sys.stderr)
         return 2
-    found = read_env_file(env_file or ENV_FILE, CF_NAMES + FORM_NAMES)
-    cf = {name: environ.get(name) or found.get(name, "") for name in CF_NAMES}
-    form = {name: environ.get(name) or found.get(name, "") for name in FORM_NAMES}
-    return main(argv, cf=cf, form=form)
+    names = CF_NAMES + TRAFFIC_NAMES + FORM_NAMES + STRIPE_NAMES
+    found = read_env_file(env_file or ENV_FILE, names)
+    value = {name: environ.get(name) or found.get(name, "") for name in names}
+    cf = {name: value[name] for name in CF_NAMES + TRAFFIC_NAMES}
+    form = {name: value[name] for name in FORM_NAMES}
+    return main(argv, cf=cf, form=form, stripe_key=stripe_key_from(value))
+
+
+def stripe_key_from(env: Mapping[str, str]) -> str:
+    """STRIPE_STATS_KEY, else STRIPE_API_KEY — dashboard.stripe_key's order."""
+    return next((env[name] for name in STRIPE_NAMES if env.get(name)), "")
 
 
 def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
-         form: Mapping[str, str] | None = None) -> int:
+         form: Mapping[str, str] | None = None, stripe_key: str | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--registry", type=Path, default=None)
@@ -983,6 +1071,7 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
     def setting(name: str) -> str:
         return form.get(name) or os.environ.get(name, "")
 
+    from run.trials import count_test_rows
     rows: list[dict] | None = None
     endpoint = setting("FORM_ENDPOINT")
     if not endpoint:
@@ -1018,7 +1107,9 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
 
     # Fail soft by design: a payments view that cannot be read is said in its
     # own section and changes neither the rest of the page nor the exit code.
-    api_key = os.environ.get("STRIPE_API_KEY", "")
+    # The command line hands over the key it read from the shell or .env; a
+    # caller of main() (a test) falls back to this process's environment.
+    api_key = stripe_key if stripe_key is not None else stripe_key_from(os.environ)
     payments = None
     if api_key:
         from run.checkout import parse_link_plans, season_2027_links
@@ -1035,12 +1126,13 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
     # here, so main() itself cannot reach Cloudflare unless handed them.
     cf = cf or {}
     traffic = traffic_summary(cf.get("CF_ACCOUNT_ID", ""), cf.get("CF_ANALYTICS_TOKEN", ""),
-                              counter_endpoint())
+                              counter_endpoint(), cf.get("TRAFFIC_FROM", ""))
 
     page = render(form_summary(rows, now) if rows is not None else None, form_note,
                   sends, season, registry, registry_note, conv, now,
                   channels=channel_summary(rows) if rows is not None else None,
-                  payments=payments, traffic=traffic)
+                  payments=payments, traffic=traffic,
+                  left_out=left_out_line(count_test_rows(rows)) if rows is not None else "")
     print(page, end="")
     if args.html is not None:
         args.html.parent.mkdir(parents=True, exist_ok=True)

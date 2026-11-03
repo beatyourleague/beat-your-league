@@ -72,7 +72,10 @@
       || window.location.hostname !== LIVE || nav.webdriver === true
       || nav.globalPrivacyControl === true
       || [nav.doNotTrack, window.doNotTrack, nav.msDoNotTrack].some(
-        (v) => v === "1" || v === "yes");
+        (v) => v === "1" || v === "yes")
+      // The owner's own check of one page: ?nocount=1 on its address counts
+      // nothing for that view. Stored nowhere, so the next page counts again.
+      || new URLSearchParams(window.location.search).get("nocount") === "1";
   }
 
   function line(event, state) {

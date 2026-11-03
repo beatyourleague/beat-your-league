@@ -910,7 +910,27 @@ def post_row(endpoint: str, row: Mapping, api_key: str | None = None) -> None:
         raise RuntimeError(f"the form Worker answered HTTP {status}")
 
 
-def main(argv: list[str] | None = None) -> int:
+# What a real post needs, said together before anything is read (TOOLS-10):
+# a dry run used to pass while FORM_API_KEY was missing, and the real run then
+# failed "Not queued". FORM_ENDPOINT and FORM_API_KEY come from this shell,
+# else the gitignored .env (make stats reads them the same way); UPDATE_SECRET
+# only from the shell, since it signs.
+POST_NAMES = ("UPDATE_SECRET", "FORM_ENDPOINT", "FORM_API_KEY")
+
+
+def post_settings(environ: Mapping[str, str], env_file: Path | None = None) -> dict[str, str]:
+    """The three settings a real post needs, from the shell, else .env for the
+    Worker's address and key."""
+    from run.stats import ENV_FILE, read_env_file
+    found = read_env_file(env_file or ENV_FILE, ("FORM_ENDPOINT", "FORM_API_KEY"))
+    out = {name: (environ.get(name) or "").strip() for name in POST_NAMES}
+    for name in ("FORM_ENDPOINT", "FORM_API_KEY"):
+        out[name] = out[name] or found.get(name, "").strip()
+    return out
+
+
+def main(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
+         env_file: Path | None = None) -> int:
     """`make roster-update EMAIL=... ROSTER=...`: queue an emailed roster
     change for the next intake. Prints no address."""
     import argparse
@@ -928,41 +948,46 @@ def main(argv: list[str] | None = None) -> int:
                         help="resolve the names and show the change; post nothing")
     args = parser.parse_args(argv)
 
-    secret = os.environ.get("UPDATE_SECRET", "")
-    endpoint = os.environ.get("FORM_ENDPOINT", "")
+    settings = post_settings(os.environ if environ is None else environ, env_file)
     if not _EMAIL_RE.match(args.email.strip().lower()):
         print("That is not an address. Nothing was posted.", file=sys.stderr)
         return 1
-    if not secret or not endpoint:
-        # Said, never worked around: without the Worker and the secret there
-        # is no authenticated path into the registry, and writing one by hand
-        # is how a registry ends up unloadable for everybody.
-        print("UPDATE_SECRET and FORM_ENDPOINT must both be set in this shell "
-              "(the same values as the GitHub secrets). Nothing was posted.",
-              file=sys.stderr)
+    missing = [name for name in POST_NAMES if not settings[name]]
+    if missing and not args.dry_run:
+        # Said, never worked around: without the Worker, its key and the
+        # secret there is no authenticated path into the registry, and writing
+        # one by hand is how a registry ends up unloadable for everybody.
+        print(f"{', '.join(missing)} {'is' if len(missing) == 1 else 'are'} not set "
+              f"(UPDATE_SECRET in this shell; FORM_ENDPOINT and FORM_API_KEY in this "
+              f"shell or .env — the same values as the GitHub secrets). Nothing was "
+              f"posted. ARGS=--dry-run checks the names without them.", file=sys.stderr)
         return 1
 
-    from run.solo import CACHE_DIR, SoloError, load_week_data
+    from run.solo import CACHE_DIR, SoloError, load_names
     from run.trial import TrialError, resolve_roster
     text = (sys.stdin.read() if args.roster == "-"
             else Path(args.roster).read_text(encoding="utf-8"))
     try:
-        data = load_week_data(CACHE_DIR)
-        ids = resolve_roster(text, data.directory)
+        # The directory alone: a week whose Monday game isn't published yet
+        # still knows every player's name (TOOLS-10).
+        directory, players = load_names(CACHE_DIR)
+        ids = resolve_roster(text, directory)
     except (SoloError, TrialError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     if not ids:
         print("No names in that roster. Nothing was posted.", file=sys.stderr)
         return 1
-    row = operator_row(args.email, ids, secret)
-    names = ", ".join(data.players.name(pid) for pid in ids)
-    who = _mask(row["email"])
+    names = ", ".join(players.name(pid) for pid in ids)
+    who = _mask(args.email.strip().lower())
     if args.dry_run:
         print(f"Would queue a roster change for {who}: {len(ids)} players — {names}")
+        if missing:
+            print(f"(A real run also needs {', '.join(missing)}.)")
         return 0
+    row = operator_row(args.email, ids, settings["UPDATE_SECRET"])
     try:
-        post_row(endpoint, row)
+        post_row(settings["FORM_ENDPOINT"], row, settings["FORM_API_KEY"])
     except RuntimeError as exc:
         print(f"Not queued: {exc}", file=sys.stderr)
         return 1

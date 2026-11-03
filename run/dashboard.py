@@ -100,15 +100,15 @@ GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 # The counter's and the form Worker's names are make stats' own lists, so the
 # two views can't read different places. STRIPE_PAYOUT_CURRENCY=usd says the
 # USD payout account exists (run/economics.py's launch line).
-ENV_NAMES = (*stats.CF_NAMES, "STRIPE_STATS_KEY", "STRIPE_API_KEY", *stats.FORM_NAMES,
+ENV_NAMES = (*stats.CF_NAMES, *stats.TRAFFIC_NAMES, *stats.STRIPE_NAMES, *stats.FORM_NAMES,
              "RESEND_READ_KEY", "STRIPE_PAYOUT_CURRENCY")
 SECRET_NAMES = ("CF_ANALYTICS_TOKEN", "STRIPE_STATS_KEY", "STRIPE_API_KEY", "FORM_API_KEY",
                 "RESEND_READ_KEY", "STRIPE_PAYMENT_LINKS")
 # The names the launch gates read from the shell (os.environ). For the length
 # of the gates' run they also see what this dashboard read from .env, so a
 # gate never says "isn't in this shell" about a value the page itself is using.
-GATE_ENV = ("STRIPE_PAYMENT_LINKS", "FORM_ENDPOINT", "FORM_API_KEY", "RESEND_READ_KEY",
-            "STRIPE_PAYOUT_CURRENCY")
+# One list, the launch check's own (make launch-check fills it from .env too).
+from run.launch_check import GATE_ENV  # noqa: E402
 
 PERIODS = (("7d", "7 days", 7), ("30d", "30 days", 30), ("all", "All", None))
 TRAFFIC_ALL_DAYS = 90          # Analytics Engine keeps three months
@@ -236,18 +236,20 @@ def _season(ctx: Context) -> str:
 
 DAILY_SQL = ("SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS t, blob1 AS e, "
              "blob2 AS p, blob6 AS s, blob3 AS v, SUM(_sample_interval) AS n FROM {dataset} "
-             "WHERE timestamp > NOW() - INTERVAL '{days}' DAY "
+             "WHERE timestamp > NOW() - INTERVAL '{days}' DAY{since} "
              "GROUP BY t, e, p, s, v ORDER BY t LIMIT 10000 FORMAT JSON")
 _DAY = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 
 
-def query_daily(account: str, token: str, days: int) -> list[dict]:
+def query_daily(account: str, token: str, days: int,
+                since: datetime | None = None) -> list[dict]:
     """The counter by UTC day, event, page and checkout state — the daily
     series and the previous-period deltas. The same read-only SQL endpoint and
-    the same field rules as ``run.stats.query_counts``."""
+    the same field rules as ``run.stats.query_counts``, TRAFFIC_FROM included."""
     if not stats.ACCOUNT_RE.fullmatch(account):
         raise ValueError("CF_ACCOUNT_ID is not a 32-character Cloudflare account id")
-    sql = DAILY_SQL.format(dataset=stats.COUNT_DATASET, days=int(days))
+    sql = DAILY_SQL.format(dataset=stats.COUNT_DATASET, days=int(days),
+                           since=stats.since_clause(since))
     request = urllib.request.Request(
         stats.AE_SQL.format(account=account), data=sql.encode("utf-8"), method="POST",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "text/plain"})
@@ -282,11 +284,21 @@ def collect_traffic(ctx: Context) -> Source:
     if not (account and token):
         return off("traffic", "CF_ACCOUNT_ID / CF_ANALYTICS_TOKEN are not in this shell or .env.",
                    "LAUNCH.md step 5b, items 6–7 — a read-only Analytics token in .env")
-    rows = {"7d": stats.query_counts(account, token, 7),
-            "30d": stats.query_counts(account, token, 30),
-            "all": stats.query_counts(account, token, TRAFFIC_ALL_DAYS)}
-    daily = query_daily(account, token, TRAFFIC_ALL_DAYS)
-    return _source("traffic", data={"rows": rows, "daily": daily}, read_at=ctx.now)
+    # TRAFFIC_FROM (make stats' rule): the owner's own checks before opening
+    # day stay out of every count. A value that isn't a UTC time is an error
+    # card, never a quiet count of everything.
+    since = stats.parse_traffic_from(ctx.env.get("TRAFFIC_FROM", ""))
+    rows = {"7d": stats.query_counts(account, token, 7, since=since),
+            "30d": stats.query_counts(account, token, 30, since=since),
+            "all": stats.query_counts(account, token, TRAFFIC_ALL_DAYS, since=since)}
+    daily = query_daily(account, token, TRAFFIC_ALL_DAYS, since=since)
+    if since is not None:
+        # The query already leaves earlier lines out; a whole UTC day before
+        # the bound is dropped here too, so no series can show one.
+        daily = [r for r in daily if r["day"] >= since.date().isoformat()]
+    return _source("traffic", data={"rows": rows, "daily": daily,
+                                    "since": since.isoformat() if since else ""},
+                   read_at=ctx.now)
 
 
 # --- forms ------------------------------------------------------------ #
@@ -297,9 +309,14 @@ def collect_forms(ctx: Context) -> Source:
         return off("forms", "FORM_ENDPOINT is not set — the Worker isn't deployed yet, "
                             "or its address isn't in this shell.")
     from run.intake import fetch_seats
+    from run.trials import count_test_rows, is_test_address
     rows = fetch_seats(endpoint, ctx.env.get("FORM_API_KEY") or None)
     clean = []
     for row in rows:
+        # A row at our own domain or a reserved test domain is a test, never
+        # demand: make stats leaves it out too (TOOLS-2).
+        if is_test_address(row.get("email")):
+            continue
         via = row.get("via")
         clean.append({
             "kind": str(row.get("kind") or "seat"),
@@ -309,13 +326,14 @@ def collect_forms(ctx: Context) -> Source:
         })
     channels = {k: dict(c) for k, c in stats.channel_summary(rows).items()}
     return _source("forms", data={"rows": clean, "summary": stats.form_summary(rows, ctx.now),
-                                  "channels": channels}, read_at=ctx.now)
+                                  "channels": channels, "left_out": count_test_rows(rows)},
+                   read_at=ctx.now)
 
 
 # --- Stripe ----------------------------------------------------------- #
 
 def stripe_key(env: Mapping[str, str]) -> str:
-    return env.get("STRIPE_STATS_KEY", "") or env.get("STRIPE_API_KEY", "")
+    return stats.stripe_key_from(env)
 
 
 def collect_stripe(ctx: Context) -> Source:
@@ -556,19 +574,10 @@ OPTIONAL_OWNER_GATES = ("The bounce check has a Resend key that can read sent em
 def gate_env(env: Mapping[str, str]):
     """The shell as the gates see it, with what the dashboard read from .env
     filled in where the shell has nothing. Put back afterwards, so nothing
-    outlives the gates' run."""
-    before = {name: os.environ.get(name) for name in GATE_ENV}
-    try:
-        for name in GATE_ENV:
-            if env.get(name) and not before[name]:
-                os.environ[name] = env[name]
+    outlives the gates' run (run.launch_check.filled_env, one copy)."""
+    from run.launch_check import filled_env
+    with filled_env({name: env.get(name, "") for name in GATE_ENV}):
         yield
-    finally:
-        for name, value in before.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
 
 
 def collect_launch(ctx: Context) -> Source:
@@ -1174,7 +1183,7 @@ LAUNCH_REFS = {
     "§8": ("LAUNCH.md §8", f"{LAUNCH_URL}#8-every-week-from-here"),
     "5.8": ("LAUNCH.md step 5", f"{LAUNCH_URL}#5-the-form-worker-25-min--do-this-first"),
     "5b": ("LAUNCH.md step 5b", f"{LAUNCH_URL}#5b-the-page-counter-10-min-right-after-step-5"),
-    "weekend": ("LAUNCH.md “This weekend”", f"{LAUNCH_URL}#this-weekend-in-order"),
+    "now": ("LAUNCH.md “Now, in order”", f"{LAUNCH_URL}#now-in-order-nov-3"),
 }
 
 
@@ -1260,6 +1269,7 @@ def workflow_health(src: Source, now: datetime, root: Path = REPO_ROOT) -> list[
             missing = False
         completed = [r for r in runs if r["status"] == "completed"]
         late = None
+        dispatched = on_time_dispatch(runs, crons)
         if name in ("weekly.yml", "saturday.yml") and crons:
             starts = [t for t in (_gh_when(r["created_at"]) for r in runs
                                   if r["event"] in ("schedule", "workflow_dispatch")) if t]
@@ -1268,9 +1278,50 @@ def workflow_health(src: Source, now: datetime, root: Path = REPO_ROOT) -> list[
         out.append({"file": name, "label": info["label"], "last": last,
                     "last_done": completed[0] if completed else None,
                     "slot": slot, "missing": missing, "late": late,
+                    "on_time_dispatch": dispatched,
                     "fails": sum(r["conclusion"] == "failure" for r in completed[:10]),
                     "recent": [r["conclusion"] or r["status"] for r in completed[:12]]})
     return out
+
+
+# A run the form Worker dispatched starts within seconds of its slot (it
+# fires at :17 and :47, the minutes every cron here uses); ten minutes is room
+# for GitHub's queue, never a run someone pressed by hand an hour later.
+ON_TIME = timedelta(minutes=10)
+
+
+def on_time_dispatch(runs: list[dict], crons: list[str]) -> datetime | None:
+    """The OLDEST workflow_dispatch run in ``runs`` that started within
+    ON_TIME after one of this workflow's own cron slots: the earliest
+    evidence that the Worker's Cron Trigger was on, or None. The oldest, not
+    the newest: the hourly intake dispatches every hour, so "some on-time run
+    came after the late one" is true of nearly every late run, including one
+    the Worker failed to start after its trigger was on."""
+    from run.launch_check import _cron_fires
+    best = None
+    for run in runs:
+        at = _gh_when(run["created_at"]) if run.get("event") == "workflow_dispatch" else None
+        if at is None or (best is not None and at >= best):
+            continue
+        days = (at - timedelta(days=1), at)
+        fires = [t for cron in crons for d in days
+                 for t in _cron_fires(cron, d.replace(hour=0, minute=0, second=0, microsecond=0))]
+        if any(t <= at <= t + ON_TIME for t in fires):
+            best = at
+    return best
+
+
+def clip(text: str, limit: int = 240) -> str:
+    """A detail cut to ``limit`` at a word or list boundary, never mid-name,
+    with a pointer to the full text (TOOLS-14: the secrets gate's list of
+    names was cut in the middle of the ones to check by hand)."""
+    text = text or ""
+    if len(text) <= limit:
+        return text
+    tail = "… (full list: make launch-check)"
+    room = text[:max(0, limit - len(tail))]
+    cut = max(room.rfind(", "), room.rfind(" "))
+    return (room[:cut] if cut > 0 else room).rstrip(" ,;:") + tail
 
 
 def _age(stamp: Any, now: datetime) -> timedelta | None:
@@ -1397,9 +1448,23 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
                                 link, "Crons", "§8"))
         if wf["late"] and wf["late"][1] > timedelta(minutes=60):
             minutes = int(wf["late"][1].total_seconds() // 60)
-            issues.append(Issue("low", f"{wf['label']} started {minutes} minutes after its slot last time.",
-                                "Set the Worker's Cron Trigger so it starts on time.",
-                                actions, "Crons", "5.8"))
+            started = wf["late"][0] + wf["late"][1]
+            # TOOLS-12: a late GitHub-scheduled run from before the Worker's
+            # trigger was on is history: it started before the first on-time
+            # Worker dispatch any workflow shows. Telling the owner to set a
+            # trigger that is already working sends them looking for a fault.
+            # A late run AFTER that first dispatch is a real miss (the Worker
+            # was on and didn't start it), so it still asks.
+            firsts = [w["on_time_dispatch"] for w in health if w.get("on_time_dispatch")]
+            if firsts and started < min(firsts):
+                issues.append(Issue("low", f"{wf['label']} started {minutes} minutes after its slot "
+                                           f"last time, before the Worker's trigger was on.",
+                                    "Nothing to do: this clears after the next on-time run.",
+                                    actions, "Crons", "5.8"))
+            else:
+                issues.append(Issue("low", f"{wf['label']} started {minutes} minutes after its slot last time.",
+                                    "Set the Worker's Cron Trigger so it starts on time.",
+                                    actions, "Crons", "5.8"))
     if sources["github"].status == "error":
         issues.append(Issue("low", "GitHub's Actions record could not be read this time.",
                             "Check the network and run make dashboard again.", actions, "Crons"))
@@ -1409,7 +1474,7 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
         for g in gates:
             if g["status"] == "FAIL":
                 issues.append(Issue("high", f"Launch check fails: {g['name'].rstrip('.')}.",
-                                    (g["detail"] or "Run make launch-check for detail.")[:240],
+                                    clip(g["detail"] or "Run make launch-check for detail."),
                                     "", "Launch check"))
         owner = [g for g in gates if g["status"] == "OWNER"
                  and g["name"].rstrip(".") not in OPTIONAL_OWNER_GATES]
@@ -1426,20 +1491,25 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
                     else "Not done yet")
             steps = [f"{lead}: {name}."]
             if detail:
-                steps.append((detail[0].upper() + detail[1:])[:240])
-            steps.append(f"Then the other {rest} in the weekend list, and run make launch-check."
-                         if rest else "Then run make launch-check.")
-            issues.append(Issue("medium", f"{len(owner)} launch step{'s are' if len(owner) != 1 else ' is'} "
-                                          f"waiting on you.",
-                                tuple(steps), "", "Launch check", "weekend"))
+                steps.append(clip(detail[0].upper() + detail[1:]))
+            # TOOLS-15: the page runs only the quick gates, so its count is
+            # never the whole list.
+            steps.append((f"Then the other {rest} quick check{'s' if rest != 1 else ''}. "
+                          if rest else "")
+                         + "The full check (make launch-check) covers DNS, Stripe and the "
+                           "accounts too.")
+            many = len(owner) != 1
+            issues.append(Issue("medium", f"{len(owner)} of the quick launch checks "
+                                          f"{'are' if many else 'is'} waiting on you.",
+                                tuple(steps), "", "Launch check", "now"))
         for g in gates:
             if g["status"] == "OWNER" and g["name"].rstrip(".") in OPTIONAL_OWNER_GATES:
                 issues.append(Issue("low", f"Optional: {g['name'].rstrip('.')}.",
-                                    (g["detail"] or "")[:240], "", "Launch check"))
+                                    clip(g["detail"] or ""), "", "Launch check"))
         for g in gates:
             if g["status"] == "WARN":
                 issues.append(Issue("low", f"Launch check warns: {g['name'].rstrip('.')}.",
-                                    (g["detail"] or "")[:240], "", "Launch check"))
+                                    clip(g["detail"] or ""), "", "Launch check"))
 
     site = sources["site"].data if sources["site"].ok else None
     rebuild_fix = ("If weekly-report's last evening run is green, git pull and build this page again.",
@@ -2140,8 +2210,10 @@ def traffic_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
                            note="A post's tag counts under its channel: reddit-oct28 is reddit.")
                 + bar_list("Countries", "Views", countries.most_common(), "No views yet.")
                 + '</div>')
+    since = stats.counting_from(_ts(src.data.get("since")))
     return section("traffic", "Traffic",
-                   "From the site's own cookieless counter: counts of page views, never people.",
+                   "From the site's own cookieless counter: counts of page views, never people."
+                   + (f" {since}: views before it are left out." if since else ""),
                    by_period(one))
 
 
@@ -2221,7 +2293,7 @@ def funnel_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
                 for r in rows)
             table = (f'<div class="card"><div class="cardhead"><h3>By channel</h3>'
                      f'<span class="unit">?via= tag</span></div><div class="tablewrap"><table class="tbl">'
-                     f'<thead><tr><th>Channel</th><th class="r">Views</th><th class="r hm">Rosters</th><th class="r">Buy presses</th>'
+                     f'<thead><tr><th>Channel</th><th class="r">Landing + buy-page views</th><th class="r hm">Rosters</th><th class="r">Buy presses</th>'
                      f'<th class="r">Paid</th><th class="r hm">Press rate</th><th class="r">Paid rate</th></tr></thead><tbody>{trs}</tbody></table></div></div>')
         else:
             table = ""
@@ -2514,11 +2586,13 @@ def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime
             f'<td class="r">{num(s.get(k, {}).get("week", 0))}</td><td class="r">{num(s.get(k, {}).get("day", 0))}</td>'
             f'<td class="r">{"—" if k == "confirm" else num(s.get(k, {}).get("people", 0))}</td></tr>'
             for k, _l in stats.FORM_KINDS if k != "update" or k in s)
+        left = stats.left_out_line(int(fo.data.get("left_out") or 0))
+        note = f'<p class="muted small pad">{h(left)}</p>' if left else ""
         parts.append(f'<div class="card"><div class="cardhead"><h3>Form Worker rows</h3>'
                      f'<span class="unit">rows kept ~13 months</span></div><div class="tablewrap">'
                      f'<table class="tbl"><thead><tr><th>Kind</th><th class="r">Ever</th><th class="r">7 days</th>'
                      f'<th class="r">24 h</th><th class="r">People</th></tr></thead><tbody>{trs}</tbody></table></div>'
-                     f'<p class="muted small pad">{h(SIGNUPS_HINT)}</p></div>')
+                     f'{note}<p class="muted small pad">{h(SIGNUPS_HINT)}</p></div>')
     else:
         parts.append(f'<div class="card"><div class="cardhead"><h3>Form Worker rows</h3></div>'
                      f'{setup_card(fo, compact=True)}</div>')

@@ -28,13 +28,13 @@ def _no_live_stripe(monkeypatch):
     monkeypatch.delenv("STRIPE_API_KEY", raising=False)
 
 ROWS = [
-    {"kind": "waitlist", "email": "a@example.com", "received_at": "2026-10-09T08:00:00Z"},
-    {"kind": "waitlist", "email": "A@example.com", "received_at": "2026-09-01T08:00:00Z"},
+    {"kind": "waitlist", "email": "a@fans.mail", "received_at": "2026-10-09T08:00:00Z"},
+    {"kind": "waitlist", "email": "A@fans.mail", "received_at": "2026-09-01T08:00:00Z"},
     {"kind": "trial", "email": "j.o.e+x@gmail.com", "ref": "r", "received_at": "2026-10-05T08:00:00Z"},
     {"kind": "trial", "email": "joe@gmail.com", "ref": "r", "received_at": "2026-10-08T20:00:00Z"},
-    {"kind": "trial", "email": "kim@example.com", "ref": "r", "received_at": "2026-10-01T08:00:00Z"},
+    {"kind": "trial", "email": "kim@fans.mail", "ref": "r", "received_at": "2026-10-01T08:00:00Z"},
     {"kind": "confirm", "code": "0" * 24, "received_at": "2026-10-09T09:00:00Z"},
-    {"kind": "update_request", "email": "sub@example.com", "ref": "r",
+    {"kind": "update_request", "email": "sub@fans.mail", "ref": "r",
      "received_at": "not a date"},
 ]
 
@@ -64,7 +64,7 @@ def test_the_send_log_is_read_by_key_shape() -> None:
 
 
 def test_conversion_joins_on_the_mailbox() -> None:
-    conv = stats.conversions(ROWS, ["Joe@gmail.com", "nobody@example.com"])
+    conv = stats.conversions(ROWS, ["Joe@gmail.com", "nobody@fans.mail"])
     assert conv == {"trial": (1, 2), "waitlist": (0, 1)}
 
 
@@ -154,8 +154,8 @@ def test_trade_check_requests_have_their_own_forms_row() -> None:
     """DASH-07: the Worker takes ``trade_check`` rows (infra/form-worker.js)
     and the summary counted them, but the FORMS block listed only the kinds
     it knew, so they were never printed."""
-    rows = [{"kind": "trade_check", "email": "a@example.com", "received_at": "2026-10-09T08:00:00Z"},
-            {"kind": "trade_check", "email": "b@example.com", "received_at": "2026-10-01T08:00:00Z"}]
+    rows = [{"kind": "trade_check", "email": "a@fans.mail", "received_at": "2026-10-09T08:00:00Z"},
+            {"kind": "trade_check", "email": "b@fans.mail", "received_at": "2026-10-01T08:00:00Z"}]
     page = stats.render(stats.form_summary(rows, NOW), "", {"weekly": {}, "finals": {}, "other": {}},
                         "2026", None, "no registry", None, NOW)
     line = next(l for l in page.splitlines() if "Trade Check requests" in l)
@@ -187,15 +187,15 @@ def test_channels_are_counted_per_kind_and_a_bad_tag_is_never_printed(
     import run.delivery as delivery
     import run.intake as intake
     rows = ROWS + [
-        {"kind": "waitlist", "email": "b@example.com", "via": "x-reply",
+        {"kind": "waitlist", "email": "b@fans.mail", "via": "x-reply",
          "received_at": "2026-10-08T08:00:00Z"},
-        {"kind": "waitlist", "email": "c@example.com", "via": "x-reply",
+        {"kind": "waitlist", "email": "c@fans.mail", "via": "x-reply",
          "received_at": "2026-10-08T09:00:00Z"},
-        {"kind": "trial", "email": "d@example.com", "via": "reddit",
+        {"kind": "trial", "email": "d@fans.mail", "via": "reddit",
          "received_at": "2026-10-08T09:00:00Z"},
-        {"kind": "trial", "email": "e@example.com", "via": "joe@example.com",
+        {"kind": "trial", "email": "e@fans.mail", "via": "joe@fans.mail",
          "received_at": "2026-10-08T09:00:00Z"},
-        {"kind": "trial", "email": "f@example.com", "via": "UPPER",
+        {"kind": "trial", "email": "f@fans.mail", "via": "UPPER",
          "received_at": "2026-10-08T09:00:00Z"},
     ]
     channels = stats.channel_summary(rows)
@@ -259,8 +259,8 @@ class _FakeStripe:
         if path == "checkout/sessions":
             return {"data": [
                 {"id": "cs_1", "status": "complete",
-                 "customer_details": {"email": "buyer@example.com"}},
-                {"id": "cs_2", "status": "expired", "customer_email": "x@example.com"},
+                 "customer_details": {"email": "buyer@fans.mail"}},
+                {"id": "cs_2", "status": "expired", "customer_email": "x@fans.mail"},
                 {"id": "cs_3", "status": "expired"}, {"id": "cs_4", "status": "open"}],
                 "has_more": False}
         if path == "refunds":
@@ -352,7 +352,7 @@ def test_paid_signups_are_counted_by_the_channel_their_payment_carried(
     def session(i, ref, status="complete", paid="paid"):
         return {"id": f"cs_{i}", "status": status, "payment_status": paid,
                 "client_reference_id": ref,
-                "customer_details": {"email": f"buyer{i}@example.com"}}
+                "customer_details": {"email": f"buyer{i}@fans.mail"}}
     sessions = [session(1, ref + "_via-reddit"), session(2, ref + "_via-reddit"),
                 session(3, ref + "_via-x"), session(4, ref),
                 session(5, ref + "_via-reddit", status="expired"),

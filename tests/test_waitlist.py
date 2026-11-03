@@ -18,12 +18,12 @@ from run.waitlist import (BODY, CAMPAIGN, FORBIDDEN_CLAIMS, SUBJECT, compose,
                           load_list, main, messages)
 
 EXPORT = """Email Address,Signed up
-Fan@Example.com,2026-08-18
-second@example.com,2026-08-18
+Fan@fans.mail,2026-08-18
+second@fans.mail,2026-08-18
 not an email,2026-08-18
-FAN@example.com,2026-08-19
+FAN@fans.mail,2026-08-19
 ,2026-08-19
-third@example.com,2026-08-20
+third@fans.mail,2026-08-20
 """
 
 
@@ -42,8 +42,8 @@ def test_addresses_are_deduped_case_insensitively(export: Path) -> None:
     """Someone signs up twice, once shouting. Mailing them twice on the first
     contact is the worst possible first impression."""
     addresses, problems = load_list(export)
-    assert addresses == ["fan@example.com", "second@example.com",
-                         "third@example.com"]
+    assert addresses == ["fan@fans.mail", "second@fans.mail",
+                         "third@fans.mail"]
     assert len(problems) == 1 and "row 4" in problems[0]
 
 
@@ -52,8 +52,8 @@ def test_a_renamed_column_is_found_not_silently_empty(tmp_path: Path) -> None:
     empty list because a header changed would look like nobody signed up."""
     for header in ("email", "Email Address", "EMAIL", "subscriber"):
         path = tmp_path / f"{header.replace(' ', '_')}.csv"
-        path.write_text(f"{header},when\nsomeone@example.com,x\n", encoding="utf-8")
-        assert load_list(path)[0] == ["someone@example.com"]
+        path.write_text(f"{header},when\nsomeone@fans.mail,x\n", encoding="utf-8")
+        assert load_list(path)[0] == ["someone@fans.mail"]
 
 
 def test_a_file_with_no_email_column_raises_rather_than_returning_nothing(
@@ -128,7 +128,7 @@ def test_the_announcement_cannot_be_sent_twice(tmp_path: Path) -> None:
             return f"fake:{message.key}"
 
     provider = _Fake()
-    batch = messages(["a@example.com", "b@example.com"], "https://x/join/")
+    batch = messages(["a@fans.mail", "b@fans.mail"], "https://x/join/")
     first = send_all(batch, provider=provider, sent_log=log)
     assert [r.ok for r in first] == [True, True]
     assert len(provider.sent) == 2
@@ -145,12 +145,12 @@ def test_the_key_is_per_campaign_and_carries_no_address() -> None:
     the first one's log entries. And the key is a DIGEST of the address, never
     the address: sent.jsonl is committed by the crons, and a committed log
     must not hold the list itself."""
-    [message] = messages(["a@example.com"], "https://x/join/")
+    [message] = messages(["a@fans.mail"], "https://x/join/")
     assert message.key.startswith(f"{CAMPAIGN}-")
     assert "@" not in message.key and "a@" not in message.key
     # Deterministic per address, distinct across addresses.
-    assert messages(["a@example.com"], "https://x/join/")[0].key == message.key
-    assert messages(["b@example.com"], "https://x/join/")[0].key != message.key
+    assert messages(["a@fans.mail"], "https://x/join/")[0].key == message.key
+    assert messages(["b@fans.mail"], "https://x/join/")[0].key != message.key
 
 
 def test_the_worker_list_takes_only_waitlist_rows() -> None:
@@ -159,19 +159,19 @@ def test_the_worker_list_takes_only_waitlist_rows() -> None:
     addresses would email people who never asked for this message."""
     import run.waitlist as wl
     rows = [
-        {"kind": "waitlist", "email": "a@example.com"},
-        {"kind": "waitlist", "email": "A@Example.com"},   # dupe, case
-        {"kind": "seat", "email": "b@example.com", "ref": "x",
-         "covered_by": "c@example.com"},
-        {"kind": "update", "email": "d@example.com", "ref": "y"},
+        {"kind": "waitlist", "email": "a@fans.mail"},
+        {"kind": "waitlist", "email": "A@fans.mail"},   # dupe, case
+        {"kind": "seat", "email": "b@fans.mail", "ref": "x",
+         "covered_by": "c@fans.mail"},
+        {"kind": "update", "email": "d@fans.mail", "ref": "y"},
         {"kind": "waitlist", "email": "not-an-email"},
-        {"kind": "waitlist", "email": "e@example.com"},
+        {"kind": "waitlist", "email": "e@fans.mail"},
     ]
     original = wl.fetch_seats
     wl.fetch_seats = lambda *a, **k: rows
     try:
         assert wl.load_worker_list("https://w.test", None) == [
-            "a@example.com", "e@example.com"]
+            "a@fans.mail", "e@fans.mail"]
     finally:
         wl.fetch_seats = original
 
@@ -211,7 +211,7 @@ def test_the_launch_email_carries_a_sender_address_and_an_opt_out(
     assert main(["--list", str(export), "--url", "https://x/join/", "--send"]) == 1
     assert "SENDER_POSTAL_ADDRESS" in capsys.readouterr().err
     monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 1, Somewhere")
-    message = messages(["fan@example.com"], "https://x/join/")[0]
+    message = messages(["fan@fans.mail"], "https://x/join/")[0]
     assert "Beat Your League · PO Box 1, Somewhere · hello@beatyourleague.com" in message.text
     assert 'reply "unsubscribe"' in message.text
     assert message.unsubscribe == "mailto:hello@beatyourleague.com?subject=unsubscribe"
@@ -270,13 +270,13 @@ def test_a_saved_roster_comes_back_in_that_persons_launch_email(monkeypatch,
     import run.waitlist as wl
     ref = _roster_ref()
     rows = [
-        {"kind": "waitlist", "email": "saved@example.com", "ref": "s3-old"},
-        {"kind": "waitlist", "email": "saved@example.com", "ref": ref},
-        {"kind": "waitlist", "email": "plain@example.com"},
-        {"kind": "waitlist", "email": "junk@example.com", "ref": "s3-not-a-roster"},
-        {"kind": "trial", "email": "trial@example.com", "ref": ref},
+        {"kind": "waitlist", "email": "saved@fans.mail", "ref": "s3-old"},
+        {"kind": "waitlist", "email": "saved@fans.mail", "ref": ref},
+        {"kind": "waitlist", "email": "plain@fans.mail"},
+        {"kind": "waitlist", "email": "junk@fans.mail", "ref": "s3-not-a-roster"},
+        {"kind": "trial", "email": "trial@fans.mail", "ref": ref},
     ]
-    assert wl.saved_refs(rows) == {"saved@example.com": ref}
+    assert wl.saved_refs(rows) == {"saved@fans.mail": ref}
     monkeypatch.setenv("SITE_URL", "https://example.com")
     monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
     monkeypatch.setattr(wl, "fetch_seats", lambda *a, **k: rows)
@@ -284,12 +284,12 @@ def test_a_saved_roster_comes_back_in_that_persons_launch_email(monkeypatch,
     monkeypatch.setattr(wl, "send_all", lambda msgs, provider: sent.extend(msgs) or [])
     assert main([]) == 0
     by_to = {m.to: m for m in sent}
-    assert set(by_to) == {"saved@example.com", "plain@example.com", "junk@example.com"}
+    assert set(by_to) == {"saved@fans.mail", "plain@fans.mail", "junk@fans.mail"}
     restore = f"https://example.com/join/?ref={ref}"
-    saved = by_to["saved@example.com"]
+    saved = by_to["saved@fans.mail"]
     assert restore in saved.text and restore in saved.html
     assert wl.SAVED_LINE in saved.text and saved.text.count("http") == 1
-    for other in ("plain@example.com", "junk@example.com"):
+    for other in ("plain@fans.mail", "junk@fans.mail"):
         assert "?ref=" not in by_to[other].text and wl.SAVED_LINE not in by_to[other].text
         assert "https://example.com/join/" in by_to[other].text
     assert "with their roster: 1" in capsys.readouterr().out
@@ -315,7 +315,7 @@ def test_opening_morning_says_every_missing_setting_at_once(monkeypatch, capsys,
     assert "NOTHING WAS SENT" in err
     for name in ("EMAIL_FROM", "SENDER_POSTAL_ADDRESS", "RESEND_API_KEY"):
         assert name in err, f"{name} was not named"
-    monkeypatch.setenv("EMAIL_FROM", "Beat Your League <hi@example.com>")
+    monkeypatch.setenv("EMAIL_FROM", "Beat Your League <hi@fans.mail>")
     monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 1")
     monkeypatch.setenv("RESEND_API_KEY", "re_x")
     assert wl.send_env_missing() == []
@@ -346,8 +346,8 @@ def test_the_launch_email_is_the_brands_shell_with_one_button_that_fits_a_phone(
     from test_email_safety import FORBIDDEN
     monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 123, Toronto ON M5V 1A1")
     ref = _roster_ref() + "_via-reply-kit"
-    saved, plain = wl.messages(["a@example.com", "b@example.com"],
-                               "https://example.com/join/", {"a@example.com": ref})
+    saved, plain = wl.messages(["a@fans.mail", "b@fans.mail"],
+                               "https://example.com/join/", {"a@fans.mail": ref})
     for message, label in ((saved, "Pick up where you left off"),
                            (plain, "Set up my team")):
         page = message.html

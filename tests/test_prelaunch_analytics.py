@@ -217,6 +217,8 @@ def test_nothing_is_sent_off_the_live_site_or_when_the_browser_asks_not(tmp_path
         {"href": live, "win": {"doNotTrack": "1"}}, {"href": live, "nav": {"msDoNotTrack": "1"}},
         {"href": live, "endpoint": ""},
         {"href": live, "events": [["purchase", "open"], ["view?x", ""]], "pageshow": False},
+        # TOOLS-1: the owner's own check of one page, per view, stored nowhere.
+        {"href": live + "join/?nocount=1"}, {"href": live + "?via=x&nocount=1"},
     ]
     for scenario, result in zip(quiet, _run(tmp_path, quiet)):
         assert result["error"] is None, scenario
@@ -224,6 +226,18 @@ def test_nothing_is_sent_off_the_live_site_or_when_the_browser_asks_not(tmp_path
     committed = re.findall(r'const ENDPOINT = "([^"]*)";', COUNT_JS.read_text(encoding="utf-8"))
     assert committed in ([""], [LIVE_URL]), \
         "count.js ENDPOINT is empty until LAUNCH.md step 5b, then exactly the forms. /e route"
+
+
+@needs_node
+def test_only_nocount_1_keeps_a_view_out_and_only_that_view(tmp_path) -> None:
+    """TOOLS-1: ?nocount=1 is the owner's per-view opt-out; any other value,
+    or a different name, still counts, and count.js keeps no memory of it."""
+    live = "https://beatyourleague.com/"
+    counted = [{"href": live + "?nocount=0"}, {"href": live + "?nocounts=1"},
+               {"href": live + "join/?via=x"}]
+    for scenario, result in zip(counted, _run(tmp_path, counted)):
+        assert result["error"] is None and len(result["calls"]) == 1, scenario
+    assert "nocount" not in COUNT_JS.read_text(encoding="utf-8").split("function line", 1)[1]
 
 
 @needs_node
@@ -762,24 +776,30 @@ def test_the_counter_credentials_come_from_the_shell_or_dot_env_and_only_via_the
         tmp_path, monkeypatch) -> None:
     """main() never reads CF credentials itself, so a test (or any caller)
     cannot reach Cloudflare by accident; the command line reads the shell,
-    then the gitignored .env — only the two counter names, nothing executed."""
+    then the gitignored .env — only the names it asks for, nothing executed.
+    The Stripe key comes the same way since TOOLS-6, but on its own argument,
+    never inside the form Worker's settings."""
     env = tmp_path / ".env"
     env.write_text("# local\nexport CF_ACCOUNT_ID=\"%s\"\nCF_ANALYTICS_TOKEN='from-file'\n"
-                   "STRIPE_API_KEY=sk_live_should_not_be_read\nCF_OTHER=$(rm -rf /)\n" % ACCOUNT,
+                   "STRIPE_API_KEY=sk_test_from_file\nCF_OTHER=$(rm -rf /)\n" % ACCOUNT,
                    encoding="utf-8")
     assert stats.read_env_file(env) == {"CF_ACCOUNT_ID": ACCOUNT,
                                         "CF_ANALYTICS_TOKEN": "from-file"}
-    handed, worker = {}, {}
+    handed, worker, key = {}, {}, []
 
     def fake_main(argv=None, cf=None, **kw):
         handed.update(cf)
         worker.update(kw.get("form") or {})
+        key.append(kw.get("stripe_key"))
         return 0
     monkeypatch.setattr(stats, "main", fake_main)
     assert stats.cli([], environ={"CF_ANALYTICS_TOKEN": "from-shell"}, env_file=env) == 0
-    assert handed == {"CF_ACCOUNT_ID": ACCOUNT, "CF_ANALYTICS_TOKEN": "from-shell"}
-    # The form Worker's names come the same way (DASH-03); a Stripe key never does.
-    assert set(worker) == set(stats.FORM_NAMES) and "sk_live" not in repr(worker)
+    assert handed == {"CF_ACCOUNT_ID": ACCOUNT, "CF_ANALYTICS_TOKEN": "from-shell",
+                      "TRAFFIC_FROM": ""}
+    # The form Worker's names come the same way (DASH-03); the Stripe key
+    # travels on its own argument, never with them.
+    assert set(worker) == set(stats.FORM_NAMES) and "sk_test" not in repr(worker)
+    assert key == ["sk_test_from_file"]
 
 
 def test_main_never_reaches_cloudflare_without_being_handed_credentials(

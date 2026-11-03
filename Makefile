@@ -135,6 +135,7 @@ dashboard-live:
 # Your books, for the dashboard's profit and posts (run/books.py; files in the
 # gitignored data/ folder, never committed):
 #   make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly   (once | monthly | yearly; DATE=2026-08-01)
+#     AMOUNT is US dollars. Stripe's fees are already out of net revenue: don't log them.
 #   make hours H=1.5 NOTE="replied to emails"
 #   make link TAG=reddit-oct28 WHERE="r/fantasyfootball" PAGE=byes/   (prints the link to post)
 #   make books                                          (what's recorded)
@@ -162,9 +163,10 @@ dashboard-registry:
 # applied through the same validated path as a confirmed self-serve update: it
 # posts an authenticated update row to the form Worker and the next hourly
 # intake checks it and keeps their scoring and lineup. ROSTER is a file of the
-# names they sent, or - for stdin. Needs UPDATE_SECRET and FORM_ENDPOINT (the
-# GitHub secrets' values) in this shell. Prints no address. ARGS=--dry-run
-# resolves the names and posts nothing.
+# names they sent, or - for stdin. Needs UPDATE_SECRET in this shell, and
+# FORM_ENDPOINT and FORM_API_KEY in this shell or .env (the GitHub secrets'
+# values). Prints no address. ARGS=--dry-run resolves the names, needs none of
+# them, and posts nothing.
 #   make roster-update EMAIL=fan@example.com ROSTER=names.txt
 roster-update:
 	$(PY) -m run.updates --email "$(EMAIL)" --roster "$(ROSTER)" $(ARGS)
@@ -180,12 +182,13 @@ seat-release:
 
 # A League Pass buyer replied "reset seats" (run/seat_resets.py): the pass's
 # seat link changes and every seat claimed before now is released. PASS is the
-# pass's Stripe id (pi_… on its payment); EMAIL, the buyer's address, prints
-# the new link (needs SITE_URL and UPDATE_SECRET). Commit and push the file
-# before sending the buyer the link.
-#   make seat-reset PASS=pi_123 EMAIL=buyer@example.com
+# pass's subscription id (Stripe → Subscriptions → the pass: sub_…; a pi_… is
+# refused, ARGS=--one-time for a one-time pass); EMAIL, the buyer's address,
+# prints the new link (needs SITE_URL and UPDATE_SECRET). Commit and push the
+# file before sending the buyer the link.
+#   make seat-reset PASS=sub_123 EMAIL=buyer@example.com
 seat-reset:
-	$(PY) -m run.seat_resets "$(PASS)" $(if $(EMAIL),--email "$(EMAIL)")
+	$(PY) -m run.seat_resets "$(PASS)" $(if $(EMAIL),--email "$(EMAIL)") $(ARGS)
 
 # The launch announcement, the one email the waitlist was promised. Preview
 # first. The send needs EMAIL_PROVIDER + its key (RESEND_API_KEY or

@@ -102,38 +102,119 @@ def test_a_roster_change_is_dated_on_the_buyers_clock() -> None:
     assert updates.roster_day("") == "" and updates.roster_day("garbage") == ""
 
 
+def _names_from_the_offline_cache(tmp_path, monkeypatch) -> None:
+    """main() resolves names through run.solo.load_names; point it at the
+    offline fixture cache, and make the full week loader refuse the way it
+    does from Monday night until Monday's box score is published."""
+    import run.solo as solo
+    from test_solo_run import OFFLINE, SEASON, _cache
+    cache, real = _cache(tmp_path), solo.load_names
+    monkeypatch.setattr(solo, "load_names",
+                        lambda *a, **k: real(cache, SEASON, session=OFFLINE))
+
+    def unfinished(*a, **k):
+        raise solo.SoloError("the box scores for week 5 are not all in yet")
+    monkeypatch.setattr(solo, "load_week_data", unfinished)
+
+
+SHELL = {"UPDATE_SECRET": SECRET, "FORM_ENDPOINT": "https://w.test", "FORM_API_KEY": "k"}
+
+
 def test_the_command_posts_through_the_worker_and_prints_no_address(
         tmp_path, monkeypatch, capsys) -> None:
-    """`make roster-update` refuses without UPDATE_SECRET and FORM_ENDPOINT
-    (no authenticated path, so nothing is written by hand), resolves the
-    pasted names with the trial's no-guessing resolver, posts one row, and
-    never prints the address — operator output gets pasted places."""
-    from test_solo_run import OFFLINE, SEASON, WEEK, _cache
+    """`make roster-update` refuses without UPDATE_SECRET, FORM_ENDPOINT and
+    FORM_API_KEY (no authenticated path, so nothing is written by hand),
+    resolves the pasted names with the trial's no-guessing resolver, posts
+    one row with the Worker's key, and never prints the address — operator
+    output gets pasted places."""
     roster = tmp_path / "names.txt"
     roster.write_text("Aaron Armstrong\nBell Cow\nCade Carter\n", encoding="utf-8")
-    monkeypatch.delenv("UPDATE_SECRET", raising=False)
-    monkeypatch.delenv("FORM_ENDPOINT", raising=False)
+    no_env = tmp_path / "no.env"
     argv = ["--email", "fan@example.com", "--roster", str(roster)]
-    assert updates.main(argv) == 1
+    assert updates.main(argv, environ={}, env_file=no_env) == 1
     assert "Nothing was posted" in capsys.readouterr().err
-    monkeypatch.setenv("UPDATE_SECRET", SECRET)
-    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
-    data = updates.decode_roster  # keep a name bound; replaced below
-    data = __import__("run.solo", fromlist=["load_week_data"]).load_week_data(
-        _cache(tmp_path), SEASON, WEEK, session=OFFLINE)
-    monkeypatch.setattr("run.solo.load_week_data", lambda *a, **k: data)
+    _names_from_the_offline_cache(tmp_path, monkeypatch)
     posted: list = []
-    monkeypatch.setattr(updates, "post_row", lambda endpoint, row: posted.append((endpoint, row)))
-    assert updates.main(argv) == 0
+    monkeypatch.setattr(updates, "post_row",
+                        lambda endpoint, row, key=None: posted.append((endpoint, row, key)))
+    assert updates.main(argv, environ=SHELL, env_file=no_env) == 0
     out = capsys.readouterr().out
-    [(endpoint, row)] = posted
-    assert endpoint == "https://w.test" and row["kind"] == "update"
+    [(endpoint, row, key)] = posted
+    assert endpoint == "https://w.test" and row["kind"] == "update" and key == "k"
     assert row["token"] == updates.update_token("fan@example.com", SECRET)
     assert "fan@" not in out and "***@example.com" in out
-    assert updates.main([*argv, "--dry-run"]) == 0 and len(posted) == 1
+    assert updates.main([*argv, "--dry-run"], environ=SHELL, env_file=no_env) == 0
+    assert len(posted) == 1
     makefile = (Path(__file__).resolve().parent.parent / "Makefile").read_text()
     target = makefile.split("\nroster-update:", 1)[1].split("\n\n", 1)[0]
     assert '-m run.updates --email "$(EMAIL)" --roster "$(ROSTER)"' in target
+    comment = makefile.split("\nroster-update:", 1)[0].rsplit("\n\n", 1)[1]
+    assert "FORM_API_KEY" in comment, "the Makefile names every setting a post needs"
+
+
+def test_a_dry_run_needs_no_secret_and_posts_nothing(tmp_path, monkeypatch, capsys) -> None:
+    """TOOLS-10, reproduced: --dry-run refused without UPDATE_SECRET and
+    FORM_ENDPOINT, though resolving names needs neither. It prints the names
+    and what a real run still needs. Mutation-checked: requiring the secrets
+    before the dry-run branch fails this."""
+    roster = tmp_path / "names.txt"
+    roster.write_text("Aaron Armstrong\nBell Cow\n", encoding="utf-8")
+    _names_from_the_offline_cache(tmp_path, monkeypatch)
+    posted: list = []
+    monkeypatch.setattr(updates, "post_row", lambda *a, **k: posted.append(a))
+    argv = ["--email", "fan@example.com", "--roster", str(roster), "--dry-run"]
+    assert updates.main(argv, environ={}, env_file=tmp_path / "no.env") == 0
+    out = capsys.readouterr().out
+    assert "Would queue a roster change for ***@example.com: 2 players" in out
+    assert "UPDATE_SECRET" in out and posted == []
+
+
+def test_a_real_run_refuses_without_the_workers_key_before_posting(
+        tmp_path, monkeypatch, capsys) -> None:
+    """TOOLS-10, reproduced: FORM_API_KEY was checked only inside post_row,
+    so the dry run passed and the real run then failed "Not queued". The
+    three settings are checked together, before any name is read; the
+    Worker's address and key are read from .env when the shell lacks them.
+    Mutation-checked: dropping FORM_API_KEY from POST_NAMES fails this."""
+    roster = tmp_path / "names.txt"
+    roster.write_text("Aaron Armstrong\n", encoding="utf-8")
+    import run.solo as solo
+    read: list = []
+    monkeypatch.setattr(solo, "load_names", lambda *a, **k: read.append(1) or (None, None))
+    posted: list = []
+    monkeypatch.setattr(updates, "post_row", lambda *a, **k: posted.append(a))
+    argv = ["--email", "fan@example.com", "--roster", str(roster)]
+    shell = {"UPDATE_SECRET": SECRET, "FORM_ENDPOINT": "https://w.test"}
+    assert updates.main(argv, environ=shell, env_file=tmp_path / "no.env") == 1
+    err = capsys.readouterr().err
+    assert "FORM_API_KEY is not set" in err and "Nothing was posted" in err
+    assert posted == [] and read == []
+    env = tmp_path / ".env"
+    env.write_text("FORM_ENDPOINT=https://w.file\nFORM_API_KEY=file-key\n", encoding="utf-8")
+    assert updates.post_settings({"UPDATE_SECRET": SECRET}, env) == {
+        "UPDATE_SECRET": SECRET, "FORM_ENDPOINT": "https://w.file", "FORM_API_KEY": "file-key"}
+    # UPDATE_SECRET signs, so it never comes from .env.
+    env.write_text("UPDATE_SECRET=from-file\n", encoding="utf-8")
+    assert updates.post_settings({}, env)["UPDATE_SECRET"] == ""
+
+
+def test_names_resolve_while_last_weeks_box_scores_are_still_out(
+        tmp_path, monkeypatch) -> None:
+    """TOOLS-10, reproduced: the command resolved names through
+    load_week_data, which refuses from Monday night until Monday's box score
+    lands. Names need the directory only. Mutation-checked: load_names going
+    through load_week_data (or calling the completeness check) fails this."""
+    import run.solo as solo
+    from test_solo_run import OFFLINE, SEASON, _cache
+
+    def refuse(*a, **k):
+        raise solo.SoloError("the box scores for week 5 are not all in yet")
+    monkeypatch.setattr(solo, "assert_week_is_complete", refuse)
+    monkeypatch.setattr(solo, "load_week_data", refuse)
+    directory, players = solo.load_names(_cache(tmp_path), SEASON, session=OFFLINE)
+    from run.trial import resolve_roster
+    [pid] = resolve_roster("Aaron Armstrong\n", directory)
+    assert players.name(pid) == "Aaron Armstrong"
 
 
 # --------------------------------------------------------------------- #

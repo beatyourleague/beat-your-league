@@ -212,7 +212,7 @@ def test_every_reader_of_the_worker_gets_clean_rows(tmp_path, worker_read) -> No
     the count of dropped rows rides on the list."""
     from run import privacy, trials, waitlist
     from run.digest import address
-    good = {"kind": "waitlist", "email": "w@example.com", "received_at": _hours_ago(1)}
+    good = {"kind": "waitlist", "email": "w@fans.mail", "received_at": _hours_ago(1)}
     worker_read["body"] = json.dumps(
         [dict(r, received_at=_hours_ago(1)) for r in _surrogate_rows()] + [good]
     ).encode("ascii")
