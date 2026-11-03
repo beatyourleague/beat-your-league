@@ -782,6 +782,20 @@ def test_ledger_page_promises_misses_are_published() -> None:
     assert re.search(r"analysis, not betting picks", LEDGER, re.I)
 
 
+def test_the_record_never_says_its_rows_were_sent_to_subscribers() -> None:
+    """LEG-7: the public record read "Every row is a call we actually sent"
+    while every row on it was the sample roster's odds, published on
+    this-week.html and mailed to nobody (no buyer exists yet). The live sample
+    records into the subscriber store (CLAUDE.md, privacy section 5), so the
+    page says "published" and names both sources, which is true either way."""
+    from render.ledger_site import render_ledger
+    page = prose(render_ledger([], {}, generated_at="2026-11-03 00:00 UTC"))
+    assert "actually sent" not in page and "we send" not in page
+    assert "Every call we publish, in a subscriber's report or in our sample roster's " \
+        "weekly report, is stamped before kickoff" in page
+    assert "Every row is a call we published" in page
+
+
 def test_no_selling_page_links_the_grading_pages() -> None:
     """Owner direction, Sep 29 2026: a new buyer decides on a first impression,
     and the grading pages (grades, failing bands, what free feeds did better)
