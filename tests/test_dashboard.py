@@ -1088,6 +1088,57 @@ def test_an_optional_or_unverifiable_launch_step_never_reads_as_undone(monkeypat
     assert optional and optional[0].severity == "low"
 
 
+def test_a_secret_missing_from_this_shell_is_a_check_not_an_undone_step(monkeypatch) -> None:
+    """DASH-08's other half. With gh signed in and the link map neither in
+    the shell nor in .env, the first step read "Not done yet: The
+    payment-link map names each pass under its own prefix." The map is a
+    GitHub secret the owner set in step 3; this Mac can't see it, which says
+    nothing about whether it is right. A gate that found a real gap still
+    reads "Not done yet"."""
+    import run.launch_check as lc
+    monkeypatch.delenv("STRIPE_PAYMENT_LINKS", raising=False)
+    gates = [g.__dict__.copy() for g in lc.check_link_map() if g.status == "OWNER"]
+    assert gates and "in this shell" in gates[0]["detail"]
+    S = rich_sources()
+    S["launch"] = dash._source("launch", data={"gates": gates}, read_at=NOW)
+    steps = [i for i in dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+             if "waiting on you" in i.title]
+    assert steps[0].fix[0] == ("Check by hand: The payment-link map names each pass under "
+                               "its own prefix.")
+    missing = {"area": "Owner", "name": "GitHub Actions secrets are set", "status": "OWNER",
+               "detail": "missing: LOG_SECRET — the send log can't be keyed"}
+    S["launch"] = dash._source("launch", data={"gates": [missing]}, read_at=NOW)
+    steps = [i for i in dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+             if "waiting on you" in i.title]
+    assert steps[0].fix[0] == "Not done yet: GitHub Actions secrets are set."
+
+
+def test_a_worker_it_cant_reach_is_never_called_a_mismatch(monkeypatch) -> None:
+    """The launch card said "The Worker's own switch doesn't match" whenever
+    the Worker gate warned, and the gate also warns when it can't reach the
+    Worker at all: a timeout on Nov 3 would have told the owner the Worker's
+    TRIAL_OPEN was wrong. The card names the gate by its own name, so the
+    two must not drift apart either."""
+    import run.launch_check as lc
+    monkeypatch.delenv("FORM_ENDPOINT", raising=False)
+    assert lc.check_worker_switches()[0].name == dash.WORKER_GATE
+    S = rich_sources()
+    S["stripe"] = dash._source("stripe", data={"sessions": [], "link_map": True,
+                                               "dispute_errors": 0}, read_at=NOW)
+    S["site"] = _site((NOW - timedelta(hours=2)).isoformat())
+
+    def card(status: str, detail: str) -> str:
+        S["launch"] = dash._source("launch", data={"gates": [
+            {"area": "Owner", "name": dash.WORKER_GATE, "status": status, "detail": detail}]},
+            read_at=NOW)
+        return dash.launch_status(S, NOW)
+    unread = card("WARN", "could not read the Worker's switches: timed out")
+    assert "couldn&#x27;t be read" in unread and "match" not in unread
+    stray = card("WARN", "the Worker takes free-report rows while the site's TRIAL_OPEN is off")
+    assert "doesn&#x27;t match" in stray
+    assert "match" not in card("PASS", "both off") and "be read" not in card("PASS", "both off")
+
+
 def test_the_page_names_plans_not_passes() -> None:
     """DASH-09: the site sells monthly plans, and the $19 Playoff Pass was
     retired Oct 31."""

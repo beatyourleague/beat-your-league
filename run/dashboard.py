@@ -1414,8 +1414,11 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
             detail = (first.get("detail") or "").strip()
             rest = len(owner) - 1
             # A gate this Mac can't verify is a check to make by hand, never
-            # a statement that the step is undone (DASH-08).
-            lead = "Check by hand" if "can't read" in detail else "Not done yet"
+            # a statement that the step is undone (DASH-08). That is "can't
+            # read" (gh signed out) and a value that isn't in this shell or
+            # .env: the link map is a GitHub secret, set or not.
+            lead = ("Check by hand" if re.search(r"can't read|in (?:this|the) shell", detail)
+                    else "Not done yet")
             steps = [f"{lead}: {name}."]
             if detail:
                 steps.append((detail[0].upper() + detail[1:])[:240])
@@ -2743,7 +2746,11 @@ def launch_status(S: Mapping[str, Source], now: datetime) -> str:
         worker = next((g for g in S["launch"].data["gates"] if g.get("name") == WORKER_GATE), None)
     free = "On" if sw.get("trial_open") else "Off"
     if worker and worker["status"] in ("FAIL", "WARN"):
-        free += ". The Worker's own switch doesn't match (see Issues)"
+        # The gate also warns when it can't reach the Worker at all, which
+        # says nothing about whether the two switches match.
+        free += (". The Worker's own switch couldn't be read (see Issues)"
+                 if "could not read" in (worker.get("detail") or "") else
+                 ". The Worker's own switch doesn't match (see Issues)")
     league = ("On sale" if sw.get("pass_link") and sw.get("seats_open") else
               "Held (no payment link, seats closed)" if not sw.get("pass_link") else
               "Link set, seats closed")
