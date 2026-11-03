@@ -528,9 +528,12 @@ def _mark_nobody_to_check(args, at: datetime) -> None:
     try:
         season = str(args.season or current_season(args.cache, today=at.date()))
         if args.week or not season_over(args.cache, season, at.date()):
-            _mark_finished(args, season, int(
-                args.week or current_week(args.cache, season, today=at.date())),
-                "nobody to check")
+            week = int(args.week or current_week(args.cache, season, today=at.date()))
+            # D8's Week 1 in May is not a Saturday that ran: marked now, it
+            # would answer for September's Week 1 check (run/tuesday.py's
+            # _mark_nobody_to_mail, same rule).
+            if args.week or week_one_due(args.cache, season, week, now=at):
+                _mark_finished(args, season, week, "nobody to check")
     except Exception as exc:  # noqa: BLE001 — a marker never fails the run
         print(f"could not tell which week this was, so no marker was left "
               f"({exc})", file=sys.stderr)

@@ -502,6 +502,47 @@ def test_only_stripe_can_explain_an_empty_paid_list() -> None:
     assert not tuesday.ended_by_stripe([owner], csv)
 
 
+def test_an_offseason_with_every_plan_ended_marks_no_week_one_in_may(
+        tmp_path, monkeypatch) -> None:
+    """Reproduction (skeptic of OPS-1): by May every plan on file has ended, so
+    the quiet all-ended path is the usual offseason. Next season's schedule is
+    in, current_week answers 1, and that path left run-tuesday-2027-w01 and
+    run-saturday-2027-w01 in the send log in May. The watchdog reads exactly
+    those keys, so if September's Week 1 Wednesday never started it would
+    have stayed quiet. The normal path exits on D8 and marks nothing; so does
+    this one. A Week 1 that is due is still marked."""
+    import run.delivery as delivery
+    import run.saturday as saturday
+    from run.watchdog import run_key
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    registry = _registry(tmp_path, _row(subscription_ids=["sub_ENDED"]))
+    monkeypatch.setattr(tuesday, "resolve_paid_list",
+                        lambda *a: _stripe_paid(ended=frozenset({"sub_ENDED"})))
+    monkeypatch.setattr(tuesday, "_mails_for_real", lambda args: True)
+    monkeypatch.setattr(saturday, "_could_mail", lambda args: True)
+    for module in (tuesday, saturday):
+        monkeypatch.setattr(module, "current_season", lambda *a, **k: "2027")
+        monkeypatch.setattr(module, "current_week", lambda *a, **k: 1)
+        monkeypatch.setattr(module, "season_over", lambda *a, **k: False)
+    may = ["--registry", str(registry), "--plans-dir", str(tmp_path / "plans")]
+
+    monkeypatch.setattr(tuesday, "week_one_due", lambda *a, **k: False)
+    monkeypatch.setattr(saturday, "week_one_due", lambda *a, **k: False)
+    assert tuesday.main(may) == 0
+    assert saturday.main([*may, "--now", "2027-05-22T16:17:00+00:00"]) == 0
+    keys = delivery.load_sent(log)
+    assert run_key("tuesday", "2027", 1) not in keys, "May answered for Week 1's Wednesday"
+    assert run_key("saturday", "2027", 1) not in keys, "May answered for Week 1's Saturday"
+
+    monkeypatch.setattr(tuesday, "week_one_due", lambda *a, **k: True)
+    monkeypatch.setattr(saturday, "week_one_due", lambda *a, **k: True)
+    assert tuesday.main(may) == 0
+    assert saturday.main([*may, "--now", "2027-09-11T16:17:00+00:00"]) == 0
+    keys = delivery.load_sent(log)
+    assert run_key("tuesday", "2027", 1) in keys and run_key("saturday", "2027", 1) in keys
+
+
 def test_a_preview_never_writes_to_the_public_record(tmp_path, capsys,
                                                      monkeypatch) -> None:
     """A call is PUBLISHED when it reaches a subscriber. The ledger is the

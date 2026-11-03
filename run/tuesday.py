@@ -540,6 +540,12 @@ def _mark_nobody_to_mail(args) -> None:
         if not args.week and season_over(args.cache, season):
             return
         week = int(args.week or current_week(args.cache, season))
+        # D8's Week 1 in May: no run is due, so none is marked. A marker left
+        # now would answer for September's Week 1 Wednesday, and the watchdog
+        # would stay quiet if that run never started. Every plan on file has
+        # ended by May, so this is the usual offseason, not an edge.
+        if not args.week and not week_one_due(args.cache, season, week):
+            return
     except Exception as exc:  # noqa: BLE001 — a marker never fails the run
         print(f"could not tell which week this was, so no marker was left "
               f"({exc})", file=sys.stderr)
