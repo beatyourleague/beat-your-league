@@ -257,7 +257,7 @@ def test_a_rough_week_is_framed_as_the_demo_it_is() -> None:
     line = live.rough_week_line(report)
     assert line == ("This week's sample roster is a rough one: its QB is on bye and "
                     "his backup was ruled out last week, and two running backs are on "
-                    "injured reserve. Your Game Plan shows exactly what its manager "
+                    "injured reserve. Your Game Plan shows what its manager "
                     "should do.")
     for name in ("Backup QB", "RB One", "Purdy"):
         assert name not in line, "facts, not a roll call"

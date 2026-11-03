@@ -75,10 +75,10 @@ def test_each_sample_banner_says_what_its_week_was_built_from() -> None:
 
 def test_a_rebuild_after_kickoff_says_it_reads_tuesdays_information() -> None:
     tuesday = _banner({"live_demo": True, "week": 6})
-    assert "exactly the way yours is built" in tuesday
+    assert "the same way yours is built" in tuesday
     assert "Rebuilt every Wednesday of the season" in tuesday
     rebuilt = _banner({"live_demo": True, "week": 6, "rebuilt_after_kickoff": True})
-    assert "exactly the way yours is built" not in rebuilt
+    assert "the same way yours is built" not in rebuilt
     assert "the Week 5 injury report" in rebuilt and "later" in rebuilt
     basis = "the week 5 injury report, the last complete one before this report goes out"
     assert "last complete one" in rr.availability_basis({"availability_as_of": basis})

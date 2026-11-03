@@ -328,8 +328,57 @@ def test_a_thursday_starter_gets_a_thursday_post_with_his_if_then() -> None:
     assert "%" not in post["text"] and URL not in post["text"] and URL in post["reply"]
     plain = drops.drafts(_report(lineup=lineup, pivots=[tuesday]))
     [post] = [p for p in plain if p["name"] == "Thursday night"]
-    assert post["text"].endswith("Our sample roster's Wednesday report flags it: check his "
-                                 "status before then.") and post["card"] == "Your Game Plan"
+    assert post["text"].endswith("Our sample roster's Wednesday report flags it: set your "
+                                 "lineup before then.") and post["card"] == "Your Game Plan"
     assert "Post it: Thursday, before his kickoff." in drops.render(_report(), plain)
     sunday = [dict(row, game="vs NE · Sun 1:00 PM ET") for row in lineup]
     assert "Thursday night" not in [p["name"] for p in drops.drafts(_report(lineup=sunday))]
+
+
+def test_the_thursday_post_quotes_the_reports_own_ask() -> None:
+    """Sweep OPS-4, reproduced on Week 9 of 2026: the draft said "Our sample
+    roster's Wednesday report flags it: check his status before then" about
+    Zay Flowers, who was on no injury report, while the report's own item said
+    "Thursday night: Zay Flowers kicks off at 8:15 PM ET — set your lineup
+    before then." The post takes the report's ask for HIM: "check his status"
+    only when the report asks for his status, never because somebody else in
+    the same game is listed."""
+    lineup = [{"slot": "WR", "player_id": "00-7", "player_name": "Zay Flowers",
+               "game": "vs JAX · Thu 8:15 PM ET"}]
+
+    def thursday(item: str | None) -> str:
+        checklist = [{"action": item}] if item else []
+        posts = drops.drafts(_report(lineup=lineup, pivots=[], checklist=checklist))
+        return _named(posts, "Thursday night")
+
+    healthy = thursday("Thursday night: Zay Flowers kicks off at 8:15 PM ET — set your "
+                       "lineup before then.")
+    assert healthy.endswith("flags it: set your lineup before then.")
+    assert "check his status" not in healthy
+    listed = thursday("Thursday night: Zay Flowers kicks off at 8:15 PM ET — check his "
+                      "status before then.")
+    assert listed.endswith("flags it: check his status before then.")
+    other = thursday("Thursday night: Zay Flowers and Mark Andrews kick off at 8:15 PM ET — "
+                     "check Mark Andrews's status before then.")
+    assert other.endswith("flags it: set your lineup before then.")
+    named = thursday("Thursday night: Zay Flowers and Mark Andrews kick off at 8:15 PM ET — "
+                     "check the status of Zay Flowers and Mark Andrews before then.")
+    assert named.endswith("flags it: check his status before then.")
+    assert thursday(None).endswith("flags it: set your lineup before then.")
+
+
+def test_a_toss_up_is_never_drafted_as_a_pick() -> None:
+    """Sweep OPS-2, reproduced on Week 9 of 2026: the closest call printed 52%
+    and the page this post links said "Rome Odunze or Khalil Shakir — either
+    is fine", while the draft read "Our sample roster's report starts Odunze:
+    52% to outscore Shakir." A toss-up (render.report.regret_tossup: 52% or
+    under, or the toss-up sentence in its reason) drafts no call post, the
+    rule the landing's strip and the share card already follow."""
+    from engine.solo_report import TOSSUP_SENTENCE
+    base = _report()
+    assert "The closest call" in [d["name"] for d in drops.drafts(base)]
+    for regret in ({**base["regret"], "confidence": 0.524},
+                   {**base["regret"], "reason": f"Closer than it looks. {TOSSUP_SENTENCE}"}):
+        posts = drops.drafts(_report(regret=regret))
+        assert "The closest call" not in [d["name"] for d in posts], regret
+        assert not any("to outscore" in d["text"] for d in posts)

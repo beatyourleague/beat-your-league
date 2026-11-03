@@ -190,7 +190,7 @@ def bands(report: Mapping[str, Any]) -> list[dict[str, str]]:
         else:
             out.append({"kind": "sample", "head": "THIS WEEK'S REPORT", "text": (
                 f"— Week {meta['week']} of the {meta['season']} season, built "
-                f"{rr._built_on(meta)} for a sample roster, exactly the way yours "
+                f"{rr._built_on(meta)} for a sample roster, the same way yours "
                 f"is built. Rebuilt every Wednesday of the season.")})
     elif meta.get("historical_demo") and meta.get("solo"):
         scoring = str(meta.get("scoring") or "")
