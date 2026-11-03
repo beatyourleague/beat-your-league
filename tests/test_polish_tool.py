@@ -468,6 +468,9 @@ def test_the_planners_switches_are_join_and_the_landings_own() -> None:
     show a checkout link that cannot finish (T3 adds the launch-check gate)."""
     code = _inline_script(PAGE)
     assert _const(code, "NOTIFY_LIST_ENDPOINT") == _const(JOIN, "NOTIFY_LIST_ENDPOINT")
+    # FUN-1: CHECKOUT_OPEN too, or the planner says checkout isn't open while
+    # join sells (the landing's interim state).
+    assert _const(code, "CHECKOUT_OPEN") == _const(LANDING, "CHECKOUT_OPEN")
     assert _const(code, "CHECKOUT_CAN_COMPLETE") == _const(LANDING, "CHECKOUT_CAN_COMPLETE")
     assert _const(code, "TRIAL_OPEN") == _const(LANDING, "TRIAL_OPEN")
 
@@ -547,7 +550,8 @@ class El {
   get childElementCount() { return this.children.filter((c) => c instanceof El).length; }
   appendChild(n) { this.children.push(n); n.parent = this; return n; }
   replaceChildren(...ns) { this.children = []; this._text = ""; ns.forEach((n) => this.appendChild(n)); }
-  remove() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); }
+  remove() { this.removed = true;
+    if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); }
   addEventListener(t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); }
   fire(t, extra) { for (const f of this.listeners[t] || []) f(Object.assign({ preventDefault() {}, target: this }, extra || {})); }
   setAttribute(k, v) { this.attrs[k] = String(v); }
@@ -595,8 +599,10 @@ const document = {
 };
 let lastUrl = null;
 const files = { "../join/players.json": cfg.players, "../join/byes.json": cfg.byes };
-const fetch = (url) => {
+const fetch = (url, init) => {
   if (cfg.fail) return Promise.reject(new Error("offline"));
+  // The waitlist row (cfg.submit): accepted, as the Worker answers a good one.
+  if (init && init.method === "POST") return Promise.resolve({ ok: true, status: 200 });
   if (!(url in files)) return Promise.reject(new Error("unexpected fetch " + url));
   const data = JSON.parse(fs.readFileSync(files[url], "utf8"));
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data) });
@@ -627,6 +633,12 @@ const tick = () => new Promise((r) => setTimeout(r, 20));
     goText: document.getElementById("cta-go").textContent,
     settingsHidden: document.getElementById("cta-settings").hidden,
     go: document.getElementById("cta-go").getAttribute("href") };
+  // The email capture, sent once (cfg.submit: the address typed).
+  if (cfg.submit) {
+    document.getElementById("cta-email").value = cfg.submit;
+    document.getElementById("cta-form").fire("submit");
+    for (let i = 0; i < 3; i++) await tick();
+  }
   if (cfg.edit !== null && cfg.edit !== undefined) {
     document.getElementById("roster-text").value = cfg.edit;
     document.getElementById("roster-text").fire("input");
@@ -647,14 +659,19 @@ const tick = () => new Promise((r) => setTimeout(r, 20));
     ctaSettingsHidden: document.getElementById("cta-settings").hidden,
     ctaGo: document.getElementById("cta-go").getAttribute("href"),
     ctaGoText: document.getElementById("cta-go").textContent,
-    retry: document.getElementById("retry-load").style.display }));
+    retry: document.getElementById("retry-load").style.display,
+    ctaCheck: document.getElementById("cta-check").textContent,
+    ctaCheckHref: document.getElementById("cta-check").getAttribute("href"),
+    ctaClosedGone: document.getElementById("cta-closed").removed === true,
+    ctaFormNote: document.getElementById("cta-form-note").textContent,
+    ctaNote: text("cta-note") }));
 })();
 """
 
 
 def _run_page(tmp_path: Path, search: str = "", paste: str | None = None, fail: bool = False,
               byes: dict | None = None, today: str = TODAY, consts: dict | None = None,
-              edit: str | None = None) -> dict:
+              edit: str | None = None, submit: str | None = None) -> dict:
     """``consts``: the page with those top-level constants set (the launch
     flip: an endpoint, an open checkout). ``edit``: text typed over the box
     after the check, so the list on screen goes stale."""
@@ -673,7 +690,8 @@ def _run_page(tmp_path: Path, search: str = "", paste: str | None = None, fail: 
         page_path.write_text(page, encoding="utf-8")
     cfg = {"page": str(page_path), "players": str(PLAYERS_JSON), "byes": str(byes_path),
            "roster": str(ROSTER_JS), "byesJs": str(BYES_JS), "email": str(EMAIL_JS),
-           "search": search, "paste": paste, "fail": fail, "today": today, "edit": edit}
+           "search": search, "paste": paste, "fail": fail, "today": today, "edit": edit,
+           "submit": submit}
     (tmp_path / "cfg.json").write_text(json.dumps(cfg), encoding="utf-8")
     stub = tmp_path / "dom-stub.js"
     stub.write_text(DOM_STUB, encoding="utf-8")
@@ -848,18 +866,57 @@ def test_the_closed_button_promises_a_kept_roster_only_when_one_is_kept(tmp_path
     and the note after it says "Your roster isn't saved with us" — and with no
     roster checked nothing is kept at all. It is the site's "Tell me when it
     opens" unless an endpoint is set AND a clean roster is on screen; the
-    scoring and size questions, which shape only the kept roster, wait for it."""
+    scoring and size questions, which shape only the kept roster, wait for it.
+    The closed state is set here, since the page's own flags follow the
+    landing's (the interim state has its own test below)."""
+    shut = {"CHECKOUT_OPEN": "false", "CHECKOUT_CAN_COMPLETE": "false"}
     closed = _run_page(tmp_path, search="?ref=" + SAMPLE_REF,
-                       consts={"NOTIFY_LIST_ENDPOINT": '""'})
+                       consts={"NOTIFY_LIST_ENDPOINT": '""', **shut})
     assert closed["ctaChecked"]["button"] == "Tell me when it opens"
     assert closed["ctaChecked"]["settingsHidden"] is False
-    fresh = _run_page(tmp_path, paste="", consts={"NOTIFY_LIST_ENDPOINT": '""'})
+    fresh = _run_page(tmp_path, paste="", consts={"NOTIFY_LIST_ENDPOINT": '""', **shut})
     assert fresh["ctaButton"] == "Tell me when it opens" and fresh["ctaSettingsHidden"] is True
     listed = _run_page(tmp_path, search="?ref=" + SAMPLE_REF, edit="Josh Allen\n",
-                       consts={"NOTIFY_LIST_ENDPOINT": '"https://forms.beatyourleague.com/rows"'})
+                       consts={"NOTIFY_LIST_ENDPOINT": '"https://forms.beatyourleague.com/rows"',
+                               **shut})
     assert listed["ctaChecked"]["button"] == "Keep my roster for launch"
     assert listed["ctaButton"] == "Tell me when it opens", "an edited roster is not the kept one"
     assert listed["ctaSettingsHidden"] is True
+
+
+@needs_node
+def test_the_interim_planner_sells_and_never_says_checkout_is_closed(tmp_path) -> None:
+    """FUN-1/LEG-M1, reproduced in the launch tree at 375px: the landing had
+    CHECKOUT_OPEN on (join sold $14.99) and CHECKOUT_CAN_COMPLETE off, and the
+    planner, which had only the second flag, still read "Checkout isn't open
+    yet, but you can check your team now.", "Tell me when it opens" and "One
+    email when signups open"; a saved roster got "Checkout isn't open yet. …
+    The morning it opens you'll get one email". It takes the landing's interim
+    branch now: the gold link is the open state's, and the capture is for
+    whoever isn't ready, with no date on its one message (FUN-5: the launch
+    email can't go out until a sender address exists)."""
+    interim = {"CHECKOUT_OPEN": "true", "CHECKOUT_CAN_COMPLETE": "false"}
+    out = _run_page(tmp_path, search="?ref=" + SAMPLE_REF, consts=interim,
+                    submit="fan@example.com")
+    assert out["ctaClosedGone"] is True
+    assert out["ctaCheck"] == "Get the weekly report for this roster"
+    assert out["ctaCheckHref"] == "../join/index.html?ref=" + SAMPLE_REF
+    assert out["ctaButton"] == "Email me once"
+    assert out["ctaFormNote"] == "Not ready yet? One message from us, nothing else. " \
+                                 "Unsubscribe any time."
+    assert out["ctaNote"].startswith("We kept your email and this roster. One message from us")
+    for line in out["said"]:
+        for stale in ("isn't open", "signups open", "when it opens", "for launch",
+                      "The morning it opens"):
+            assert stale not in line, (stale, line)
+    bare = _run_page(tmp_path, paste="", consts=interim, submit="fan@example.com")
+    assert bare["ctaCheck"] == "Get the weekly report" and bare["ctaButton"] == "Email me once"
+    assert bare["ctaNote"] == "You're on the list. One message from us, nothing else."
+    # The closed state keeps its own words.
+    shut = _run_page(tmp_path, search="?ref=" + SAMPLE_REF, submit="fan@example.com",
+                     consts={"CHECKOUT_OPEN": "false", "CHECKOUT_CAN_COMPLETE": "false"})
+    assert shut["ctaClosedGone"] is False and shut["ctaButton"] == "Keep my roster for launch"
+    assert shut["ctaNote"].startswith("Checkout isn't open yet. We kept your email")
 
 
 @needs_node
