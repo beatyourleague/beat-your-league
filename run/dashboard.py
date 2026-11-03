@@ -155,6 +155,11 @@ class Context:
     registry: Path | None = None
 
 
+# The page counts people and never shows an address; this line says where
+# the addresses are, so the owner never has to ask (run/signups.py).
+SIGNUPS_HINT = ("To see the addresses behind these rows, run make signups in your "
+                "terminal. This page never shows them.")
+
 # What each source is, how to connect it, and what it shows once it is.
 SOURCE_INFO = {
     "traffic": ("Page counter", "LAUNCH.md step 5b — the page counter",
@@ -2512,7 +2517,8 @@ def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime
         parts.append(f'<div class="card"><div class="cardhead"><h3>Form Worker rows</h3>'
                      f'<span class="unit">rows kept ~13 months</span></div><div class="tablewrap">'
                      f'<table class="tbl"><thead><tr><th>Kind</th><th class="r">Ever</th><th class="r">7 days</th>'
-                     f'<th class="r">24 h</th><th class="r">People</th></tr></thead><tbody>{trs}</tbody></table></div></div>')
+                     f'<th class="r">24 h</th><th class="r">People</th></tr></thead><tbody>{trs}</tbody></table></div>'
+                     f'<p class="muted small pad">{h(SIGNUPS_HINT)}</p></div>')
     else:
         parts.append(f'<div class="card"><div class="cardhead"><h3>Form Worker rows</h3></div>'
                      f'{setup_card(fo, compact=True)}</div>')

@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry dashboard dashboard-live dashboard-registry cost hours link books ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry signups signups-registry dashboard dashboard-live dashboard-registry cost hours link books ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
         og og-week brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample byes \
         platforms
 
@@ -97,6 +97,25 @@ stats-registry:
 	  gh run download -n sealed-registry -D "$$dir/data/sealed" && \
 	  $(PY) -I -S run/statebox.py open registry --root "$$dir" && \
 	  $(PY) -m run.stats --registry "$$dir/data/registry/rosters.json"
+
+# Who entered an email on the site (run/signups.py): every address the form
+# Worker holds, grouped by what they asked for (waitlist, free report, rookie
+# report, extra team, roster update, seat, Trade Check), each with the one use
+# the privacy policy allows. Your terminal only: it refuses in CI, and
+# ARGS="--csv data/signups.csv" writes a copy only to a gitignored path.
+# ARGS="--kind waitlist --since 7" narrows it. Read-only.
+signups:
+	$(PY) -m run.signups $(ARGS)
+
+# The same, marking who subscribes, from a sealed-registry copy opened in a
+# temporary folder outside the repo and deleted on exit (the stats-registry
+# recipe). Needs `gh` logged in and CACHE_KEY in the shell.
+signups-registry:
+	@test -n "$$CACHE_KEY" || { echo "CACHE_KEY is not in this shell: read -s CACHE_KEY && export CACHE_KEY"; exit 2; }
+	@dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	  gh run download -n sealed-registry -D "$$dir/data/sealed" && \
+	  $(PY) -I -S run/statebox.py open registry --root "$$dir" && \
+	  $(PY) -m run.signups --registry "$$dir/data/registry/rosters.json" $(ARGS)
 
 # The owner's private dashboard (run/dashboard.py): one self-contained page at
 # data/dashboard.html (gitignored), built from the same read-only sources as
