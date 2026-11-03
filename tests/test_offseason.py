@@ -533,3 +533,15 @@ def test_the_workflows_carry_both() -> None:
 
 def test_the_calendar_knows_about_the_rookie_report() -> None:
     assert 5 in plans.months_covered() and not plans.bills_all_year()
+
+
+def test_the_season_review_credits_nflverse_and_carries_the_disclaimer() -> None:
+    """Launch review LEG-3, reproduced: review_message(REVIEW_SAMPLE) printed
+    "32.1 to 9.4" and "Josh Allen: 240.5 points" with no CC-BY-4.0 credit in
+    either half (RULE N1, a licence term)."""
+    import html as _html
+    from render.report import NFLVERSE_LINE, NO_BETTING_LINE
+    from render.season_review import REVIEW_SAMPLE, review_message
+    message = review_message("a@example.com", "2026", [("Your Team", REVIEW_SAMPLE)], "k")
+    for words in (message.text, _html.unescape(message.html)):
+        assert NFLVERSE_LINE in words and NO_BETTING_LINE in words

@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from render.email import BASE, CARD, DISPLAY, FLAG, FONT, NAVY, PAPER, SMALL
-from render.report import EMAIL_META, esc, preheader_html
+from render.email import BASE, FLAG, FONT, NAVY, SMALL, note_html
+from render.report import esc
 from run.updates import EXPIRY_DAYS
 
 SUBJECT = "Confirm your roster change"
@@ -94,24 +94,8 @@ def confirm_email(url: str, names: Sequence[str], settings: Any = None,
                   f'{esc(setup)}</p>' if setup else "")
     name_html = (f'<p style="{BASE}margin:0 0 14px 0;"><b>Team name:</b> {esc(name)}</p>'
                  if name else "")
-    html = (
-        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
-        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        f'{EMAIL_META}<title>{esc(SUBJECT)}</title></head>'
-        f'<body style="margin:0;padding:0;background:{PAPER};">'
-        f'{preheader_html(PREHEADER)}'
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'border="0" style="background:{PAPER};"><tr><td align="center" '
-        f'style="padding:18px 8px;"><table role="presentation" width="560" '
-        f'cellpadding="0" cellspacing="0" border="0" '
-        f'style="max-width:560px;width:100%;background:{CARD};">'
-        f'<tr><td style="background:{NAVY};padding:20px 26px;border-left:4px solid {FLAG};">'
-        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
-        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">Beat Your League</div>'
-        f'<div style="font-family:{DISPLAY};font-size:24px;font-weight:bold;'
-        f'text-transform:uppercase;color:{CARD};padding-top:6px;">'
-        f'Confirm your roster change</div></td></tr>'
-        f'<tr><td style="padding:22px 26px;">'
+    html = note_html(
+        "Confirm your roster change", PREHEADER,
         f'<p style="{BASE}margin:0 0 14px 0;">{esc(LEDE)}</p>{name_html}{roster_html}{setup_html}'
         f'<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
         f'<td style="background:{FLAG};border-radius:4px;">'
@@ -119,8 +103,7 @@ def confirm_email(url: str, names: Sequence[str], settings: Any = None,
         f'font-family:{FONT};font-size:15px;font-weight:bold;color:{NAVY};'
         f'text-decoration:none;">Review and confirm</a></td></tr></table>'
         f'<p style="{SMALL}margin:14px 0 0 0;">{esc(LIMIT)}</p>'
-        f'<p style="{SMALL}margin:8px 0 0 0;">{esc(IGNORE)}</p>'
-        f'</td></tr></table></td></tr></table></body></html>\n')
+        f'<p style="{SMALL}margin:8px 0 0 0;">{esc(IGNORE)}</p>')
     text = "\n".join([
         SUBJECT.upper(), "",
         LEDE, "",

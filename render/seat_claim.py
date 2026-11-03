@@ -33,8 +33,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from render.email import BASE, CARD, DISPLAY, FLAG, FONT, NAVY, PAPER, SMALL
-from render.report import EMAIL_META, esc, preheader_html
+from render.email import BASE, FLAG, FONT, NAVY, SMALL
+from render.report import esc
 from render.sender import CONTACT, sender_line
 
 SUBJECT = "Your League Pass seat isn't set up yet"
@@ -81,32 +81,14 @@ FULL_CHECK = (f"If one of those seats should be yours, ask whoever bought your "
 
 
 def _shell(subject: str, preheader: str, body_html: str) -> str:
-    """The navy masthead, the body, and the sender block — one document a
-    phone lays out, held to every email client's rules."""
+    """The report's masthead, the body, and the sender block — one document a
+    phone lays out, held to every email client's rules (render.email.
+    note_html)."""
+    from render.email import note_html
     sender = sender_line()
-    return (
-        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
-        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        f'{EMAIL_META}<title>{esc(subject)}</title></head>'
-        f'<body style="margin:0;padding:0;background:{PAPER};">'
-        f'{preheader_html(preheader)}'
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'border="0" style="background:{PAPER};"><tr><td align="center" '
-        f'style="padding:18px 8px;"><table role="presentation" width="560" '
-        f'cellpadding="0" cellspacing="0" border="0" '
-        f'style="max-width:560px;width:100%;background:{CARD};">'
-        f'<tr><td style="background:{NAVY};padding:20px 26px;border-left:4px solid {FLAG};">'
-        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
-        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">Beat Your League</div>'
-        f'<div style="font-family:{DISPLAY};font-size:24px;font-weight:bold;'
-        f'text-transform:uppercase;color:{CARD};padding-top:6px;">'
-        f'{esc(subject)}</div></td></tr>'
-        f'<tr><td style="padding:22px 26px;">{body_html}</td></tr>'
-        f'<tr><td style="background:{PAPER};padding:16px 26px 22px 26px;">'
-        f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — questions? '
-        f'Write to {esc(CONTACT)}.'
-        + (f'<br>{esc(sender)}' if sender else "")
-        + '</p></td></tr></table></td></tr></table></body></html>\n')
+    return note_html(subject, preheader, body_html,
+                     f'<b>Beat Your League</b> — questions? Write to {esc(CONTACT)}.'
+                     + (f'<br>{esc(sender)}' if sender else ""))
 
 
 def _footer_lines() -> list[str]:

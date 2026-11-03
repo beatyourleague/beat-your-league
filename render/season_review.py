@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from render.email import BASE, FLAG, FONT, NAVY, SMALL
-from render.report import esc, seat_stop_href
+from render.report import NFLVERSE_LINE, NO_BETTING_LINE, esc, seat_stop_href
 from render.sender import sender_line
 from render.team_mail import _shell
 from run.delivery import Message
@@ -20,6 +20,10 @@ ROOKIE_BODY = ("After the NFL Draft we'll put together a report on the new class
 ROOKIE_BUTTON = "Send me the rookie report"
 NOTHING_BILLS = "Nothing bills from this email."
 STOP = "Don't want these? Reply with the word stop."
+# The odds it graded and the box scores it graded them on (launch review
+# LEG-3): RULE N1's CC-BY-4.0 credit is a licence term, and principle 4's
+# disclaimer rides every render.
+SOURCE_LINES = (NO_BETTING_LINE, NFLVERSE_LINE)
 
 
 # The longest ordinary section, for the launch check's width and sender audit.
@@ -94,6 +98,8 @@ def review_message(email: str, season: str, teams: Sequence[tuple[str, Mapping[s
                  f'font-family:{FONT};font-size:15px;font-weight:bold;color:{NAVY};'
                  f'text-decoration:none;">{esc(ROOKIE_BUTTON)}</a></td></tr></table>')
     sender = sender_line()
+    body += "".join(f'<p style="{SMALL}margin:14px 0 0 0;">{esc(line)}</p>'
+                    for line in SOURCE_LINES)
     body += (f'<p style="{SMALL}margin:14px 0 0 0;">{esc(NOTHING_BILLS)} {esc(STOP)}</p>'
              + (f'<p style="{SMALL}margin:8px 0 0 0;">{esc(sender)}</p>' if sender else ""))
     html = _shell(subject, "How your calls landed this season, misses included.", body)
@@ -102,6 +108,6 @@ def review_message(email: str, season: str, teams: Sequence[tuple[str, Mapping[s
         text += [name, *lines, ""]
     if rookie_url:
         text += [ROOKIE_HEAD.upper(), ROOKIE_BODY, f"{ROOKIE_BUTTON}: {rookie_url}", ""]
-    text += [f"{NOTHING_BILLS} {STOP}", *([sender] if sender else []), ""]
+    text += [*SOURCE_LINES, "", f"{NOTHING_BILLS} {STOP}", *([sender] if sender else []), ""]
     return Message(to=email, subject=subject, html=html, text="\n".join(text), key=key,
                    unsubscribe=seat_stop_href())

@@ -390,6 +390,38 @@ def masthead_html(label: str, big: str, meta_html: str, stamp: str | None = None
         + '</td></tr>')
 
 
+def note_html(subject: str, preheader: str, body_html: str,
+              footer_html: str = "") -> str:
+    """A short note's whole document (a confirmation, a notice, the Trade
+    Check): the report's own masthead over one white card, then
+    ``footer_html`` (escaped by the caller) on the paper.
+
+    The notes drew their own square header, a gold rule and a letter-spaced
+    wordmark, while the report, the welcome and the Saturday check open on
+    this lockup, so the product read as two (launch review EM-10)."""
+    foot = (f'<tr><td style="background:{PAPER};padding:16px 4px 8px 4px;">'
+            f'<p style="{SMALL}margin:0;">{footer_html}</p></td></tr>'
+            if footer_html else "")
+    return (
+        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        f'{EMAIL_META}<title>{esc(subject)}</title></head>'
+        f'<body style="margin:0;padding:0;background:{PAPER};">'
+        f'{preheader_html(preheader)}'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{PAPER};"><tr><td align="center" '
+        f'style="padding:18px 8px;"><table role="presentation" width="560" '
+        f'cellpadding="0" cellspacing="0" border="0" '
+        f'style="max-width:560px;width:100%;background:{PAPER};">'
+        + masthead_html("", subject, "", big_size=24)
+        + f'<tr><td style="padding:10px 0 0 0;">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{CARD};border:1px solid {LINE};border-radius:12px;">'
+        f'<tr><td style="padding:22px 26px;">{body_html}</td></tr></table></td></tr>'
+        + foot
+        + '</table></td></tr></table></body></html>\n')
+
+
 def _header(meta: Mapping[str, Any], team: str | None = None) -> str:
     """The masthead and the notices under it (render.anatomy.masthead,
     .bands). ``team`` names a subscriber's roster (render.report.team_name) so

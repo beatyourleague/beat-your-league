@@ -27,6 +27,12 @@ _STAMP = {
 }
 
 _FONT = "'Barlow Condensed','Arial Narrow',sans-serif"
+# A roster product's card (a ``typed-*`` store) is graded on nflverse box
+# scores, and RULE N1 makes the credit a licence term on anything public: the
+# card is posted as an image, away from the page that carries it (launch
+# review LEG-3). The first sentence of ingest.nflverse.ATTRIBUTION; a
+# Sleeper-era card was graded on the league's own record and carries none.
+CREDIT = "NFL data: nflverse (nflverse-data), CC-BY-4.0."
 _BODY_FONT = "'Barlow','Helvetica Neue',Arial,sans-serif"
 
 
@@ -57,6 +63,9 @@ def receipt_card_svg(call: LedgerCall, sample: bool = False) -> str:
         result_line = (f"{pick} {_points(call.pick_points)} · {over} "
                        f"{_points(call.over_points)}  ({sign}{margin:.1f})")
 
+    credit = (f'<text x="{WIDTH - 76}" y="616" text-anchor="end" font-family={_BODY_FONT!r} '
+              f'font-size="18" fill="#5A6B80">{escape(CREDIT)}</text>'
+              if str(call.league_id).startswith("typed-") else "")
     sample_mark = ""
     if sample:
         sample_mark = (
@@ -90,6 +99,7 @@ def receipt_card_svg(call: LedgerCall, sample: bool = False) -> str:
   <line x1="76" y1="532" x2="{WIDTH - 76}" y2="532" stroke="#D8D3C6" stroke-width="2" stroke-dasharray="8 6"/>
   <text x="76" y="576" font-family={_BODY_FONT!r} font-size="22" fill="#5A6B80">Graded against the real box score. Wins and misses alike — the full ledger is public.</text>
   <text x="76" y="616" font-family={_FONT!r} font-size="24" font-weight="800" letter-spacing="3" fill="#B3402F">ANALYSIS, NOT BETTING PICKS</text>
+  {credit}
 </svg>
 '''
 

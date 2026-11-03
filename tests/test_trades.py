@@ -127,3 +127,26 @@ def test_the_workflow_runs_it_and_records_nothing() -> None:
 def test_the_runner_answers_nothing_with_no_endpoint(monkeypatch, capsys) -> None:
     monkeypatch.delenv("FORM_ENDPOINT", raising=False)
     assert trades.main([]) == 0
+
+
+@pytest.mark.parametrize("half", [1, 2])
+def test_the_answer_carries_the_disclaimer_and_the_data_credit(half) -> None:
+    """Launch review LEG-M2/LEG-3, reproduced: trade_email(TRADE_SAMPLE) printed
+    this week's projections ("RB: Saquon Barkley (17.6) → Bijan Robinson
+    (15.1)") and how each player has scored with neither principle 4's "not
+    betting picks" line nor RULE N1's CC-BY-4.0 credit, a licence term."""
+    from render.report import NFLVERSE_LINE, NO_BETTING_LINE
+    words = html.unescape(trade_email(TRADE_SAMPLE, "", "https://x.test/u")[half])
+    assert NO_BETTING_LINE in words and NFLVERSE_LINE in words
+
+
+def test_made_the_deal_is_a_button_in_the_products_masthead() -> None:
+    """Launch review EM-10: the Trade Check printed "Made the deal?" over a
+    raw URL in the client's default blue, under a square header no other
+    report-family email used."""
+    page = trade_email(TRADE_SAMPLE, "", "https://x.test/u")[1]
+    assert re.search(r'<a href="https://x\.test/u" style="[^"]*color:#101E33;[^"]*">'
+                     r'Update my roster</a>', page)
+    assert ">https://x.test/u<" not in page
+    assert 'Beat Your <span style="color:#F0B62A;">League</span>' in page
+    assert "border-left:4px" not in page

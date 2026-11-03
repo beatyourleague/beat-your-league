@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
-from render.email import BASE, SMALL
-from render.report import esc
+from render.email import BASE, FLAG, FONT, NAVY, SMALL
+from render.report import NFLVERSE_LINE, NO_BETTING_LINE, esc
 from render.team_mail import _shell
 
 SUBJECT = "Your trade check"
@@ -15,6 +15,11 @@ LIMITS = ("This compares this week's lineup and the byes ahead. It doesn't rate 
           "Your roster on file hasn't changed.")
 NOT_ASKED = "Didn't ask for this? Ignore it. Nothing changed."
 MADE_IT = "Made the deal? Update your roster here so your next report uses it:"
+MADE_IT_BUTTON = "Update my roster"
+# It prints this week's projections and how each player has scored, so it
+# carries what every report does (launch review LEG-M2, LEG-3): principle 4's
+# disclaimer, and RULE N1's CC-BY-4.0 credit, a licence term.
+SOURCE_LINES = (NO_BETTING_LINE, NFLVERSE_LINE)
 
 
 # The longest ordinary answer, for the launch check's width and sender audit.
@@ -75,15 +80,24 @@ def trade_email(change: Mapping[str, Any], team: str = "",
         + "".join(f'<p style="{BASE}margin:0 0 4px 0;">{esc(line)}</p>' for line in lines)
         + f'<p style="{SMALL}margin:0 0 10px 0;">&nbsp;</p>' for head, lines in sections)
     if update_url:
-        body += (f'<p style="{BASE}margin:0 0 12px 0;">{esc(MADE_IT)} '
-                 f'<a href="{esc(update_url)}">{esc(update_url)}</a></p>')
+        # A button, like the confirmation emails', in place of a raw URL in
+        # the client's default blue (launch review EM-10).
+        body += (f'<p style="{BASE}margin:0 0 8px 0;">{esc(MADE_IT)}</p>'
+                 f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
+                 f'style="margin:0 0 14px 0;"><tr>'
+                 f'<td style="background:{FLAG};border-radius:4px;">'
+                 f'<a href="{esc(update_url)}" style="display:inline-block;padding:12px 22px;'
+                 f'font-family:{FONT};font-size:15px;font-weight:bold;color:{NAVY};'
+                 f'text-decoration:none;">{esc(MADE_IT_BUTTON)}</a></td></tr></table>')
     body += (f'<p style="{SMALL}margin:0 0 8px 0;">{esc(LIMITS)}</p>'
-             f'<p style="{SMALL}margin:0;">{esc(NOT_ASKED)}</p>')
+             + "".join(f'<p style="{SMALL}margin:0 0 8px 0;">{esc(line)}</p>'
+                       for line in SOURCE_LINES)
+             + f'<p style="{SMALL}margin:0;">{esc(NOT_ASKED)}</p>')
     html = _shell(subject, "What the deal does to your lineup and byes.", body)
     text: list[str] = [subject.upper(), ""]
     for head, lines in sections:
         text += [head.upper(), *lines, ""]
     if update_url:
         text += [f"{MADE_IT} {update_url}", ""]
-    text += [LIMITS, "", NOT_ASKED, ""]
+    text += [LIMITS, "", *SOURCE_LINES, "", NOT_ASKED, ""]
     return subject, html, "\n".join(text)
