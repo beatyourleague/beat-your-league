@@ -129,6 +129,106 @@ def test_the_report_says_when_a_roster_change_counts() -> None:
     assert "by Friday night (ET)" in UPDATE_BODY
 
 
+def test_the_early_look_is_true_at_any_hour_it_is_sent() -> None:
+    """Launch review PROD-4/PUR-S1/EM-S3 (Nov 2026). The early look goes to
+    any buyer until the week's run marker exists, which on a normal week is
+    about 5:17 PM ET Wednesday. A buyer at 10:47 AM ET Wednesday was told
+    "Waivers haven't cleared yet" under the subject "your early look, before
+    waivers", hours after ESPN's and Yahoo's default waivers had run."""
+    from render.email import subject_for
+    from render.report import EARLY_LOOK, EARLY_LOOK_MORNING
+    for words in (EARLY_LOOK, EARLY_LOOK_MORNING):
+        assert "aivers haven't cleared" not in words and "before waivers" not in words
+    assert "Your full report comes Wednesday evening" in EARLY_LOOK
+    report = {"meta": {"solo": True, "week": 9, "early_look": True}, "lineup": []}
+    assert subject_for(report).endswith("your early look")
+    assert "waivers" not in subject_for(report)
+
+
+# --------------------------------------------------------------------- #
+# the week whose report goes in the morning
+# --------------------------------------------------------------------- #
+
+def _week(days: dict[str, str]) -> dict:
+    """team -> game, the shape run.solo._week_games gives the engine."""
+    return {team: {"opponent": "X", "home": True, "day": day, "time": "13:00"}
+            for team, day in days.items()}
+
+
+def test_a_week_with_a_wednesday_game_says_its_report_goes_that_morning() -> None:
+    """2026 Week 12 opens GB@LA on Wednesday Nov 25, and weekly.yml's morning
+    slot sends it then. A game moved to the Wednesday AFTER the week's Sunday
+    (BAL@PIT, 2020) is not the report's day."""
+    from engine.solo_report import report_goes_morning
+    assert report_goes_morning(_week({"GB": "2026-11-25", "DET": "2026-11-26",
+                                      "KC": "2026-11-29"}))
+    assert not report_goes_morning(_week({"KC": "2026-11-19", "BUF": "2026-11-22",
+                                          "MIN": "2026-11-23"}))
+    assert not report_goes_morning(_week({"KC": "2020-11-29", "PIT": "2020-12-02"}))
+    assert not report_goes_morning({})
+
+
+@needs_schedule
+def test_2026_week_12_is_the_morning_week_and_its_neighbours_are_not() -> None:
+    from engine.solo_report import report_goes_morning
+    from run.solo import _week_games
+    assert report_goes_morning(_week_games(CACHE, "2026", 12, live=False))
+    for week in (11, 13):
+        assert not report_goes_morning(_week_games(CACHE, "2026", week, live=False))
+
+
+def _meta(**extra) -> dict:
+    return {"solo": True, "season": "2026", "week": 11, "last_week": 18,
+            "update_url": "https://example.com/join/?update=1", **extra}
+
+
+def test_no_report_promises_an_evening_report_in_the_morning_week() -> None:
+    """Launch review EM-1/PROD-M1 (Nov 2026). Week 12's report goes Wednesday
+    morning, and the evening run skips everyone it already mailed. Every
+    report still said "Update it here by Wednesday afternoon (ET) and that
+    evening's report uses it": Week 11's (Nov 18) pointed at an afternoon
+    update the morning report would never read, and Week 12's own, sent that
+    morning, promised an evening report that never comes. Any early look
+    that week said "Your full report comes Wednesday evening"."""
+    from render.report import early_look_text, update_line, update_lines
+    week_11 = _meta(next_report_morning=True)
+    week_12 = _meta(week=12, report_morning=True)
+    early_12 = _meta(week=12, report_morning=True, early_look=True)
+    for meta in (week_11, week_12, early_12):
+        for words in (update_line(meta), " ".join(update_lines(meta))):
+            words = words.replace("&#x27;", "'")
+            assert "that evening's report" not in words, meta
+            assert "by Friday night (ET)" in words, meta
+            assert "https://example.com/join/?update=1" in words
+    assert "Tuesday night (ET)" in " ".join(update_lines(week_11))
+    assert "Wednesday morning" in " ".join(update_lines(week_11))
+    assert "next Wednesday afternoon (ET)" in " ".join(update_lines(week_12))
+    assert "Tuesday night (ET) and Wednesday morning's report" in " ".join(update_lines(early_12))
+    assert "Your full report comes Wednesday morning" in early_look_text(early_12)
+    assert "evening" not in early_look_text(early_12)
+    # Every other week is as before.
+    from render.report import UPDATE_BODY
+    assert UPDATE_BODY in " ".join(update_lines(_meta()))
+    assert UPDATE_BODY in " ".join(update_lines(_meta(early_look=True)))
+    assert "Wednesday evening" in early_look_text(_meta(early_look=True))
+
+
+def test_the_morning_flag_rides_the_report_meta(tmp_path) -> None:
+    """Present only in a week whose report goes in the morning, so every other
+    week's report is byte-identical to before."""
+    from dataclasses import replace
+    from run import solo
+    from test_solo_run import OFFLINE, SEASON, WEEK, _cache, _spec
+    cache = _cache(tmp_path)
+    data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
+    assert "report_morning" not in solo.report_for(_spec(), data, cache_dir=cache)["meta"]
+    # The same week, with its games moved to a Wednesday before a Sunday game.
+    wednesday = {team: {**game, "day": "2024-12-25"} for team, game in data.games.items()}
+    wednesday["BAL"] = {"opponent": "DEN", "home": True, "day": "2024-12-29", "time": "13:00"}
+    meta = solo.report_for(_spec(), replace(data, games=wednesday), cache_dir=cache)["meta"]
+    assert meta["report_morning"] is True
+
+
 # --------------------------------------------------------------------- #
 # the early look
 # --------------------------------------------------------------------- #
@@ -172,7 +272,7 @@ def test_a_buyer_before_wednesdays_run_gets_an_early_look_at_once(tmp_path, monk
                              first_plans=first, out_dir=tmp_path / "out")
     [message] = sink.sent
     assert message.key == f"{season}-w{week:02d}-early-{signup.slug}"
-    assert message.subject.endswith("your early look, before waivers")
+    assert message.subject.endswith("your early look")
     for words in (message.text, message.html):
         assert "Your full report comes Wednesday evening" in words.replace("&#x27;", "'")
     assert not list(processed.rglob("calls.jsonl")), "an early look is not the report of record"

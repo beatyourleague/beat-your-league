@@ -292,11 +292,28 @@ MARK_CSS = (".brand svg.mark{width:22px;height:22px;flex:none;}"
 # A buyer before Wednesday's run gets this week's report at once
 # (run.tuesday.run_subscriber early_look), so they hold something real the day
 # they pay. Wednesday's report still comes, after waivers.
+# True at any hour it is sent (launch review PROD-4/PUR-S1/EM-S3): it said
+# "Waivers haven't cleared yet" to a buyer at 11 AM ET Wednesday, hours after
+# ESPN's and Yahoo's default waivers had run, and the subject said "before
+# waivers". The deadline is UPDATE_BODY's. A week with a Wednesday game sends
+# its report that MORNING (run/report_slot.py), so that week says so (EM-1,
+# PROD-M1).
 EARLY_LOOK_HEAD = "Your early look"
-EARLY_LOOK = ("Waivers haven't cleared yet, so this is built on the roster you gave us. "
-              "Your full report comes Wednesday evening. Change your roster before then "
-              "and it will use the new one.")
+EARLY_LOOK = ("Built on the roster you gave us. Your full report comes Wednesday evening. "
+              "Changed your roster? Update it by Wednesday afternoon (ET) and that "
+              "report will use it.")
+EARLY_LOOK_MORNING = ("Built on the roster you gave us. Your full report comes Wednesday "
+                      "morning, because there's a game that day. Changed your roster? "
+                      "Update it by Tuesday night (ET) and that report will use it.")
 BRAND_LINE = ("your lineup, decided every Wednesday of the season.")
+
+
+def early_look_text(meta: Mapping[str, Any]) -> str:
+    """The early look's sentence for this week: a week whose report goes
+    Wednesday morning (``meta["report_morning"]``) says morning."""
+    return EARLY_LOOK_MORNING if meta.get("report_morning") else EARLY_LOOK
+
+
 # Contract C5 (final review FUN-6/COPY-8): the one betting phrase any surface
 # may carry is "not betting picks". The old line denied a second betting term
 # by name on every report, both samples and every email. One constant; the
@@ -2355,6 +2372,45 @@ UPDATE_REPLY = ("Reply to this email with your updated roster and your next repo
 # route goes and the link keeps only what is still true of it.
 UPDATE_BODY_LAST = ("Update it here by Friday night (ET) — the Saturday check "
                     "uses it. We'll email you a button to confirm:")
+# A week with a Wednesday game sends its report that MORNING (run/report_slot.
+# due, weekly.yml's 13:17 UTC slot), and the evening run skips everyone already
+# mailed (launch review EM-1/PROD-M1, 2026 Week 12). UPDATE_BODY's "by
+# Wednesday afternoon (ET) and that evening's report uses it" is false three
+# ways around that week, so each says what is true of it, in the order a
+# reader meets the deadlines:
+# - the weekly report BEFORE it (Week 11): Saturday's check, then Tuesday night;
+UPDATE_BODY_MORNING = ("Update it here by Friday night (ET) for the Saturday check. "
+                       "Next week's report goes Wednesday morning, because there's a "
+                       "game that day, so update it by Tuesday night (ET) for that "
+                       "one. We'll email you a button to confirm:")
+# - an early look in that week: Wednesday morning's report, then Saturday's;
+UPDATE_BODY_EARLY_MORNING = ("Update it here by Tuesday night (ET) and Wednesday "
+                             "morning's report uses it. After that, by Friday night "
+                             "(ET) for the Saturday check. We'll email you a button "
+                             "to confirm:")
+# - the morning report itself, which has no report that evening.
+UPDATE_BODY_SAME_DAY = ("Update it here by Friday night (ET) for the Saturday check, "
+                        "or by next Wednesday afternoon (ET) for next week's report. "
+                        "We'll email you a button to confirm:")
+
+
+def update_body(meta: Mapping[str, Any]) -> str:
+    """Which sentence says when a roster change counts, for this report.
+
+    The report it points at is the NEXT one: this week's full report for an
+    early look, next week's for a weekly report. ``report_morning`` (this
+    week's report goes Wednesday morning) comes from the week's own schedule
+    (engine.solo_report.report_goes_morning); ``next_report_morning`` (next
+    week's does) from the run, which can see next week's schedule."""
+    if _last_report(meta):
+        return UPDATE_BODY_LAST
+    if meta.get("early_look"):
+        return UPDATE_BODY_EARLY_MORNING if meta.get("report_morning") else UPDATE_BODY
+    if meta.get("next_report_morning"):
+        return UPDATE_BODY_MORNING
+    if meta.get("report_morning"):
+        return UPDATE_BODY_SAME_DAY
+    return UPDATE_BODY
 
 
 def reply_update_works() -> bool:
@@ -2412,7 +2468,7 @@ def update_line(meta: Mapping[str, Any]) -> str:
         if _last_report(meta) or not reply_update_works():
             return f"{esc(as_of)}<br>" if as_of else ""
         return f'<b>{esc(UPDATE_HEAD)}</b>{dated} {esc(UPDATE_REPLY)}<br>'
-    body = UPDATE_BODY_LAST if _last_report(meta) else UPDATE_BODY
+    body = update_body(meta)
     return (f'<b>{esc(UPDATE_HEAD)}</b>{dated} {esc(body)} '
             f'<a href="{esc(url)}">{esc(url)}</a><br>')
 
@@ -2427,7 +2483,7 @@ def update_lines(meta: Mapping[str, Any]) -> list[str]:
     dated = f" {as_of}" if as_of else ""
     if not url and (_last_report(meta) or not reply_update_works()):
         return ["", as_of] if as_of else []
-    body = UPDATE_BODY_LAST if _last_report(meta) else UPDATE_BODY
+    body = update_body(meta)
     return ["", f"{UPDATE_HEAD.upper()}{dated} "
             + (f"{body} {url}" if url else UPDATE_REPLY)]
 

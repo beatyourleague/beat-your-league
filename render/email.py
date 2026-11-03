@@ -39,8 +39,8 @@ from render.report import (
     EMAIL_META,
     sender_html,
     SEASON_END_HEAD,
-    EARLY_LOOK,
     EARLY_LOOK_HEAD,
+    early_look_text,
     season_end_lines,
     preheader_html,
     AS_SET_BODY,
@@ -1005,7 +1005,7 @@ def _solo_text(report: Mapping[str, Any]) -> str:
                             if trial_join_url(meta) else ""))
         lines.append("")
     if meta.get("early_look"):
-        lines += [f"{EARLY_LOOK_HEAD.upper()}. {EARLY_LOOK}", ""]
+        lines += [f"{EARLY_LOOK_HEAD.upper()}. {early_look_text(meta)}", ""]
     if season_end_lines(meta):
         lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     for item in report.get("checklist") or []:
@@ -1151,7 +1151,7 @@ def _league_text(report: Mapping[str, Any]) -> str:
                             if trial_join_url(meta) else ""))
         lines.append("")
     if meta.get("early_look"):
-        lines += [f"{EARLY_LOOK_HEAD.upper()}. {EARLY_LOOK}", ""]
+        lines += [f"{EARLY_LOOK_HEAD.upper()}. {early_look_text(meta)}", ""]
     if season_end_lines(meta):
         lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     lines += ["GAME PLAN"]
@@ -1435,7 +1435,7 @@ def subject_for(report: Mapping[str, Any]) -> str:
         team = team_name(report)
         week = f"Week {meta['week']}" + (f" — {team}" if team else "")
         if meta.get("early_look"):
-            return f"{week}: your early look, before waivers"
+            return f"{week}: your early look"
         # The subject leads with an empty spot when there is one (F6): it is
         # the one thing in the report that costs points if left unread.
         holes = empty_spots(report)

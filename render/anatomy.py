@@ -217,7 +217,7 @@ def bands(report: Mapping[str, Any]) -> list[dict[str, str]]:
                "league's real record." if meta.get("anonymized_demo") else ""))})
     if meta.get("early_look"):
         out.append({"kind": "early", "head": f"{rr.EARLY_LOOK_HEAD}.",
-                    "text": rr.EARLY_LOOK})
+                    "text": rr.early_look_text(meta)})
     if meta.get("trial") and not meta.get("historical_demo"):
         from render.email import (TRIAL_BUTTON, TRIAL_HEAD, TRIAL_INTRO,
                                   trial_join_url, trial_price_line)

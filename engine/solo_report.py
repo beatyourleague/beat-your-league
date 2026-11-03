@@ -394,6 +394,9 @@ def build_solo_report(
                               and all(p.projection is None for p in picks)),
             "gaps": gaps,
             "llm_tokens": 0,
+            # Present only in a week whose report goes Wednesday morning, so
+            # every other week's report is byte-identical to before.
+            **({"report_morning": True} if report_goes_morning(schedule) else {}),
         },
         # None, not (): we have never seen their lineup, and an empty tuple would
         # read as "they started nobody" and produce a full list of changes — or
@@ -2230,6 +2233,21 @@ def _week_sunday(schedule: Mapping[str, Mapping[str, Any]]) -> date | None:
     sundays = [day for day in (_game_day(g) for g in schedule.values())
                if day is not None and day.weekday() == 6]
     return min(sundays) if sundays else None
+
+
+def report_goes_morning(schedule: Mapping[str, Mapping[str, Any]]) -> bool:
+    """Does this week's report go Wednesday MORNING? Only in a week with a
+    game on its opening Wednesday (2026: Weeks 1 and 12), which is the day the
+    report is sent: weekly.yml's morning slot runs then and only then
+    (run/report_slot.due). Every surface that says "Wednesday evening" or
+    "that evening's report" reads this (launch review EM-1/PROD-M1).
+
+    The Wednesday before the week's Sunday: a game postponed to the Wednesday
+    after it (BAL@PIT, 2020) is not the report's day."""
+    sunday = _week_sunday(schedule)
+    return any(day is not None and day.weekday() == 2
+               and (sunday is None or day < sunday)
+               for day in (_game_day(g) for g in schedule.values()))
 
 
 def practice_squad_items(picks: Sequence[SlotPick], unconfirmed: Mapping[str, str],
