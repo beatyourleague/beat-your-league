@@ -1526,20 +1526,30 @@ entry by test), so the welcome and first report arrive within minutes. Rules
   `STRIPE_WEBHOOK_SECRET` over `t + "." + the raw body BYTES` (read once, capped at 64 KB, 413
   above), any v1 in constant time, `|now - t|` at most 300 s. Unverified: 400, nothing else.
 - **Store nothing, log nothing from the event, decide nothing.** It carries the buyer's address.
-  Only `checkout.session.completed` and `.async_payment_succeeded` dispatch; other verified events
-  answer 200. The intake reads Stripe itself, so every purchase rule stays in Python.
+  Only `checkout.session.completed` and `.async_payment_succeeded` dispatch, as snapshot events
+  or as Stripe's thin events (`v1.` + the same name; the Dashboard preselects Thin, and found in
+  review: a Thin endpoint would have answered 200 "ignored" to every purchase while every check
+  read green). Other
+  verified events answer 200 and log one fixed line, never their type. The intake reads Stripe
+  itself, so every purchase rule stays in Python.
 - **Awaited, not `waitUntil`:** a failed dispatch answers 502 so Stripe retries (up to 3 days
   live) and shows it. No secret: 404; no `GH_DISPATCH_TOKEN`: 503. The hourly run serves the
-  buyer in every case; no throttle ever drops a dispatch (daily.yml's concurrency group keeps
-  one running and one pending, so bursts collapse into runs that serve everybody).
-- **The quiet window.** A purchase-started intake overlapping the Wednesday run mailed a new
-  buyer the report of record (from weekly.yml) AND an early look (from daily.yml) minutes apart:
-  different concurrency groups, and weekly.yml pushes its report keys and `run-tuesday-…` marker
-  only at the end, so `_first_file` read `tuesday_finished` as False (reproduced with the real
-  intake). So from `QUIET_LEAD_MINUTES` (15 = daily.yml's intake timeout) before each weekly.yml
-  and saturday.yml SCHEDULE time until the hourly minute (:47), the Worker answers 200 and leaves
-  the purchase to the :47 run, which the schedule already keeps clear. Four windows a week, 45
-  minutes each. Residual, unchanged: a GitHub backup run that starts late is not in any window.
+  buyer in every case. Nothing is dropped: a held purchase answers 200 and the :47 run serves it.
+- **Held, on the clock AND on GitHub's own run state.** A purchase-started intake overlapping a
+  weekly.yml run mailed a new buyer the report of record AND an early look (or a second report
+  of record) minutes apart: different concurrency groups, and neither checkout of the send log
+  holds the other's keys until it pushes (reproduced with the real intake). So the Worker holds
+  a purchase for the :47 run (1) from `QUIET_LEAD_MINUTES` = 40 before each weekly.yml and
+  saturday.yml SCHEDULE time until the :47 after it (40 = a run ahead in daily-intake, intake 15
+  + commit-record 10, then this run's own intake 15, pinned to daily.yml's timeouts), (2)
+  whenever GitHub lists a weekly.yml or saturday.yml run not completed (late backups and runs
+  past :47, which a clock window missed), (3) when the run list can't be read. A clock alone was
+  wrong at both edges. (4) A daily.yml run already queued or pending serves the purchase, so
+  nothing is added, and `SETTLE_MINUTES` = 5 after the 14:17 daily "true" dispatch: GitHub keeps
+  one pending run per concurrency group and a newer one CANCELS it, so a purchase there would
+  have skipped that day's billing stop and watchdog. Residual, stated: a weekly backup that
+  starts after the check while a purchase run is still going (a duplicate report of record,
+  never a wrong one), and the old :47 hourly residual, both unchanged.
 - **Status:** `GET ?status=1` carries `instant_delivery` (both halves set, a boolean only);
   `run.launch_check.check_instant_delivery` is OWNER when false, PASS when true, SKIP when
   unreadable, and the dashboard runs it and shows it on the launch card. Setup is LAUNCH step 4,

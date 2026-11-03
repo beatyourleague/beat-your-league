@@ -11,11 +11,15 @@ What is pinned here, each by running the real Worker under node:
 - **It decides nothing and keeps nothing.** One dispatch, the same one the
   hourly run gets (daily.yml, {daily: "false"}); nothing from the event is
   stored, logged or forwarded.
-- **The quiet window.** A buyer who paid while the Wednesday report run was
-  going could be mailed that week's report of record by it AND an early look
-  by a purchase-started intake minutes later. That is reproduced below with
-  the real intake, and the Worker is pinned to leave a purchase in that
-  window to the :47 hourly run, which the schedule already keeps clear.
+- **Held, never dropped.** A buyer who paid while the Wednesday report run
+  was going could be mailed that week's report of record by it AND an early
+  look by a purchase-started intake minutes later. That is reproduced below
+  with the real intake, and the Worker is pinned to leave a purchase to the
+  :47 hourly run near a report run on the clock, while GitHub lists one as
+  going, or when GitHub can't say. A daily.yml run already waiting serves the
+  purchase, so a purchase never replaces the pending 14:17 once-a-day run.
+- **Thin events too.** Stripe's Dashboard preselects them; the same two
+  checkout events under their "v1." names dispatch the same run.
 
 The Worker tests need node and skip without it; CI installs it.
 """
@@ -79,10 +83,24 @@ function fakeKV() {
   };
 }
 const calls = [];
+const reads = [];
 let ghStatus = 204;
 let ghThrows = false;
+// GitHub's run lists, by workflow file: an array of run statuses, newest first.
+let ghRuns = {};
+let ghReadStatus = 200;
+let readThrows = false;
 globalThis.fetch = async (url, init) => {
-  calls.push({ url: String(url), method: init.method, headers: init.headers,
+  url = String(url);
+  if ((init.method || "GET") === "GET") {
+    reads.push({ url, headers: init.headers });
+    if (readThrows) throw new Error("network down");
+    if (ghReadStatus !== 200) return new Response("{}", { status: ghReadStatus });
+    const workflow = (url.match(/workflows[/]([^/]+)[/]runs/) || [])[1];
+    if (ghRuns === "junk") return new Response("not json", { status: 200 });
+    return Response.json({ workflow_runs: (ghRuns[workflow] || []).map((status) => ({ status })) });
+  }
+  calls.push({ url, method: init.method, headers: init.headers,
                body: JSON.parse(init.body) });
   if (ghThrows) throw new Error("network down");
   return new Response(null, { status: ghStatus });
@@ -92,10 +110,12 @@ Date.now = () => NOW;
 const hook = async (env, { body, headers = {}, method = "POST", at }) => {
   NOW = at;
   calls.length = 0;
+  reads.length = 0;
   const init = { method, headers };
   if (method !== "GET") init.body = body;
   const res = await worker.fetch(new Request("https://forms.test/stripe", init), env);
-  return { status: res.status, text: await res.text(), calls: calls.slice() };
+  return { status: res.status, text: await res.text(), calls: calls.slice(),
+           reads: reads.slice() };
 };
 """
 
@@ -141,6 +161,9 @@ for (const [name, c] of Object.entries(CASES)) {
   for (const drop of c.drop || []) delete env[drop];
   ghStatus = c.ghStatus || 204;
   ghThrows = Boolean(c.ghThrows);
+  ghRuns = c.ghRuns || {};
+  ghReadStatus = c.ghReadStatus || 200;
+  readThrows = Boolean(c.readThrows);
   out[name] = await hook(env, c);
 }
 return { out, kv: { size: kv.store.size, puts: kv.puts, lists: kv.lists, gets: kv.gets,
@@ -285,13 +308,19 @@ def test_nothing_from_the_event_is_stored_logged_or_forwarded(tmp_path) -> None:
         "gh_down": {**_case(body, _header(body, t)), "ghStatus": 500},
         "gh_unreachable": {**_case(body, _header(body, t)), "ghThrows": True},
         "no_token": {**_case(body, _header(body, t)), "drop": ["GH_DISPATCH_TOKEN"]},
+        "held": {**_case(body, _header(body, t)), "ghRuns": {"weekly.yml": ["in_progress"]}},
+        "read_down": {**_case(body, _header(body, t)), "ghReadStatus": 500},
+        "ignored": _case(body.replace(b"checkout.session.completed", b"charge.refunded"),
+                         _header(body.replace(b"checkout.session.completed",
+                                              b"charge.refunded"), t)),
     }
     got = _run(tmp_path, cases)
     assert got["kv"] == {"size": 0, "puts": 0, "lists": 0, "gets": 0, "deletes": 0}
     private = (EMAIL, "buyer.private", SESSION, "PRIVATEREF", "Pat Private", "evt_1Private",
                SECRET, _sign(body, t))
     shown = json.dumps(got["logs"]) + json.dumps(
-        {n: {"text": r["text"], "calls": r["calls"]} for n, r in got["out"].items()})
+        {n: {"text": r["text"], "calls": r["calls"], "reads": r["reads"]}
+         for n, r in got["out"].items()})
     for value in private:
         assert value not in shown, value
     # And the log says what happened in fixed words a reader can act on.
@@ -331,42 +360,57 @@ def _crons(name: str) -> list[str]:
     return [entry["cron"] for entry in triggers.get("schedule") or []]
 
 
-def _quiet_minutes(start: datetime, days: int, lead: int, resume: int) -> set[datetime]:
+def _quiet_minutes(start: datetime, days: int, lead: int, resume: int,
+                   settle: int) -> set[datetime]:
     """Every minute from ``lead`` minutes before a weekly.yml or saturday.yml
-    cron until the hourly run's minute after it, read from the workflows."""
+    cron until the hourly run's minute after it, and ``settle`` minutes from
+    the 14:17 daily "true" cron, read from the workflows."""
     from test_scheduling import _matches
     crons = _crons("weekly.yml") + _crons("saturday.yml")
+    [once_a_day] = [c for c in _crons("daily.yml") if c.split()[1] != "*"]
     quiet = set()
-    for m in range(-60, days * 24 * 60 + 60):
+    for m in range(-90, days * 24 * 60 + 90):
         fire = start + timedelta(minutes=m)
-        if not any(_matches(cron, fire) for cron in crons):
-            continue
-        wait = resume - fire.minute
-        wait += 60 if wait <= 0 else 0
-        for k in range(-lead, wait):
-            quiet.add(fire + timedelta(minutes=k))
+        if any(_matches(cron, fire) for cron in crons):
+            wait = resume - fire.minute
+            wait += 60 if wait <= 0 else 0
+            for k in range(-lead, wait):
+                quiet.add(fire + timedelta(minutes=k))
+        if _matches(once_a_day, fire):
+            for k in range(settle):
+                quiet.add(fire + timedelta(minutes=k))
     return quiet
 
 
-def test_the_quiet_window_is_derived_from_the_workflows() -> None:
-    """The lead is daily.yml's intake timeout (the longest a run started just
-    before a report run can still be sending), and the window ends at the
-    hourly cron's minute, from which a dispatch is no worse than that run."""
+def _lead_and_settle() -> tuple[int, int]:
     src = WORKER.read_text(encoding="utf-8")
-    lead = int(re.search(r"const QUIET_LEAD_MINUTES = (\d+);", src).group(1))
-    assert lead == _yaml("daily.yml")["jobs"]["intake"]["timeout-minutes"]
+    return (int(re.search(r"const QUIET_LEAD_MINUTES = (\d+);", src).group(1)),
+            int(re.search(r"const SETTLE_MINUTES = (\d+);", src).group(1)))
+
+
+def test_the_quiet_window_is_derived_from_the_workflows() -> None:
+    """The lead covers a purchase run that waits behind another daily.yml run
+    (its intake and commit-record timeouts) and then runs its own intake: a
+    run dispatched before it has pushed its send log by the report run's
+    start. The window ends at the hourly cron's minute; the run-state check
+    covers a report run that goes on past it."""
+    src = WORKER.read_text(encoding="utf-8")
+    lead, settle = _lead_and_settle()
+    jobs = _yaml("daily.yml")["jobs"]
+    assert lead == 2 * jobs["intake"]["timeout-minutes"] + jobs["commit-record"]["timeout-minutes"]
+    assert 1 <= settle < 30
     assert re.search(r'const QUIET_FOR = \["weekly\.yml", "saturday\.yml"\];', src)
     hourly = [c for c in _crons("daily.yml") if c.split()[1:] == ["*"] * 4]
     assert hourly == ["47 * * * *"]
 
 
 @needs_node
-def test_a_purchase_during_a_report_run_is_left_for_the_hourly_run(tmp_path) -> None:
-    """Every minute of one UTC week through the real route: a signed purchase
-    dispatches unless the minute is inside a quiet window computed here from
-    the YAML crons. Spot checks read as a schedule."""
-    src = WORKER.read_text(encoding="utf-8")
-    lead = int(re.search(r"const QUIET_LEAD_MINUTES = (\d+);", src).group(1))
+def test_a_purchase_near_a_report_run_is_left_for_the_hourly_run(tmp_path) -> None:
+    """Every minute of one UTC week through the real route, with GitHub
+    listing nothing running: a signed purchase dispatches unless the minute
+    is inside a quiet window computed here from the YAML crons. Spot checks
+    read as a schedule."""
+    lead, settle = _lead_and_settle()
     resume = int(_crons("daily.yml")[1].split()[0])
     start = datetime(2026, 10, 12, tzinfo=timezone.utc)          # a Monday
     body = _event()
@@ -382,7 +426,7 @@ def test_a_purchase_during_a_report_run_is_left_for_the_hourly_run(tmp_path) -> 
     """, [_case(body, _header(body, int((start + timedelta(minutes=m)).timestamp())),
                 at=start + timedelta(minutes=m))
           for m in range(7 * 24 * 60)])["result"]
-    expected = _quiet_minutes(start, 7, lead, resume)
+    expected = _quiet_minutes(start, 7, lead, resume, settle)
     quiet = set()
     for m in range(7 * 24 * 60):
         at = start + timedelta(minutes=m)
@@ -396,18 +440,110 @@ def test_a_purchase_during_a_report_run_is_left_for_the_hourly_run(tmp_path) -> 
 
     def q(iso: str) -> bool:
         return datetime.fromisoformat(iso + "+00:00") in quiet
-    # Wednesday's evening run (22:17) and its retry (00:17 Thursday).
-    assert not q("2026-10-14T22:01") and q("2026-10-14T22:02") and q("2026-10-14T22:17")
-    assert q("2026-10-14T22:46") and not q("2026-10-14T22:47")
-    assert q("2026-10-15T00:02") and q("2026-10-15T00:46") and not q("2026-10-15T00:47")
+    # Wednesday's evening run (22:17) and its retry (00:17 Thursday). 22:01
+    # (16 minutes before) is held now: a run dispatched then could wait
+    # behind another daily.yml run and still be sending after 22:17.
+    assert not q("2026-10-14T21:36") and q("2026-10-14T21:37") and q("2026-10-14T22:01")
+    assert q("2026-10-14T22:17") and q("2026-10-14T22:46") and not q("2026-10-14T22:47")
+    assert q("2026-10-14T23:37") and q("2026-10-15T00:46") and not q("2026-10-15T00:47")
     assert not q("2026-10-14T23:30")
     # The morning slot (13:17 every Wednesday) and the Saturday check.
-    assert q("2026-10-14T13:02") and not q("2026-10-14T13:47")
-    assert q("2026-10-17T16:02") and q("2026-10-17T16:46") and not q("2026-10-17T16:47")
+    assert q("2026-10-14T12:37") and not q("2026-10-14T13:47")
+    assert q("2026-10-17T15:37") and q("2026-10-17T16:46") and not q("2026-10-17T16:47")
+    # The 14:17 once-a-day run: a purchase just after it can't replace it.
+    assert not q("2026-10-13T14:16") and q("2026-10-13T14:17") and q("2026-10-13T14:18")
+    assert not q(f"2026-10-13T14:{17 + settle:02d}")
     # Monday's grading mails nobody, so a Monday purchase goes at once.
     assert not q("2026-10-12T13:20")
-    # Four runs a week, each window 45 minutes: the rest of the week is instant.
-    assert len(quiet) == 4 * 45
+    # Four report runs a week, each held 70 minutes, and the daily settle.
+    assert len(quiet) == 4 * (lead + 30) + 7 * settle
+
+
+@needs_node
+def test_a_report_run_that_is_still_going_holds_the_purchase(tmp_path) -> None:
+    """The clock alone missed the runs that matter most: GitHub's backup of
+    the 22:17 slot routinely runs 22:35-23:05, a backup can start hours late,
+    and the primary can run past :47. Any weekly.yml or saturday.yml run
+    GitHub lists as not completed holds the purchase for the hourly run, at
+    any hour. A daily.yml run already waiting serves the purchase itself, so
+    nothing is added (and a pending 14:17 daily "true" run is never replaced:
+    GitHub keeps one pending run per group). A run list that can't be read
+    holds too: when in doubt, the hourly run."""
+    t_of = lambda at: int(at.timestamp())  # noqa: E731
+    body = _event()
+    wed = datetime(2026, 11, 4, 22, 50, tzinfo=timezone.utc)     # past the window
+    late = datetime(2026, 11, 5, 3, 0, tzinfo=timezone.utc)      # a backup hours late
+    sat = datetime(2026, 11, 7, 16, 55, tzinfo=timezone.utc)
+    after_daily = datetime(2026, 11, 5, 14, 30, tzinfo=timezone.utc)
+
+    def at(when: datetime, **extra) -> dict:
+        return {**_case(body, _header(body, t_of(when)), at=when), **extra}
+    got = _run(tmp_path, {
+        "weekly_going": at(wed, ghRuns={"weekly.yml": ["in_progress", "completed"]}),
+        "weekly_queued": at(late, ghRuns={"weekly.yml": ["queued", "completed"]}),
+        "weekly_pending": at(late, ghRuns={"weekly.yml": ["pending"]}),
+        "weekly_older_going": at(wed, ghRuns={"weekly.yml": ["completed", "in_progress"]}),
+        "saturday_going": at(sat, ghRuns={"saturday.yml": ["in_progress"]}),
+        "all_done": at(wed, ghRuns={"weekly.yml": ["completed"] * 10,
+                                    "saturday.yml": ["completed"],
+                                    "daily.yml": ["completed"] * 10}),
+        "daily_running": at(late, ghRuns={"daily.yml": ["in_progress", "completed"]}),
+        "daily_waiting": at(after_daily, ghRuns={"daily.yml": ["pending", "in_progress"]}),
+        "daily_queued": at(after_daily, ghRuns={"daily.yml": ["queued"]}),
+        "read_refused": at(late, ghReadStatus=403),
+        "read_down": at(late, readThrows=True),
+        "read_junk": at(late, ghRuns="junk"),
+        "settle": at(datetime(2026, 11, 5, 14, 18, tzinfo=timezone.utc)),
+    })
+    out, logs = got["out"], got["logs"]
+    for name in ("weekly_going", "weekly_queued", "weekly_pending", "weekly_older_going",
+                 "saturday_going", "read_refused", "read_down", "read_junk", "settle"):
+        assert out[name]["status"] == 200 and out[name]["calls"] == [], (name, out[name])
+        assert out[name]["text"] == "left for the hourly run", (name, out[name])
+    for name in ("daily_waiting", "daily_queued"):
+        assert out[name]["status"] == 200 and out[name]["calls"] == [], (name, out[name])
+        assert out[name]["text"] == "a run is already waiting", (name, out[name])
+    for name in ("all_done", "daily_running"):
+        assert out[name]["text"] == "dispatched" and len(out[name]["calls"]) == 1, name
+    # The reads ask GitHub about exactly the three workflows, with the token.
+    urls = sorted(r["url"] for r in out["all_done"]["reads"])
+    base = "https://api.github.com/repos/beatyourleague/beat-your-league/actions/workflows/"
+    assert urls == [f"{base}{w}/runs?per_page=10" for w in ("daily.yml", "saturday.yml",
+                                                             "weekly.yml")]
+    assert all(r["headers"]["Authorization"] == "Bearer tok"
+               for r in out["all_done"]["reads"])
+    # The settle minute is held on the clock, before GitHub is asked at all.
+    assert out["settle"]["reads"] == []
+    assert any("a report run is going" in line for line in logs)
+    assert any("could not be read" in line and "HTTP 403" in line for line in logs)
+
+
+@needs_node
+def test_thin_events_start_the_run_and_a_wrong_event_says_so_in_the_log(tmp_path) -> None:
+    """Stripe's Dashboard offers Thin events first, named "v1." + the
+    snapshot name. Signed the same way, they dispatch the same run: the
+    Worker reads nothing else from the event. Any other verified event
+    answers 200 "ignored" and logs one fixed line, without its type, so a
+    webhook set up with the wrong events shows in the Worker's logs."""
+    t = int(CLEAR.timestamp())
+    thin = {kind: json.dumps({"id": "evt_1PrivateEvent", "object": "v2.core.event",
+                              "type": kind, "related_object": {"id": SESSION}},
+                             indent=2).encode("utf-8")
+            for kind in ("v1.checkout.session.completed",
+                         "v1.checkout.session.async_payment_succeeded")}
+    other = _event("customer.private_kind_updated")
+    got = _run(tmp_path, {
+        **{kind: _case(body, _header(body, t)) for kind, body in thin.items()},
+        "other": _case(other, _header(other, t)),
+    })
+    for kind in thin:
+        res = got["out"][kind]
+        assert res["text"] == "dispatched" and len(res["calls"]) == 1, (kind, res)
+        assert res["calls"][0]["body"] == {"ref": "main", "inputs": {"daily": "false"}}
+    assert got["out"]["other"]["text"] == "ignored" and got["out"]["other"]["calls"] == []
+    ignored = [line for line in got["logs"] if "ignored an event" in line]
+    assert len(ignored) == 1
+    assert "private_kind" not in json.dumps(got["logs"])
 
 
 # --------------------------------------------------------------------- #
@@ -537,6 +673,10 @@ def test_the_launch_check_reports_instant_delivery_from_the_worker(monkeypatch) 
         monkeypatch.setattr(lc, "worker_status", lambda e, k, a=answer: a)
         [gate] = lc.check_instant_delivery()
         assert gate.status == want, answer
+        if want == "PASS":
+            # A 200 on Stripe's page is not proof: an endpoint sending the
+            # wrong events is answered 200 "ignored".
+            assert "can't see Stripe's side" in gate.detail and "dispatched" in gate.detail
         if want == "OWNER":
             assert gate.detail.startswith("Instant delivery isn't set up")
             assert "LAUNCH.md step 4" in gate.detail

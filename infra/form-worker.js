@@ -165,18 +165,34 @@
  * - Nothing from the event is stored, logged or forwarded. It carries the
  *   buyer's address; the dispatch carries only the workflow and its input.
  * - Only checkout.session.completed and .async_payment_succeeded start a
- *   run. Any other verified event answers 200 and does nothing.
- * - A QUIET WINDOW around the Wednesday report runs and the Saturday check
- *   (QUIET_FOR): from QUIET_LEAD_MINUTES before each of their SCHEDULE times
- *   until the hourly run's minute (:47). A purchase there is left to the :47
- *   run, which the schedule already keeps clear of them. Without it, a buyer
- *   who paid while weekly.yml was running got that week's report of record
- *   from it AND an early look from this run minutes apart: the two runs sit
- *   in different concurrency groups, and this one's checkout of the send log
- *   holds neither the report's key nor the run's marker until weekly.yml
- *   pushes (tests/test_instant_delivery.py reproduces it).
- * - The dispatch is awaited, not left to waitUntil: it is one GitHub call,
- *   and a failure answers 502, so Stripe retries it (live mode retries for up
+ *   run, as snapshot events or as Stripe's thin events (the same names with
+ *   "v1." in front; Stripe's Dashboard offers Thin first). Any other verified
+ *   event answers 200, does nothing and logs one fixed line, so a webhook set
+ *   up with the wrong events shows in the Worker's logs.
+ * - HELD, never dropped (STRIPE_HOLD). A purchase dispatches nothing, answers
+ *   200 and is left to the :47 hourly run when any of these is true:
+ *   1. The clock is in a QUIET WINDOW: from QUIET_LEAD_MINUTES before a
+ *      weekly.yml or saturday.yml SCHEDULE time until the :47 after it, and
+ *      for SETTLE_MINUTES after the 14:17 daily "true" dispatch.
+ *   2. GitHub lists a weekly.yml or saturday.yml run that has not completed
+ *      (a late GitHub backup, or a run still going past :47).
+ *   3. GitHub can't be read: when in doubt, the hourly run.
+ *   And when daily.yml already has a run waiting to start, that run serves
+ *   the purchase (it reads Stripe when it starts), so nothing is added.
+ *   Why: a purchase-started intake overlapping weekly.yml mailed a new buyer
+ *   the report of record from it AND an early look (or a second report of
+ *   record) from this run minutes apart. The two sit in different
+ *   concurrency groups, and neither checkout of the send log holds the
+ *   other's keys until it pushes (tests/test_instant_delivery.py reproduces
+ *   it). The lead covers a dispatched run waiting behind another daily.yml
+ *   run and then running its own intake (daily.yml's timeouts). The
+ *   waiting-run rule and the settle window keep a purchase from replacing a
+ *   pending 14:17 daily "true" run: GitHub keeps one pending run per
+ *   concurrency group, and a newer one cancels it, which would skip that
+ *   day's billing stop and watchdog.
+ * - The dispatch is awaited, not left to waitUntil: three quick reads and
+ *   one GitHub call, all inside one 8-second limit, and a failed dispatch
+ *   answers 502, so Stripe retries it (live mode retries for up
  *   to three days) and its webhook page shows the failure. A 200 sent before
  *   the dispatch would lose a failed one in silence. A retry that dispatches
  *   twice is safe: daily.yml queues in one concurrency group (one running,
@@ -184,9 +200,11 @@
  * - Unset STRIPE_WEBHOOK_SECRET: the route answers 404. Unset
  *   GH_DISPATCH_TOKEN: a purchase answers 503. Either way nothing is
  *   dispatched and the hourly run still serves the buyer.
- * Setup (LAUNCH.md step 4, "Before you buy"): Stripe (live) → Developers →
- * Webhooks → Add endpoint https://forms.beatyourleague.com/stripe, those two
- * events; its signing secret (whsec_…) → Worker secret STRIPE_WEBHOOK_SECRET.
+ * Setup (LAUNCH.md step 4, "Before you buy"): Stripe (live) → Workbench →
+ * Webhooks → Create an event destination → Your account → Snapshot → those
+ * two events → Webhook endpoint https://forms.beatyourleague.com/stripe; its
+ * signing secret (whsec_…) → Worker secret STRIPE_WEBHOOK_SECRET. The token
+ * reads Actions too (rule 2): "Actions: Read and write" already covers it.
  */
 
 // The same set the join page and run/rosters.py accept (anything@anything.tld,
@@ -516,10 +534,15 @@ async function dispatch(entry, env, signal) {
 
 // ── instant delivery: POST /stripe ─────────────────────────────────────
 
-// The two events that mean money arrived for a Checkout Session. The intake
+// The two events that mean money arrived for a Checkout Session, as snapshot
+// events and as thin ones ("v1." + the same name; Stripe's Dashboard offers
+// Thin first, and an endpoint set up that way would otherwise answer
+// "ignored" to every purchase while its page showed a 200). The Worker reads
+// nothing else from the event, so either shape is the same signal. The intake
 // still checks payment_status itself; a dispatch for an unpaid one costs a
 // run that finds nothing to do.
-const STRIPE_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded"];
+const STRIPE_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded",
+  "v1.checkout.session.completed", "v1.checkout.session.async_payment_succeeded"];
 // A Checkout Session event is a few KB. Anything far bigger is not Stripe.
 const MAX_STRIPE_BODY = 64 * 1024;
 // Stripe's own libraries allow five minutes between signing and checking.
@@ -529,13 +552,23 @@ const STRIPE_TOLERANCE_SECONDS = 300;
 const PURCHASE_RUN = { cron: "purchase", workflow: "daily.yml", inputs: { daily: "false" } };
 // The runs a purchase-started intake must not overlap (see the header).
 const QUIET_FOR = ["weekly.yml", "saturday.yml"];
-// How long before one of them the window opens: daily.yml's intake job
-// timeout (timeout-minutes: 15), the longest a run started just before can
-// still be sending when the report run checks out the send log.
-const QUIET_LEAD_MINUTES = 15;
+// How long before one of them the window opens, from daily.yml's timeouts: a
+// run ahead of this one in daily-intake (intake 15 + commit-record 10), then
+// this run's own intake (15). A run dispatched before that has pushed its
+// send log by the time the report run checks it out.
+const QUIET_LEAD_MINUTES = 40;
+// After the 14:17 daily "true" dispatch: long enough for GitHub to list it,
+// so the waiting-run rule sees it and no purchase replaces it.
+const SETTLE_MINUTES = 5;
+// What a held purchase answers. Stripe's webhook page shows it.
+const STRIPE_HOLD = "left for the hourly run";
+const STRIPE_WAITING = "a run is already waiting";
+// A run GitHub has not started yet: queued, pending (held by a concurrency
+// group), waiting or requested. Anything not completed counts as going.
+const NOT_STARTED = ["queued", "pending", "waiting", "requested"];
 
 // The minute the hourly intake runs (:47 in SCHEDULE). A quiet window ends
-// there, because from then on this dispatch is no worse than that one.
+// there; the run-state check covers a report run that is still going.
 function hourlyMinute() {
   const hourly = SCHEDULE.find((entry) => entry.workflow === PURCHASE_RUN.workflow
     && entry.inputs && entry.inputs.daily === PURCHASE_RUN.inputs.daily);
@@ -543,20 +576,72 @@ function hourlyMinute() {
 }
 
 // Whether `ms` falls in a quiet window: from QUIET_LEAD_MINUTES before a
-// QUIET_FOR run's SCHEDULE time until the next hourly minute after it.
+// QUIET_FOR run's SCHEDULE time until the next hourly minute after it, or
+// within SETTLE_MINUTES after the daily "true" dispatch.
 function quietAt(ms) {
   const minute = 60 * 1000;
   const resume = hourlyMinute();
   const base = Math.floor(ms / minute) * minute;
   for (let offset = -60; offset <= QUIET_LEAD_MINUTES; offset += 1) {
     const fire = new Date(base + offset * minute);
-    if (!due(fire).some((entry) => QUIET_FOR.includes(entry.workflow))) continue;
-    let wait = resume - fire.getUTCMinutes();
-    if (wait <= 0) wait += 60;
-    if (ms >= fire.getTime() - QUIET_LEAD_MINUTES * minute
-        && ms < fire.getTime() + wait * minute) return true;
+    for (const entry of due(fire)) {
+      let end;
+      if (QUIET_FOR.includes(entry.workflow)) {
+        let wait = resume - fire.getUTCMinutes();
+        if (wait <= 0) wait += 60;
+        end = fire.getTime() + wait * minute;
+        if (ms >= fire.getTime() - QUIET_LEAD_MINUTES * minute && ms < end) return true;
+      } else if (entry.workflow === PURCHASE_RUN.workflow && entry.inputs
+                 && entry.inputs.daily === "true") {
+        end = fire.getTime() + SETTLE_MINUTES * minute;
+        if (ms >= fire.getTime() && ms < end) return true;
+      }
+    }
   }
   return false;
+}
+
+// The status of a workflow's most recent runs, newest first. Throws on any
+// answer but a readable 200: the caller holds the purchase then.
+async function recentRuns(workflow, env, signal) {
+  const repo = env.GH_REPO || REPO;
+  const response = await fetch(
+    `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?per_page=10`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${env.GH_DISPATCH_TOKEN}`,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "beat-your-league-scheduler",
+      },
+      ...(signal ? { signal } : {}),
+    });
+  if (!response.ok) throw new Error(`${workflow} runs: HTTP ${response.status}`);
+  const body = await response.json();
+  if (!body || !Array.isArray(body.workflow_runs)) throw new Error(`${workflow} runs: unreadable`);
+  return body.workflow_runs.map((run) => String((run && run.status) || ""));
+}
+
+// Why a purchase must not start a run now, or null to dispatch. Fixed words
+// only: they go to the log and to Stripe's webhook page.
+async function purchaseHold(env, nowMs, signal) {
+  if (quietAt(nowMs)) return [STRIPE_HOLD, "a report run is due or running"];
+  let runs;
+  try {
+    runs = await Promise.all([...QUIET_FOR, PURCHASE_RUN.workflow]
+      .map((workflow) => recentRuns(workflow, env, signal)));
+  } catch (error) {
+    return [STRIPE_HOLD, `GitHub's run list could not be read (${
+      error && error.message ? error.message : "error"})`];
+  }
+  const daily = runs.pop();
+  if (runs.some((statuses) => statuses.some((status) => status !== "completed"))) {
+    return [STRIPE_HOLD, "a report run is going"];
+  }
+  if (daily.some((status) => NOT_STARTED.includes(status))) {
+    return [STRIPE_WAITING, "daily.yml already has a run waiting, which serves the purchase"];
+  }
+  return null;
 }
 
 // The body, as bytes, or null once it passes `cap` (read no further).
@@ -641,18 +726,30 @@ async function stripeWebhook(request, env) {
     const event = JSON.parse(new TextDecoder().decode(raw));
     if (event && typeof event === "object" && typeof event.type === "string") type = event.type;
   } catch { return answer(400, "bad json"); }
-  if (!STRIPE_EVENTS.includes(type)) return answer(200, "ignored");
+  if (!STRIPE_EVENTS.includes(type)) {
+    // Fixed words, never the type: a webhook sending the wrong events (or
+    // the right ones in a shape this does not know) shows up here.
+    console.log("stripe: ignored an event of a type this route doesn't start runs for "
+      + "(LAUNCH.md step 4: the two checkout events)");
+    return answer(200, "ignored");
+  }
   if (!env.GH_DISPATCH_TOKEN) {
     console.log("stripe: GH_DISPATCH_TOKEN is not set; nothing dispatched "
       + "(the hourly run serves the purchase)");
     return answer(503, "dispatch not configured");
   }
-  if (quietAt(Date.now())) {
-    console.log("stripe: a report run is due or running; the :47 hourly run serves the purchase");
-    return answer(200, "left for the hourly run");
+  // One limit for the reads and the dispatch together.
+  const signal = AbortSignal.timeout(8000);
+  const hold = await purchaseHold(env, Date.now(), signal);
+  if (hold) {
+    const [text, why] = hold;
+    console.log(text === STRIPE_HOLD
+      ? `stripe: ${why}; the :47 hourly run serves the purchase`
+      : `stripe: ${why}`);
+    return answer(200, text);
   }
   try {
-    await dispatch(PURCHASE_RUN, env, AbortSignal.timeout(8000));
+    await dispatch(PURCHASE_RUN, env, signal);
   } catch (error) {
     // dispatch's own message: the workflow and GitHub's HTTP status, or a
     // timeout. Never the event.

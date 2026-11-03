@@ -1804,7 +1804,10 @@ def check_instant_delivery() -> list[Gate]:
         return [Gate("Owner", INSTANT_GATE, "SKIP", f"could not read the Worker's switches: {exc}")]
     if status.get("instant_delivery") is True:
         return [Gate("Owner", INSTANT_GATE, "PASS",
-                     "the Worker has its Stripe signing secret and its dispatch token")]
+                     "the Worker has its Stripe signing secret and its dispatch token. This "
+                     "can't see Stripe's side: a purchase's delivery must read \"dispatched\" "
+                     "on Stripe's webhook page and start a daily-intake run on its own "
+                     "(LAUNCH.md step 4)")]
     if "instant_delivery" not in status:
         return [Gate("Owner", INSTANT_GATE, "OWNER",
                      "Instant delivery isn't set up: the Worker runs older code. Re-paste "

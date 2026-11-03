@@ -40,8 +40,10 @@ on:
     # (POST /stripe), which dispatches this workflow with daily "false" the
     # moment someone pays, so the wait is a minute, not an hour. Same
     # pipeline, better trigger; this hourly cron stays as the backup, and a
-    # purchase near the Wednesday or Saturday runs is left to it (the Worker's
-    # quiet window). Bursts collapse in the concurrency group below.
+    # purchase near or during the Wednesday or Saturday runs is left to it
+    # (the Worker checks the clock and GitHub's run list). Bursts collapse in
+    # the concurrency group below; a purchase never adds a run while one is
+    # already waiting there, so it can't replace the 14:17 once-a-day run.
     #
     # Half an hour from the others (Oct 9 2026): at the same minute it fired
     # together with the Tuesday runs and the Saturday check, each in its own
