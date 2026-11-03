@@ -276,6 +276,8 @@ def _prior_week_games(cache_dir: Path, season: str, week: int
     import csv as _csv
     from zoneinfo import ZoneInfo
 
+    from engine.context import team_code
+
     try:
         path = fetch("schedules", "games.csv", cache_dir, live=True)
     except NflverseError:
@@ -293,8 +295,12 @@ def _prior_week_games(cache_dir: Path, season: str, week: int
                     continue
             except ValueError:
                 continue
-            away = (row.get("away_team") or "").strip()
-            home = (row.get("home_team") or "").strip()
+            # The schedule archive says OAK/SD/STL where the stat rows say
+            # LV/LAC/LA (engine.context.team_code), so before 2020 every week
+            # read as "no rows" for those teams and never counted as in: the
+            # rookie report for a 2014-2019 class showed none of its games.
+            away = team_code(row.get("away_team"))
+            home = team_code(row.get("home_team"))
             if not away or not home:
                 continue
             day = (row.get("gameday") or "").strip()

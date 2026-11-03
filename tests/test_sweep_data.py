@@ -151,6 +151,22 @@ def test_a_week_with_monday_night_out_is_not_complete(tmp_path) -> None:
     assert solo.last_complete_week(scored, "2026", weekly, now=LATER) == 8
 
 
+def test_a_relocated_franchises_old_schedule_code_still_counts_as_in(tmp_path) -> None:
+    """Reproduced on the real archive: the schedule says OAK/SD/STL where the
+    stat rows say LV/LAC/LA, so last_complete_week answered None for 2014 and
+    2016 and Week 6 for 2019, and the rookie report for those classes printed
+    none of their games (DATA-06's rule, re-checked). Schedule codes go
+    through engine.context.team_code, as the context model's do."""
+    games = [(1, "2016-09-11", "13:00", "SD", "KC", True),
+             (1, "2016-09-12", "22:20", "LA", "SF", True),
+             (2, "2016-09-18", "13:00", "OAK", "ATL", True)]
+    cache = _schedule(tmp_path, games)
+    weekly = {1: _rows("LAC", "KC", "LA", "SF"), 2: _rows("LV", "ATL")}
+    assert solo.last_complete_week(cache, "2026", weekly, now=LATER) == 2
+    weekly[2] = _rows("ATL")                       # the Raiders' rows missing
+    assert solo.last_complete_week(cache, "2026", weekly, now=LATER) == 1
+
+
 def test_the_rookie_report_counts_only_complete_weeks(tmp_path, monkeypatch) -> None:
     import ingest.nflverse as nflverse
     import render.rookies as rookies

@@ -1520,8 +1520,8 @@ function carryVia(href, via) {
 // attaches the buyer's roster and scoring to the payment. Checkout itself is
 // hosted by Stripe; card data never touches this site, and no payment URL is
 // ever published on this page. It was closed Sep 29 2026 while the join
-// page's links were empty and opened again when the Monthly link came back
-// (Oct 31 2026): the interim state, with CHECKOUT_CAN_COMPLETE still false.
+// page's links were empty and opened again when the Monthly link went on it
+// (Nov 3 2026): the interim state, with CHECKOUT_CAN_COMPLETE still false.
 const CHECKOUT_OPEN = true;
 // Whether a purchase can actually FINISH. CHECKOUT_OPEN sells; this says
 // whether selling works. It stays false until the crons hold STRIPE_API_KEY,
