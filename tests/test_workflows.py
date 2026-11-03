@@ -329,6 +329,38 @@ def test_only_the_daily_intake_mails() -> None:
     assert not intakes["saturday.yml"] and not intakes["monday.yml"]
 
 
+def test_every_intake_can_key_the_forgotten_list() -> None:
+    """Reproduction (launch review OPS-5): the Wednesday intake mapped no
+    LOG_SECRET. The sweep asks run.privacy.is_forgotten about every paid
+    session in its window, which keys a code under LOG_SECRET as soon as the
+    forgotten list holds one entry, so after the first privacy deletion that
+    step raised DigestError on any purchase from the last three days and the
+    weekly run went red as "a paid signup was blocked". LOG_SECRET keys codes;
+    it mails nothing, so a --no-mail step may hold it."""
+    steps = [s for name in ("weekly.yml", "daily.yml") for s in _steps(name)
+             if re.search(r"-m run\.intake\b", str(s.get("run", "")))]
+    assert len(steps) == 2
+    for step in steps:
+        assert (step.get("env") or {}).get("LOG_SECRET") == "${{ secrets.LOG_SECRET }}", \
+            f"{step.get('name')!r} cannot key the forgotten list"
+
+
+def test_the_reply_kit_is_drafted_once_a_day() -> None:
+    """Reproduction (launch review OPS-9): daily.yml's header said the 14:17
+    run drafts the reply kit, while its steps were a bare `always()`, so every
+    hourly run drafted and uploaded the same morning's kit (45 of the last 100
+    artifacts). It now carries the once-a-day gate the billing stop uses, and
+    the upload follows the draft. The renewal notice keeps `always()`: it is
+    keyed by its renewal date, and a legally owed notice waits on no gate."""
+    steps = {s.get("name"): s for s in _steps("daily.yml")}
+    billing = steps["Stop monthly billing at the end of the season"]["if"]
+    draft = steps["Draft the daily reply kit"]
+    assert draft["if"] == billing, "the reply kit is drafted on every hourly run"
+    assert draft.get("id") and f"steps.{draft['id']}.outcome == 'success'" in \
+        steps["Upload the day's reply kit"]["if"]
+    assert "Pre-renewal notices go out on EVERY run" in _text("daily.yml")
+
+
 def test_the_daily_cron_sends_the_promised_pre_renewal_notice() -> None:
     """Seven surfaces promise "we email you before it bills", and California
     requires it 15-45 days before any yearly renewal. A module that nothing

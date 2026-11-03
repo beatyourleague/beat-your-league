@@ -247,6 +247,10 @@ jobs:
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
           # A rotated UPDATE_SECRET's old value (OPS-R10; run/updates.py).
           UPDATE_SECRET_PREVIOUS: ${{ secrets.UPDATE_SECRET_PREVIOUS }}
+          # Keys the forgotten list's codes (run/privacy.py). Not a mail secret:
+          # without it, the first privacy deletion made this intake raise on
+          # every paid session in the sweep window (launch review OPS-5).
+          LOG_SECRET: ${{ secrets.LOG_SECRET }}
           # A game postponed or suspended that the schedule still shows at its
           # old kickoff (run/solo.py POSTPONED_GAMES, LAUNCH.md section 8): a repo
           # variable set for one week, AWAY@HOME. Unset excuses nothing.
