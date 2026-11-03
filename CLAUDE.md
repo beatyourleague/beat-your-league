@@ -1998,7 +1998,8 @@ Not a CI step on purpose: the repo is public, so a job summary would publish sub
 
 **`make signups` (`run/signups.py`, Nov 3 2026)** — the one view that prints ADDRESSES, because
 the owner asked to see who joined the waitlist. Terminal only: refuses in CI; `--csv` writes
-only to a gitignored path outside `site/` (mode 600, formula-safe cells). Every Worker kind that
+only to a gitignored path outside `site/` (judged on the disk, so a Mac's `SITE/` counts), never over a
+file it did not write (`.env` and the books are gitignored too), mode 600, formula-safe cells. Every Worker kind that
 carries an email is a group, each printed with the one use privacy §1 allows for it (the
 waitlist gets the one launch email, nothing else); one line per canonical mailbox. The stop
 list is honoured: a stopped address is marked and left out of the CSV, and a non-empty stop

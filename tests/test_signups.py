@@ -251,3 +251,50 @@ def test_it_never_writes_to_the_worker() -> None:
     source = Path(signups.__file__).read_text(encoding="utf-8")
     for word in ("urlopen", '"POST"', '"DELETE"', "delete_worker_rows"):
         assert word not in source
+
+
+def test_a_differently_cased_site_path_is_still_inside_site(tmp_path, capsys,
+                                                            monkeypatch) -> None:
+    """A Mac's disk ignores case, so SITE/signups.csv IS site/signups.csv.
+    The guard compared names, so SITE/x.pyc (gitignored by *.pyc) went
+    straight into the published folder. It compares the file system now."""
+    folder = tmp_path / "site"
+    folder.mkdir()
+    if not (tmp_path / "SITE").exists():
+        pytest.skip("this disk is case-sensitive, so SITE/ is another folder here")
+    monkeypatch.setattr(signups, "SITE_DIR", folder)
+    target = tmp_path / "SITE" / "signups.csv"
+    code, _, err = run(["--csv", str(target)], capsys)
+    assert code == 2 and not (folder / "signups.csv").exists() and "inside site/" in err
+
+
+def test_a_csv_name_hard_linked_to_a_page_never_writes_into_the_page(tmp_path) -> None:
+    """The path checks read the NAME. If that name is a hard link to a page,
+    writing through it would put every address into the page. The CSV is a
+    new file moved into place, so the page keeps its own contents (even one
+    that starts like an earlier copy, which the overwrite check lets by)."""
+    page = tmp_path / "page.html"
+    head = ",".join(signups.CSV_FIELDS) + "\n<p>public</p>"
+    page.write_text(head, encoding="utf-8")
+    target = tmp_path / "signups.csv"
+    target.hardlink_to(page)
+    groups, _ = signups.group(ROWS)
+    signups.write_csv(target, groups)
+    assert page.read_text(encoding="utf-8") == head
+    assert "late@example.com" in target.read_text(encoding="utf-8")
+    assert target.stat().st_mode & 0o077 == 0
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".signups-")] == []
+
+
+def test_the_csv_never_replaces_a_file_it_did_not_write(tmp_path, capsys) -> None:
+    """.env, the owner's books (data/costs.csv) and the registry are all
+    gitignored, so the gitignore check lets them by, and none of them is kept
+    anywhere else. Only an earlier copy of this CSV may be replaced."""
+    books = tmp_path / "costs.csv"
+    books.write_text("date,amount,what\n2026-10-01,12.00,domain\n", encoding="utf-8")
+    code, _, err = run(["--csv", str(books)], capsys)
+    assert code == 2 and "already holds something else" in err
+    assert books.read_text(encoding="utf-8").startswith("date,amount")
+    target = tmp_path / "signups.csv"
+    assert run(["--csv", str(target)], capsys)[0] == 0
+    assert run(["--csv", str(target)], capsys)[0] == 0

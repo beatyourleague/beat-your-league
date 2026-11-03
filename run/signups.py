@@ -38,7 +38,9 @@ waitlist and who asked for what. Everything about it follows from that:
   to hello@ as a step for the owner.
 - **It never runs in CI** (the repository is public, so a job log would
   publish every address), and ``--csv`` writes only to a gitignored path
-  outside ``site/``, with owner-only permissions.
+  outside ``site/`` (checked on the disk, so ``SITE/`` on a Mac is caught),
+  with owner-only permissions, and never over a file it did not write:
+  ``.env``, the books and the registry are gitignored too.
 """
 
 from __future__ import annotations
@@ -278,41 +280,84 @@ def _cell(value: str) -> str:
     return "'" + value if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
 
 
+def _inside(path: Path, folder: Path) -> bool:
+    """Whether ``path`` is ``folder`` or under it. Compared by the file
+    system, not by spelling: on a Mac's case-insensitive disk ``SITE/x.csv``
+    is ``site/x.csv``, and a name comparison alone let it through."""
+    resolved, target = path.resolve(), folder.resolve()
+    if resolved.is_relative_to(target):
+        return True
+    for parent in (resolved, *resolved.parents):
+        try:
+            if parent.exists() and os.path.samefile(parent, target):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def csv_refusal(path: Path, gitignored: Callable[[Path], bool]) -> str | None:
     """Why ``path`` may not hold the CSV, or None. Inside ``site/`` is
     published by the next deploy whatever .gitignore says; anything not
     gitignored could be committed to a public repository."""
-    resolved = path.resolve()
-    if resolved.is_relative_to(SITE_DIR.resolve()):
+    if _inside(path, SITE_DIR):
         return (f"{path} is inside site/, which is published to the web. Use a path such "
                 f"as data/signups.csv.")
     if not gitignored(path):
         return (f"{path} is not gitignored, so these addresses could be committed to a "
                 f"public repository. Use a path such as data/signups.csv.")
+    if path.exists() and not _an_earlier_copy(path):
+        return (f"{path} already holds something else, and writing the CSV would replace "
+                f"it. Gitignored files such as .env, the books in data/ and the registry "
+                f"are kept nowhere else. Use a new path such as data/signups.csv.")
     return None
 
 
+def _an_earlier_copy(path: Path) -> bool:
+    """Whether ``path`` is a CSV this tool wrote (its header row), so a re-run
+    may replace it."""
+    try:
+        with path.open(encoding="utf-8", newline="") as handle:
+            return handle.readline().rstrip("\r\n") == ",".join(CSV_FIELDS)
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
 def write_csv(path: Path, groups: dict[str, dict[str, Entry]]) -> tuple[int, int]:
-    """(rows written, stopped addresses left out). Owner-only permissions."""
-    written = left_out = 0
+    """(rows written, stopped addresses left out). Owner-only permissions.
+    Written to a new file and moved into place, so an existing name that is a
+    hard link to some other file (a page under site/, say) is replaced rather
+    than written through."""
+    import tempfile
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    os.chmod(path, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
-        out = csv.writer(handle)
-        out.writerow(CSV_FIELDS)
-        for kind, _heading, use in _ordered_kinds(groups):
-            for entry in sorted((groups.get(kind) or {}).values(),
-                                key=lambda e: (e.first or datetime.max.replace(tzinfo=timezone.utc),
-                                               e.address)):
-                if entry.stop:
-                    left_out += 1
-                    continue
-                out.writerow([_cell(v) for v in (
-                    kind, entry.address, _day(entry.first), _day(entry.last), str(entry.times),
-                    " ".join(entry.vias), "yes" if entry.saved_roster else "",
-                    entry.subscriber, use)])
-                written += 1
+    fd, temp = tempfile.mkstemp(prefix=".signups-", suffix=".tmp", dir=path.parent)
+    os.chmod(temp, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+            written, left_out = _write_rows(handle, groups)
+        os.replace(temp, path)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        raise
+    return written, left_out
+
+
+def _write_rows(handle, groups: dict[str, dict[str, Entry]]) -> tuple[int, int]:
+    written = left_out = 0
+    out = csv.writer(handle)
+    out.writerow(CSV_FIELDS)
+    for kind, _heading, use in _ordered_kinds(groups):
+        for entry in sorted((groups.get(kind) or {}).values(),
+                            key=lambda e: (e.first or datetime.max.replace(tzinfo=timezone.utc),
+                                           e.address)):
+            if entry.stop:
+                left_out += 1
+                continue
+            out.writerow([_cell(v) for v in (
+                kind, entry.address, _day(entry.first), _day(entry.last), str(entry.times),
+                " ".join(entry.vias), "yes" if entry.saved_roster else "",
+                entry.subscriber, use)])
+            written += 1
     return written, left_out
 
 
