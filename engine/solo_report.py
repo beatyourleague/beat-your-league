@@ -951,6 +951,10 @@ class Cover:
     mover: str | None = None
     flex_slot: str | None = None
     practice_squad: bool = False   # plays only if elevated (method §15 C9)
+    # The injury report's week, when it listed the incoming player
+    # questionable too (launch review PROD-2): ranked after the healthy, and
+    # named so on the plan that moves him in.
+    questionable_in: int | None = None
 
     @property
     def moving(self) -> tuple[str, ...]:
@@ -1009,10 +1013,14 @@ def covers(pick: SlotPick, spec: RosterSpec, picks: Sequence[SlotPick],
         practice_squad=lambda pid: pid in unconfirmed,
         incoming_ok=lambda pid: playing(pid) and model.project(pid, week) is not None,
         mover_ok=playing)
+    # The gate reads week W-1's injury report (method §15 C3), so that is the
+    # week a questionable cover was listed on.
     return [Cover(incoming, _printed(model, incoming, week),
                   slots[via][1] if via is not None else None,
                   slots[via][0] if via is not None else None,
-                  incoming in unconfirmed)
+                  incoming in unconfirmed,
+                  (week - 1 if availability.classify(incoming).status
+                   is Status.QUESTIONABLE else None))
             for incoming, via in ranked]
 
 
@@ -1067,13 +1075,27 @@ def stand_in(pick: SlotPick, options: Sequence[Cover],
     return StandIn(final, late, early, list(dict.fromkeys(too_early)), held)
 
 
+def doubt_note(cover: Cover, players: PlayerIndex) -> str:
+    """". A.J. Brown was questionable in Week 8 too, so check he's playing" —
+    when the player a plan moves in was on last week's report himself.
+
+    Launch review PROD-2: report C's if/then said "Move A.J. Brown into WR"
+    and "Move TreVeyon Henderson into FLEX" while both bench rows read
+    "Questionable in Week 8 … didn't play". Saturday's check already says it
+    of its own swaps ("He's questionable too"); Tuesday's plan did not."""
+    if cover.questionable_in is None:
+        return ""
+    return (f". {players.name(cover.incoming)} was questionable in Week "
+            f"{cover.questionable_in} too, so check he's playing")
+
+
 def cover_action(cover: Cover, slot: str, players: PlayerIndex) -> str:
     """"Move Sam LaPorta into FLEX (projects 9.5)" — or, for a slide, "Move
     Rome Odunze to WR and start Devin Neal at FLEX" (Saturday's own words)."""
     number = (f" (projects {cover.value:.1f})" if cover.value is not None
               else " (no games this season yet)")
     squad = (f". {elevation_note(players.name(cover.incoming))}"
-             if cover.practice_squad else "")
+             if cover.practice_squad else doubt_note(cover, players))
     if cover.mover is None:
         return f"Move {players.name(cover.incoming)} into {slot}{number}{squad}"
     return (f"Move {players.name(cover.mover)} to {slot} and start "
@@ -1180,7 +1202,9 @@ def starter_plans(name: str, pick: SlotPick, found: StandIn,
     move = (f"start {who}" if early.mover is None else
             f"move {players.name(early.mover)} to {slot} and start {who} at "
             f"{early.flex_slot}")
-    squad = f" {elevation_note(who)}." if early.practice_squad else ""
+    squad = (f" {elevation_note(who)}." if early.practice_squad
+             else f"{doubt_note(early, players)[1:]}." if early.questionable_in
+             else "")
     rows.append({"condition": f"{name} ({slot}) is still questionable on game day",
                  "action": (f"{players.name(first_id) if first_id else who} kicks "
                             f"off{clock}. Decide before then: {move}, or keep "
