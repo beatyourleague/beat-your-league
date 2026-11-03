@@ -782,6 +782,20 @@ def test_ledger_page_promises_misses_are_published() -> None:
     assert re.search(r"analysis, not betting picks", LEDGER, re.I)
 
 
+def test_the_record_never_says_its_rows_were_sent_to_subscribers() -> None:
+    """LEG-7: the public record read "Every row is a call we actually sent"
+    while every row on it was the sample roster's odds, published on
+    this-week.html and mailed to nobody (no buyer exists yet). The live sample
+    records into the subscriber store (CLAUDE.md, privacy section 5), so the
+    page says "published" and names both sources, which is true either way."""
+    from render.ledger_site import render_ledger
+    page = prose(render_ledger([], {}, generated_at="2026-11-03 00:00 UTC"))
+    assert "actually sent" not in page and "we send" not in page
+    assert "Every call we publish, in a subscriber's report or in our sample roster's " \
+        "weekly report, is stamped before kickoff" in page
+    assert "Every row is a call we published" in page
+
+
 def test_no_selling_page_links_the_grading_pages() -> None:
     """Owner direction, Sep 29 2026: a new buyer decides on a first impression,
     and the grading pages (grades, failing bands, what free feeds did better)
@@ -3978,6 +3992,53 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     assert "front page" not in notes and "watch-form" not in notes
 
 
+def test_a_held_pass_sends_its_checked_roster_on_to_the_open_plan() -> None:
+    """FUN-10, reproduced at 375px: join/index.html?plan=pass, eleven players
+    pasted and checked. Step 3 ended on a switched-off "League Pass opens
+    soon" and the one way on, "set that up instead" at the top, linked a bare
+    index.html, so the roster had to be pasted again. Carrying the page's own
+    ref would not help: it is a league_pass ref, and RESTORED_PLAN brings that
+    back as pass mode, the same dead end. Once checked, the link carries the
+    roster as a MONTHLY ref; unchecked or edited, it stays bare. Run under
+    node with the real roster.js."""
+    fn = _js_function(JOIN, "ownPlanHref")
+    ids = ["00-0036355", "00-0035704", "00-0033873", "DEF-DEN"]
+    got = _node(
+        ROSTER_JS + "\nconst OWN_PLAN_HREF = 'index.html', SOURCE = 'reddit';\n"
+        "let state;\n"
+        "const radio = (n) => ({ scoring: 'half_ppr', league: 'dynasty' })[n];\n"
+        "const template = () => ['QB', 'RB', 'WR'];\n"
+        "const leagueSize = () => 10;\n" + fn +
+        "\nconst out = [];\n"
+        "for (const [ready, stale] of [[true, false], [false, false], [true, true]]) {\n"
+        "  state = { ready, stale, matches: " + json.dumps(ids) +
+        ".map((id) => ({ player: { id } })) };\n"
+        "  const href = ownPlanHref();\n"
+        "  const ref = href.includes('?ref=') ? R.decodeRoster(decodeURIComponent("
+        "href.split('?ref=')[1])) : null;\n"
+        "  out.push([href.split('?')[0], ref && [ref.plan, ref.scoring, ref.playerIds,"
+        " ref.leagueSize, ref.leagueType, ref.via]]);\n"
+        "}\nconsole.log(JSON.stringify(out));")
+    assert got == [
+        ["index.html", ["monthly", "half_ppr", ids, 10, "dynasty", "reddit"]],
+        ["index.html", None],
+        ["index.html", None],
+    ]
+    # The ref comes back as the Monthly plan, not as the pass it left.
+    restore = re.search(r"const RESTORED_PLAN = [^;]*;", JOIN, re.S).group(0)
+    assert 'monthly: "monthly"' in restore
+    # The note's link is that one, and it is redrawn when the list changes.
+    notes = _js_function(JOIN, "closedNoteNodes")
+    assert 'link(ownPlanHref(), "set that up instead")' in notes
+    assert "OWN_PLAN_HREF, \"set that up instead\"" not in notes
+    code = _js_code(JOIN)
+    typed = code.split('$("roster-text").addEventListener("input"')[1].split("});")[0]
+    assert "redrawPassNote();" in typed
+    assert "redrawPassNote();" in _js_function(JOIN, "draw")
+    redraw = _js_function(JOIN, "redrawPassNote")
+    assert "!PASS_LINK" in redraw and "WANTS_PASS && OWN_PLAN_HREF" in redraw
+
+
 def test_adding_a_player_keeps_every_choice_already_made() -> None:
     """Launch audit F7, reproduced at 390: paste a roster with "J. Taylor" and
     a junk line, tap "Jonathan Taylor" and "remove" ("…Looks right", step 3
@@ -4514,7 +4575,7 @@ def test_join_pages_load_no_third_party_fonts_and_declare_their_colours(page, na
                           r' type="font/woff2" crossorigin>', page)
     assert 1 <= len(preloads) <= 2, name
     assert '<meta name="theme-color" content="#101E33">' in page, name
-    assert '<meta name="color-scheme" content="light">' in page, name
+    assert '<meta name="color-scheme" content="only light">' in page, name
     assert not re.search(r"font-family:'Barlow(?: Condensed)?';", page), \
         f"{name}: a face with no fallback stack renders in Times until the font lands"
 
@@ -4819,8 +4880,13 @@ def test_the_faq_is_short_and_its_heading_stays_in_view() -> None:
 
 
 def _live_week_gate(page: str) -> bool:
-    # And the page is in the card layout the phone shows (review BUYER-1).
-    return re.search(r"w\.odds >= 3 && w\.closest_call &&\s*w\.cards === true", page) \
+    # And the page is in the card layout the phone shows (review BUYER-1), and
+    # its card 01 printed a projected total (DES-1: a week whose QB was on bye
+    # with nobody cleared behind him opened on "no projected total", on the
+    # page linked as "this week's report"). week.json writes `total` only
+    # when it is false, so an older build still passes.
+    return re.search(r"w\.odds >= 3 && w\.closest_call &&\s*w\.cards === true"
+                     r" && w\.total !== false", page) \
         is not None and 'querySelectorAll("[data-live-week]")' in page
 
 
@@ -5133,13 +5199,17 @@ def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
 
 @pytest.mark.parametrize("name,scheme,colour", [
     ("index.html", "dark", "#05090F"), ("league-pass.html", "dark", "#05090F"),
-    *[(p, "light", "#101E33") for p in _PAPER]])
+    *[(p, "only light", "#101E33") for p in (*_PAPER, "byes/index.html")]])
 def test_every_page_declares_its_colour_scheme_and_bar_colour(name: str, scheme: str,
                                                                colour: str) -> None:
     """Launch review I12: no page declared color-scheme or theme-color, so the
     dark landing drew light native controls and scrollbars, and Safari's bar
     stayed untinted. Dark pages say dark; paper pages say light with the
-    masthead's navy, as the generated report pages do (render.report.PAGE_META)."""
+    masthead's navy, as the generated report pages do (render.report.PAGE_META).
+    DES-9: "light" alone let a browser's auto-dark (Chrome's force-dark, as
+    Samsung Internet does) repaint a paper page, turning the gold button's
+    navy label near-white, about 1.6:1. "only light" opts out of that and
+    still keeps native controls light, which "light dark" would not."""
     head = (SITE / name).read_text(encoding="utf-8").split("</head>")[0]
     assert f'<meta name="color-scheme" content="{scheme}">' in head
     assert f'<meta name="theme-color" content="{colour}">' in head

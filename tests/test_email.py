@@ -115,7 +115,7 @@ def test_batch_sends_the_email_rendering_not_the_browser_one(
     ]), encoding="utf-8")
     subscriber = Subscriber(
         email="fan@example.com", user_id="1", league_id=season.league_id,
-        rival_owner_id=None, rival_roster_id=2, sleeper_username="kevin_fan")
+        rival_owner_id=None, rival_roster_id=2, sleeper_username="fan_one")
     result = batch.run_subscriber(subscriber, twr.REPORT_WEEK, twr._template())
     assert result.ok, result.detail
     assert result.message is not None

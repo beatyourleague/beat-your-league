@@ -20,7 +20,7 @@
 <link rel="manifest" href="/site.webmanifest">
 <!-- A paper page, said so: light native controls, and a phone's browser
      bar in the masthead's navy (launch review I12). -->
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="only light">
 <meta name="theme-color" content="#101E33">
 <link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -283,15 +283,15 @@
       <div class="nextcard"><b>Have another team?</b>
         <p>Your plan covers up to 3 at no extra charge: redraft, keeper or dynasty.
         <a href="join/?add=1">Add a team</a> with the email you just used.</p></div>
-      <div class="nextcard"><b>Run this league?</b>
+      <div class="nextcard" id="lp-next"><b>Run this league?</b>
         <p>The <a href="league-pass.html">League Pass</a> gives every manager their own weekly
         report: $34.99 a month for the whole league, stopping on its own after the title
         game, with a full refund before your first weekly report's first game (one per
         league). Buy it with this same email, cancel your Monthly plan, and reply to any
         report while its refund window is open: we'll refund it.</p></div>
       <div class="nextcard"><b>Know a manager in another league?</b>
-        <p id="friend-line">One email every Wednesday decides your lineup for your own roster:
-        https://beatyourleague.com/?via=friend</p>
+        <p id="friend-line">One email every Wednesday decides your lineup, built from your
+        roster: https://beatyourleague.com/?via=friend</p>
         <button type="button" class="btn gold" id="friend-share">Send it to them</button>
         <p class="msg" id="friend-msg" role="status"></p></div>
     </div>
@@ -331,6 +331,13 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
 if (new URLSearchParams(location.search).get("plan") === "pass") {
   document.getElementById("next-steps").hidden = true;
 }
+// While the League Pass is held (join's STRIPE_LINK_PASS empty, league-pass's
+// SEATS_OPEN off), its card told a buyer who had just paid to buy it and ask
+// for a refund on the Monthly plan: a swap nobody can make (LEG-5). The card's
+// words stay in the markup for the day it opens; set this to false then.
+// tests/test_prelaunch_pages.py holds it to both pages.
+const PASS_HELD = true;
+if (PASS_HELD) document.getElementById("lp-next").hidden = true;
 // The 2027 Season Pass renews, so "stops on its own" is the plan's line, not its.
 // The payment link's success URL carries ?plan=2027.
 if (new URLSearchParams(location.search).get("plan") === "2027") {
@@ -365,6 +372,19 @@ document.getElementById("friend-share").addEventListener("click", () => {
   shareWithFriend(line.textContent.replace(/\s+/g, " ").trim(), line,
                   document.getElementById("friend-msg"));
 });
+// PUR-2, join's "overnight" window (firstReportTiming): from 00:00 UTC the day
+// before the next report (Monday evening ET) the intake serves next week, and
+// that first report waits for Monday night's box score (run/solo.py
+// BOX_SCORE_LAG), which usually lands overnight. Until 16:00 UTC that day,
+// "usually lands within the hour" sent a buyer to the spam folder for a
+// report not built yet. Never in the season's last week: no next week waits.
+function mondayNight(w, now, kick) {
+  if (!Number.isInteger(w.week) || !Number.isInteger(w.last_week) || w.week >= w.last_week ||
+      !/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "") || !(now >= kick)) return false;
+  const [y, m, d] = w.lands_on.split("-").map(Number);
+  const start = Date.UTC(y, m - 1, d - 1);
+  return now >= start && now < start + 16 * 3600 * 1000;
+}
 // D9: site/week.json's phase. "Today" holds only while there is a report to
 // send — once the season is over (phase "over", or past the last week's
 // report day, ET) nothing goes out until next season, and the page says so
@@ -403,6 +423,19 @@ document.getElementById("friend-share").addEventListener("click", () => {
               !Number.isInteger(w.week) || !Number.isInteger(w.last_week) || isNaN(kick)) return;
           if (w.week > 1 && Date.now() < kick) {
             today.textContent = "Your first report: your Week " + w.week + " lineup, decided.";
+          } else if (mondayNight(w, Date.now(), kick)) {
+            // Next week's report, once Monday night is scored: not today, and
+            // not within the hour (PUR-2).
+            const lead = document.createElement("b");
+            lead.textContent = "Your first report lands once Monday night's game is scored, " +
+              "usually by Tuesday morning.";
+            document.getElementById("first-note").replaceChildren(lead, document.createTextNode(
+              " It's built from the roster you just entered. If it hasn't arrived by then, " +
+              "check your spam folder and mark it \"not spam\" once."));
+            const label = document.querySelector("#step-today b");
+            if (label) label.textContent = "Next";
+            today.textContent = "Your first report, once Monday night's game is scored: your " +
+              "Week " + (w.week + 1) + " lineup, decided.";
           } else if (w.week > 1 && w.week < w.last_week) {
             const day = new Date(w.lands_on + "T12:00:00Z").toLocaleDateString("en-US",
               { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
@@ -423,7 +456,7 @@ document.getElementById("friend-share").addEventListener("click", () => {
   } catch (e) { /* the page stays as it is */ }
 })();
 </script>
-<footer><div class="wrap"><nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a><a href="rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a><a href="dynasty/">Dynasty</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
+<footer><div class="wrap"><nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a><a href="rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a><a href="dynasty/">Dynasty</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=6c2efd9b19" defer></script>
     <b>Beat Your League</b> — analysis, not betting picks. This page is written in plain language
   rather than legalese; it is not legal advice, and it does not limit any right you have under
   consumer law where you live. NFL data: nflverse (nflverse-data), CC-BY-4.0.</div></footer>

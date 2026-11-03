@@ -75,8 +75,9 @@ def _room(rookie: Mapping[str, Any], year: int) -> str:
         return f"No {rookie['position']} usage for this team in {year - 1}."
     noun = "pass attempts" if rookie["position"] == "QB" else "targets and carries"
     arrived = room.get("arrived") or []
-    joined = f" Arrived: {', '.join(arrived)}." if arrived else ""
-    lead = f" Still there: {room['lead']}." if room.get("lead") else ""
+    # A name can end in its own period ("Harold Fannin Jr."): one stop, never two.
+    joined = f" Arrived: {', '.join(arrived).rstrip('.')}." if arrived else ""
+    lead = f" Still there: {room['lead'].rstrip('.')}." if room.get("lead") else ""
     return (f"{room['left_share']}% of the team's {year - 1} {rookie['position']} {noun} "
             f"have left.{joined}{lead}")
 

@@ -100,8 +100,9 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
         body = (
             '<div class="empty"><b>The rules are up before the first game.</b>'
             '<p>Here is what gets recorded, written down before anyone has played. Every call '
-            'we send a subscriber is stamped before kickoff and graded against the real box '
-            'score once the games are final, hit or miss, and nothing is edited afterwards. '
+            'we publish, in a subscriber\'s report or our sample roster\'s, is stamped before '
+            'kickoff and graded against the real box score once the games are final, hit or '
+            'miss, and nothing is edited afterwards. '
             # The early-season arm ships seeded calls in Weeks 2-3 for one
             # setup (run/solo.seeded_scope), so "the first ones are made in
             # week 4" was wrong on the page that states the rules, and "fills
@@ -185,13 +186,14 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
   <header>
     <div class="topbar"><a class="brand" href="../index.html">{mark_svg("byll")}<span>Beat Your League</span></a><a class="home" href="../index.html">← Home</a></div>
     <h1>The Receipts</h1>
-    <p>Every call we send is stamped before kickoff and graded against the real box score once
-    the games end. The rules that decide it were locked before the season, and nothing is edited
-    after the fact.</p>
+    <p>Every call we publish, in a subscriber's report or in our sample roster's weekly
+    report, is stamped before kickoff and graded against the real box score once the games
+    end. The rules that decide it were locked before the season, and nothing is edited after
+    the fact.</p>
   </header>
   <main>{body}</main>
   <div style="padding:24px 28px;border-top:3px double var(--line);text-align:center;">
-    <p style="margin:0 0 12px;font-size:15px;">Every row is a call we actually sent,
+    <p style="margin:0 0 12px;font-size:15px;">Every row is a call we published,
     recorded before kickoff and graded in the open. Yours start the week you set
     up your team.</p>
     <a href="../join/index.html" style="display:inline-block;background:var(--turf);color:#fff;

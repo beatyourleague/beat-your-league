@@ -30,6 +30,13 @@ PRIVACY_VERSIONS = [
     ("2026-10-25", "9b76a92788b6df6f"),
     # Extra teams and team names (owner decision): what we keep when you add one.
     ("2026-11-01", "1ba6c29e8064929a"),
+    # LEG-6, before any buyer (so no change notice was owed): the league type
+    # (redraft, keeper or dynasty) named among the settings and as the extra
+    # counted line beside a roster check; the counter and the forms described
+    # as running, not "once switched on"; every kind of form row the Worker
+    # takes; and terms.html's nav, League Pass included, as CLAUDE.md set for
+    # the next change to these words.
+    ("2026-11-03", "a70990c8d5767e14"),
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "0d5cce06d12dd87c"),

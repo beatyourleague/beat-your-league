@@ -999,18 +999,60 @@ def test_the_privacy_page_describes_the_counter_and_drops_no_analytics() -> None
     section4 = text[text.index("4. Who else"):text.index("5. Your report")]
     assert "runs our page counter" in section4
     assert "page counts (section 3) after three months" in text
-    # True before the Worker's /e is deployed as well as after (review): the
-    # counting is stated as switched on with the forms, never as running now.
-    assert "We do count visits" not in text
-    assert "until then nothing is counted" in section3
-    assert "once it is switched on, runs our page counter" in section4
-    assert re.search(r"Page counts\s*,\s*once our counter is switched on", section1)
-    assert "once our counter is switched on, anonymous page counts" in box
+    # The counter has been on since Nov 2 (LEG-6): it is described as running,
+    # and the "once it is switched on" wording that was true before is gone.
+    assert "until then nothing is counted" not in section3
+    assert "We count visits our own way" in section3
+    assert "and runs our page counter" in section4
+    assert not re.search(r"once (?:our counter|it) is switched on", text)
+    assert "anonymous page counts, saying which page" in box
     # Steps inside the site carry our own name as the referrer (count.js).
     assert "or ours for a step from one of our pages" in section3
     source = COUNT_JS.read_text(encoding="utf-8")
     assert "globalPrivacyControl" in source and "doNotTrack" in source
     assert re.search(r"const LIVE = \"beatyourleague\.com\"", source)
+
+
+def test_the_privacy_page_names_every_counted_line_and_every_form() -> None:
+    """LEG-6, reproduced: a roster check on the signup page with Keeper or
+    Dynasty picked sends two counter lines (bylCount("roster"), then
+    bylCount(leagueKind)), and the Worker takes "dynasty" and "keeper", but
+    the page said "at most one short line" and never named the league type,
+    which also rides the ref onto Stripe. It still said the counter and the
+    forms were "not yet on" after both went live, and its forms list left out
+    team adds, Trade Checks and rookie-report requests. Every event count.js
+    can send and every kind of row the Worker keeps is named now."""
+    text = _privacy()
+    box = text[text.index("The whole list."):text.index("1. What we collect")]
+    section1 = text[text.index("1. What we collect"):text.index("2. What we never")]
+    section3 = text[text.index("3. Cookies, analytics and tracking"):text.index("4. Who else")]
+    section4 = text[text.index("4. Who else"):text.index("5. Your report")]
+    assert "league type (redraft, keeper or dynasty)" in box
+    assert "which kind of league a checked roster is for" in box
+    assert "whether it is a redraft, keeper or dynasty league" in section1
+    assert "at most one short line" not in text
+    events = re.search(r"const EVENTS = \[([^\]]*)\]", COUNT_JS.read_text(encoding="utf-8"))
+    said = {"view": "when a page opens", "roster": "checks a roster",
+            "checkout": "presses a buy button", "trial": "asks for a free report",
+            "waitlist": "joins the waitlist",
+            "dynasty": "for a keeper or dynasty league sends one more line",
+            "keeper": "for a keeper or dynasty league sends one more line"}
+    for event in re.findall(r'"(\w+)"', events.group(1)):
+        assert said[event] in section3, f"count.js sends {event!r}; privacy section 3 omits it"
+    assert "for a keeper or dynasty league sends one more line" in section1
+    worker = (ROOT / "infra" / "form-worker.js").read_text(encoding="utf-8")
+    kinds = re.search(r"const KINDS = \[([^\]]*)\]", worker, re.S)
+    named = {"seat": "seat claims", "update": "roster changes", "update_request": "roster changes",
+             "team_add": "team adds", "trade_check": "Trade Checks",
+             "confirm": "the buttons you press to confirm them", "trial": "free-report requests",
+             "waitlist": "waitlist", "rookie_ask": "rookie-report requests"}
+    forms = section4[section4.index("stores what you send through our forms"):]
+    forms = forms[:forms.index("each entry with the time")]
+    for kind in re.findall(r'"(\w+)"', kinds.group(1)):
+        assert named[kind] in forms, f"the Worker keeps {kind!r} rows; privacy section 4 omits them"
+    for stale in ("Until our forms are switched on", "when signups open",
+                  "while checkout was closed"):
+        assert stale not in text, stale
 
 
 def test_the_privacy_page_names_the_postal_code_not_a_full_address() -> None:
@@ -1073,6 +1115,11 @@ def test_the_privacy_page_carries_the_sites_one_nav() -> None:
     assert '<span>Beat Your <span class="lg">League</span></span>' in top
     assert '<a href="sample-report.html">See a real report</a>' in top
     assert '<a class="hidesm" href="index.html#pricing">Pricing</a>' in top
+    # LEG-6 moved the date again, so League Pass joined the bar, as on terms.html.
+    nav = re.search(r'<nav class="sitenav" aria-label="Site">.*?</nav>', top).group(0)
+    terms = (SITE / "terms.html").read_text(encoding="utf-8")
+    assert nav in terms.split("<h1", 1)[0]
+    assert '<a class="hidesm" href="league-pass.html">League Pass</a>' in nav
 
 
 def test_the_counters_store_and_token_are_a_plan_risk_decision() -> None:

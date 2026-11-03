@@ -235,7 +235,7 @@ def test_batch_run_subscriber_end_to_end(tmp_path: Path, monkeypatch: pytest.Mon
     subscriber = Subscriber(
         email="fan@example.com", user_id="u1".replace("u", "") or "1",
         league_id=season.league_id, rival_owner_id=None, rival_roster_id=2,
-        sleeper_username="kevin_fan",
+        sleeper_username="fan_one",
     )
     # user u1 owns roster 1 in the fixture; registry stores numeric ids in
     # production, the fixture uses "u1" — patch the roster file to match.
@@ -250,7 +250,7 @@ def test_batch_run_subscriber_end_to_end(tmp_path: Path, monkeypatch: pytest.Mon
     assert result.ok, result.detail
     assert result.html_path is not None and result.html_path.is_file()
     assert "fan@example.com" not in result.html_path.name
-    assert "kevin_fan" in result.html_path.name
+    assert "fan_one" in result.html_path.name
     html_out = result.html_path.read_text(encoding="utf-8")
     assert "RIVALRY WEEK" in html_out  # rival IS this week's opponent here
     text_out = result.html_path.with_suffix(".txt").read_text(encoding="utf-8")

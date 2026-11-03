@@ -224,8 +224,10 @@ def _visible(path: Path) -> str:
     return re.sub(r"<!--.*?-->", "", page, flags=re.S)
 
 
+# "Pay once" (LEG-4): League Pass's steps said "Pay once, on Stripe." under a
+# $34.99-a-month price, left over from the one-time pass.
 @pytest.mark.parametrize("retired", ["Rest-of-Season", "Playoff Pass", "One payment", "one payment",
-                                     "othing renews", "othing to cancel"])
+                                     "othing renews", "othing to cancel", "Pay once", "pay once"])
 def test_no_page_sells_a_one_time_pass(retired) -> None:
     pages = _pages()
     assert len(pages) > 15

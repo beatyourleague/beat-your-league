@@ -87,6 +87,90 @@ def test_today_switches_off_an_hourly_run_before_kickoff() -> None:
     assert got == [[False, "this", "before"], [False, None, None], [False, "next", "after"]]
 
 
+def test_a_monday_night_buyer_is_not_promised_a_report_today() -> None:
+    """PUR-2, reproduced: a purchase at 01:55Z Nov 3 (Mon 8:55 PM ET), week.json
+    on week 8 with lands_on Nov 4. The page said "Your first report lands
+    today", but current_week had moved to 9 at 00:00Z, so the first report was
+    week 9's early look, held by the intake until Monday night's box score
+    landed ("CHI@SEA is not over"): only the welcome went out that night. From
+    00:00 UTC the day before lands_on until 16:00 UTC that day the page names
+    the wait instead; outside it, and in the season's last week, nothing
+    changes. DES-10 rides along: the date drops its weekday, so the line no
+    longer reads "your Wednesday report from Wed, Nov 4"."""
+    wk8 = {**WEEK, "week": 8, "lands_on": "2026-11-04", "first_kickoff": "2026-10-30T00:15:00Z"}
+    last = {**wk8, "week": 18}
+    got = _node(PHASE + "\nconsole.log(JSON.stringify(" + json.dumps([
+        [wk8, "2026-11-02T23:59:00Z"],     # Monday 6:59 PM ET: the roster report today
+        [wk8, "2026-11-03T01:55:00Z"],     # Monday 8:55 PM ET
+        [wk8, "2026-11-03T09:00:00Z"],     # Tuesday 4 AM ET, box score maybe not in
+        [wk8, "2026-11-03T16:00:00Z"],     # Tuesday 11 AM ET: today again
+        [last, "2026-11-03T01:55:00Z"],    # the last week: no next week to wait for
+    ]) + ".map(([w, now]) => firstReportTiming(w, new Date(now)))));")
+    assert [g and g["when"] for g in got] == ["after", "overnight", "overnight", "after", None]
+    assert got[0]["tuesday"] == "Nov 4"
+    draw = _js_function(JOIN, "drawFirst")
+    night = prose(draw.split('FIRST.when === "overnight"')[1].split("} else if")[0])
+    assert "once Monday night's game is scored" in night and "usually by Tuesday morning" in night
+    assert "today" not in night
+    after = prose(draw.split('FIRST.when === "after"')[1].split("} else {")[0])
+    assert "then a new one every Wednesday from" in after
+    assert "your Wednesday report from" not in after
+
+
+PRESEASON = {"season": "2026", "week": 1, "last_week": 18, "lands_on": "2026-09-09",
+             "first_kickoff": "2026-09-10T00:20:00Z", "phase": "preseason"}
+
+
+def test_no_monday_night_wait_before_the_season_has_a_game() -> None:
+    """PUR-2's window, reproduced on the preseason clock (render/live_sample
+    preseason_clock: week 1, lands_on Week 1's own report day): at 01:00Z Sep
+    8 (Labor Day, 9 PM ET) the window opened and the page said "This week's
+    report lands once Monday night's game is scored" with no game anywhere.
+    A seat claim shows that line in the preseason (canStartToday is the form
+    endpoint). The wait is named only once the week has kicked off; before
+    that the first report is the roster report, today."""
+    got = _node(PHASE + "\nconsole.log(JSON.stringify(" + json.dumps([
+        [PRESEASON, "2026-09-08T01:00:00Z"],
+        [{**PRESEASON, "phase": "season"}, "2026-09-08T01:00:00Z"],
+    ]) + ".map(([w, now]) => firstReportTiming(w, new Date(now)))));")
+    assert [g and g["when"] for g in got] == ["after", "after"]
+
+
+def test_the_thank_you_page_waits_for_monday_night_with_the_join_page() -> None:
+    """PUR-2's other half, reproduced on the page a Monday-night buyer lands on
+    after Stripe: join had come to say "lands once Monday night's game is
+    scored, usually by Tuesday morning", and then thanks.html said "Your first
+    report is on its way. It usually lands within the hour" and, after that
+    hour, to check the spam folder, for a report the intake would not build
+    until the box score was in. Inside the same window as join's "overnight"
+    (checked against firstReportTiming on the same times) it says the wait;
+    outside it the static words stand."""
+    fn = _js_function(THANKS, "mondayNight")
+    wk8 = {**WEEK, "week": 8, "lands_on": "2026-11-04", "first_kickoff": "2026-10-30T00:15:00Z"}
+    last = {**wk8, "week": 18}
+    cases = [[wk8, "2026-11-02T23:59:00Z"], [wk8, "2026-11-03T01:55:00Z"],
+             [wk8, "2026-11-03T09:00:00Z"], [wk8, "2026-11-03T16:00:00Z"],
+             [last, "2026-11-03T01:55:00Z"], [{**wk8, "first_kickoff": "2026-11-05T01:15:00Z"},
+                                              "2026-11-03T01:55:00Z"],
+             [PRESEASON, "2026-09-08T01:00:00Z"]]
+    got = _node(fn + "\n" + PHASE + "\nconsole.log(JSON.stringify(" + json.dumps(cases) +
+                ".map(([w, now]) => { const t = firstReportTiming(w, new Date(now));"
+                " return [mondayNight(w, Date.parse(now), Date.parse(w.first_kickoff)),"
+                " Boolean(t && t.when === 'overnight')]; })));")
+    assert [g[0] for g in got] == [False, True, True, False, False, False, False]
+    assert [g[0] for g in got] == [g[1] for g in got], "thanks.html and join disagree"
+    handler = _js_code(THANKS).split("mondayNight(w, Date.now(), kick)) {")[1].split("} else if")[0]
+    words = " ".join(s for s in re.findall(r'"((?:[^"\\]|\\.)*)"',
+                                           re.sub(r'"\s*\+\s*"', "", handler))
+                     if " " in s and not s.startswith("#"))   # sentences, not selectors
+    assert "Your first report lands once Monday night's game is scored" in words
+    assert "usually by Tuesday morning" in words
+    assert "within the hour" not in words and "today" not in words.lower()
+    assert 'getElementById("first-note").replaceChildren' in handler
+    # The static first screen keeps its pinned words for every other hour.
+    assert "usually lands within the hour" in prose(THANKS)
+
+
 def test_the_season_closes_when_no_weekly_report_is_left() -> None:
     """D9: "over", the last week from its first kickoff, and past the last
     week's lands_on (ET) all close; preseason is open for checkout and closed

@@ -340,7 +340,11 @@ def test_the_2027_plan_replaces_every_nothing_renews_line() -> None:
         assert target in fn, target
     assert 'textContent = "Unlock my lineups — $49";' in fn
     assert "We email you before it bills" in re.sub(r'"\s*\+\s*"', "", fn)
-    assert LANDING.count('(SEASON_2027_READY ? "" : " Stops on its own after your title game.")') == 2
+    # The hero's risk line follows the flag; the finance note no longer says
+    # it stops at all (DES-5: it repeated the card's first line).
+    assert LANDING.count('(SEASON_2027_READY ? "" : " Stops on its own after your title game.")') == 1
+    finance = LANDING.split('const finance = document.getElementById("finance-note");')[1]
+    assert "stops on its own" not in finance.split("finance.hidden")[0].lower()
 
 
 def test_the_ref_prefix_stays_s() -> None:
@@ -429,6 +433,20 @@ def test_no_selling_page_uses_a_banned_word(name: str) -> None:
     rendered = _flat(_markup((SITE / name).read_text(encoding="utf-8")))
     for word in ("calibrated", "tested", "proven", "accurate"):
         assert not re.search(rf"\b{word}\b", rendered, re.I), (name, word)
+
+
+@pytest.mark.parametrize("name", SELLING)
+def test_no_selling_page_talks_about_misses_or_minimizes(name: str) -> None:
+    """DES-7/FUN-8: How it works said the season review covers "how your calls
+    landed, misses included", on a page that ends on two buy buttons; the
+    selling pages never show the record's misses. DES-8: League Pass said "it's
+    just a better league", the minimizer the plain-words direction bans. "Just"
+    survives only as time ("the roster you just entered", "just now")."""
+    page = (SITE / name).read_text(encoding="utf-8")
+    words = _flat(_markup(page)) + " " + _strings(page)
+    assert not re.search(r"misses included|\bour misses\b", words, re.I), name
+    left = re.sub(r"\byou just (entered|used)\b|\bjust now\b", " ", words, flags=re.I)
+    assert not re.search(r"\bjust\b", left, re.I), name
 
 
 def test_the_refund_line_is_a_promise_and_keeps_the_pinned_words() -> None:

@@ -100,6 +100,22 @@ def test_the_settings_are_one_line_before_the_roster() -> None:
         in _function(JOIN, "drawShapeNote")
 
 
+def test_the_open_settings_say_the_scoring_caveat_once() -> None:
+    """FUN-14, reproduced: pressing Change showed "Six-point passing TDs or TE
+    premium? Pick the closest." directly above the panel's first note, which
+    ends "Six-point passing touchdowns and TE premium aren't scored yet." In
+    ?add=1 the panel opens on load, so the repeat showed with no click. The
+    short line now steps aside while the panel is open. It is a class, not the
+    hidden attribute, because seat, update and free-report modes set that one
+    for their own reasons and closing the panel must not undo them."""
+    show = _function(JOIN, "showSettings")
+    assert '$("step-league").classList.toggle("settings-open", open);' in show
+    assert "#step-league.settings-open #settings-intro{display:none;}" in JOIN
+    assert 'settings-intro").hidden' not in show
+    body = JOIN.split('<div id="settings-body" hidden>')[1].split("</div>")[0]
+    assert "TE premium aren't scored yet" in _flat(body)
+
+
 def test_a_free_report_that_is_not_open_asks_for_nothing() -> None:
     """m-try: with free reports switched off the page pitched a free report,
     took a roster and an email, and then refused. It now says so in the

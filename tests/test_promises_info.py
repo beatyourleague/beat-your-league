@@ -300,6 +300,13 @@ def test_the_info_pages_say_what_is_true() -> None:
     assert "up to 14 teams" in lp and "up to 14 teams" in HOW
     assert "You paste your roster once" not in HOW
     assert "ninety seconds" not in HOW
-    for page in (HOW, NOT_FOUND, lp):
+    # legal.html is only a redirect to the terms, but its footer is still the
+    # contract C5 line (LEG-10: it said "analysis, not picks").
+    legal = (SITE / "legal.html").read_text(encoding="utf-8")
+    for page in (HOW, NOT_FOUND, lp, legal):
         assert "analysis, not betting picks" in page
         assert "analysis, not picks" not in page
+    # FUN-7: the live-week line read "The this week's report is a real one"
+    # in every week the hero's rule shows it.
+    flat = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", HOW))
+    assert "The this week" not in flat and "This week's report is a real one" in flat

@@ -22,7 +22,7 @@
 <!-- Paper page: the browser's own bar and controls match the navy header and
      stay light, whatever the visitor's system theme (I12). -->
 <meta name="theme-color" content="#101E33">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="only light">
 <!-- Fonts are self-hosted (contract C7): no request leaves for a font
      service, and the two faces above the fold load first. fonts.css carries
      metric-matched fallbacks, so the swap does not move the layout. -->
@@ -401,6 +401,9 @@
   #step-league{margin:14px 0;}
   #step-league > .note:first-child{margin-top:0;}
   #settings-intro{margin:6px 0 0;font-size:14px;}
+  /* The open panel's first note says the same thing in full (FUN-14). A
+     class, not hidden: seat, update and free-report modes set that. */
+  #step-league.settings-open #settings-intro{display:none;}
   @media (prefers-reduced-motion:reduce){
     #rows.fresh .row,.tally.good::before,.ok::before,#step-email,.checkmail,.err,.ok,.suggest,
     .opts label{animation:none!important;}
@@ -806,7 +809,7 @@ Baltimore Ravens
 </div>
 <footer>
   <div class="wrap">
-    <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="../how-it-works.html">How it works</a><a href="../sample-report.html">Sample report</a><a href="../this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="../league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="../join/index.html">Check my team</a><a href="../byes/">Bye planner</a><a href="../rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="../espn/">ESPN</a><a href="../yahoo/">Yahoo</a><a href="../sleeper/">Sleeper</a><a href="../cbs/">CBS</a><a href="../dynasty/">Dynasty</a></div><div><p>About</p><a href="../terms.html">Terms &amp; refunds</a><a href="../privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
+    <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="../how-it-works.html">How it works</a><a href="../sample-report.html">Sample report</a><a href="../this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="../league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="../join/index.html">Check my team</a><a href="../byes/">Bye planner</a><a href="../rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="../espn/">ESPN</a><a href="../yahoo/">Yahoo</a><a href="../sleeper/">Sleeper</a><a href="../cbs/">CBS</a><a href="../dynasty/">Dynasty</a></div><div><p>About</p><a href="../terms.html">Terms &amp; refunds</a><a href="../privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=6c2efd9b19" defer></script>
     We store the minimum: your email, your scoring settings and your roster. We never
     ask for a password, and we never connect to your league<span id="footer-checkout">. Checkout runs on Stripe's
     own secure page, which also asks for your card's country and, where needed, its postal code</span>. Beat Your League —
@@ -1293,6 +1296,7 @@ $("roster-text").addEventListener("input", () => {
   state.ready = false;
   $("step-email").classList.add("hidden");
   drawPayoff();
+  redrawPassNote();
   const tally = $("tally");
   tally.className = "tally bad";
   tally.textContent = 'Your roster changed — hit "Check my team" again.';
@@ -1489,6 +1493,7 @@ function draw(focusAt) {
   $("resolve").classList.toggle("is-done", state.ready);
   keepInAddress();
   relistIfChanged();
+  redrawPassNote();
   if (Number.isInteger(focusAt)) {
     const rows = list.querySelectorAll(".row");
     const target = rows[Math.min(focusAt, rows.length - 1)];
@@ -2009,6 +2014,7 @@ function drawSettingsLine() {
 function settingsOpen() { return !$("settings-body").hidden; }
 function showSettings(open) {
   $("settings-body").hidden = !open;
+  $("step-league").classList.toggle("settings-open", open);
   $("settings-change").setAttribute("aria-expanded", open ? "true" : "false");
   $("settings-change").textContent = open ? "Done" : "Change";
   drawShapeNote();
@@ -2523,8 +2529,22 @@ function firstReportTiming(w, now) {
   // Inside that window either report may come, so the page names neither.
   if (w.week > 1 && now < kickoff.getTime() - 75 * 60 * 1000) return { when: "before" };
   if (w.week > 1 && now < kickoff) return null;
+  // PUR-2: at 00:00 UTC the day before the next report (Monday evening ET)
+  // the intake moves to next week, and a buyer's first report is that week's,
+  // which waits for Monday night's box score (run/solo.py BOX_SCORE_LAG).
+  // That usually lands overnight, so until Tuesday 16:00 UTC (late morning
+  // ET) the page names the wait, never "today". Only once the week has kicked
+  // off: before Week 1 (the preseason clock, whose lands_on is Week 1's own
+  // report day) there is no Monday night game to wait for, and the buyer's
+  // first report is the roster report, today.
+  const [y, m, d] = w.lands_on.split("-").map(Number);
+  const nextWeek = Date.UTC(y, m - 1, d - 1);
+  if (!(Number.isInteger(w.last_week) && w.week >= w.last_week) && now >= kickoff &&
+      now >= nextWeek && now < nextWeek + 16 * 3600 * 1000) {
+    return { when: "overnight" };
+  }
   return { when: "after", tuesday: lands.toLocaleDateString("en-US",
-    { weekday: "short", month: "short", day: "numeric" }) };
+    { month: "short", day: "numeric" }) };
 }
 // D9: site/week.json's "phase" (render/live_sample.py). A missing phase is
 // "season". Checkout, seats and the free report close once there is no weekly
@@ -2609,9 +2629,15 @@ function drawFirst() {
   } else if (FIRST && FIRST.when === "before") {
     side.replaceChildren(b("This week's report today"), t(", then a new one every Wednesday evening"));
     note.replaceChildren(t("This week's report lands "), b("today"), t("."));
+  } else if (FIRST && FIRST.when === "overnight") {
+    side.replaceChildren(b("This week's report once Monday night's game is scored"),
+      t(" (usually by Tuesday morning), then a new one every Wednesday evening"));
+    note.replaceChildren(t("This week's report lands "),
+      b("once Monday night's game is scored"), t(", usually by Tuesday morning."));
   } else if (FIRST && FIRST.when === "after") {
+    // DES-10: the date carries no weekday, so the line says Wednesday once.
     side.replaceChildren(b("Your first report today"),
-      t(", then your Wednesday report from " + FIRST.tuesday));
+      t(", then a new one every Wednesday from " + FIRST.tuesday));
     note.replaceChildren(t("Your first report lands "), b("today"),
       t("; your Wednesday report starts " + FIRST.tuesday + "."));
   } else {
@@ -2766,7 +2792,7 @@ function closedNoteNodes(action) {
   const lead = WANTS_PASS ? "The League Pass opens soon" : "Checkout opens soon";
   if (WANTS_PASS && OWN_PLAN_HREF) {
     return [text(lead + ". A plan for your own team is open now: "),
-            link(OWN_PLAN_HREF, "set that up instead"), text(".")];
+            link(ownPlanHref(), "set that up instead"), text(".")];
   }
   // The work is kept either way (BE-I3, I1): a checked roster stays in this
   // page's address, and with the list connected it is kept with the email.
@@ -2784,6 +2810,26 @@ function closedNoteNodes(action) {
                  "it opens.")];
   }
   return [head];
+}
+// FUN-10: a pass buyer's way to the open plan, from a held pass. Once a roster
+// is checked it rides along as a MONTHLY ref, so it isn't pasted again; the
+// page's own league_pass ref would restore pass mode (RESTORED_PLAN) and land
+// on this same dead end. An edited, unchecked list sends the bare link.
+function ownPlanHref() {
+  if (!state.ready || state.stale) return OWN_PLAN_HREF;
+  try {
+    return OWN_PLAN_HREF + "?ref=" + encodeURIComponent(R.withVia(R.encodeRoster("monthly",
+      radio("scoring"), template(), state.matches.map((m) => m.player.id), leagueSize(),
+      radio("league")), SOURCE));
+  } catch (err) {
+    return OWN_PLAN_HREF;
+  }
+}
+// The pass note's link follows the roster on screen, checked or edited.
+function redrawPassNote() {
+  if (WANTS_PASS && OWN_PLAN_HREF && !PASS_LINK && !SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {
+    noteClosedFor("", "");
+  }
 }
 function noteClosedFor(link, other) {
   if (seasonOver()) { link = ""; other = ""; }

@@ -18,7 +18,8 @@
         .forEach(function (x) { part[x.type] = x.value; });
       var today = part.year + "-" + part.month + "-" + part.day;
       if (!/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "") || today > w.lands_on) return;
-      if (Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call && w.cards === true) {
+      if (Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call && w.cards === true &&
+          w.total !== false) {
         links.forEach(function (a) { a.hidden = false; });
       }
     })

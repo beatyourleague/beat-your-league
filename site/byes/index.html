@@ -23,7 +23,7 @@
 <!-- Paper page, like join/: light native controls and the navy header's
      colour in the phone's browser bar. -->
 <meta name="theme-color" content="#101E33">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="only light">
 <link rel="preload" href="../fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="../fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../fonts/fonts.css">
@@ -470,7 +470,7 @@ Baltimore Ravens
         <input type="email" id="cta-email" placeholder="you@example.com" autocomplete="email"
                aria-label="Your email">
         <button type="submit" id="cta-button">Tell me when it opens</button>
-        <p class="note">One email when signups open, nothing else. Unsubscribe any time.</p>
+        <p class="note" id="cta-form-note">One email when signups open, nothing else. Unsubscribe any time.</p>
       </form>
       <p class="ctanote" id="cta-note" role="status"></p>
       <a class="golink" id="cta-go" href="../join/index.html" hidden>Get the weekly report</a>
@@ -500,7 +500,7 @@ Baltimore Ravens
 </div>
 <footer class="sitefoot">
   <div class="wrap">
-    <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="../how-it-works.html">How it works</a><a href="../sample-report.html">Sample report</a><a href="../this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="../league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="../join/index.html">Check my team</a><a href="../byes/">Bye planner</a><a href="../rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="../espn/">ESPN</a><a href="../yahoo/">Yahoo</a><a href="../sleeper/">Sleeper</a><a href="../cbs/">CBS</a><a href="../dynasty/">Dynasty</a></div><div><p>About</p><a href="../terms.html">Terms &amp; refunds</a><a href="../privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
+    <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="../how-it-works.html">How it works</a><a href="../sample-report.html">Sample report</a><a href="../this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="../league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="../join/index.html">Check my team</a><a href="../byes/">Bye planner</a><a href="../rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="../espn/">ESPN</a><a href="../yahoo/">Yahoo</a><a href="../sleeper/">Sleeper</a><a href="../cbs/">CBS</a><a href="../dynasty/">Dynasty</a></div><div><p>About</p><a href="../terms.html">Terms &amp; refunds</a><a href="../privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=6c2efd9b19" defer></script>
     The roster you type here is checked in your browser and isn't sent to us unless you
     leave your email. Not affiliated with the NFL, ESPN, Yahoo, Sleeper or CBS.
     Beat Your League — analysis, not betting picks. NFL data: nflverse (nflverse-data),
@@ -551,10 +551,14 @@ if (!window.R || !window.B) {
 // The launch list: kind "waitlist" to the form Worker, like join/'s own
 // (tests/test_polish_tool.py pins it equal to join's NOTIFY_LIST_ENDPOINT).
 const NOTIFY_LIST_ENDPOINT = "https://forms.beatyourleague.com/rows";
-// The landing's two flags, pinned equal to them by test: whether a purchase
-// can finish, and whether the free first report is open.
+// The landing's three flags, pinned equal to them by test: whether join sells,
+// whether a purchase can finish, and whether the free first report is open.
+// Selling before a purchase is proven to finish is the landing's interim
+// state (LAUNCH.md step 4): the buy link shows and the capture stays.
+const CHECKOUT_OPEN = true;
 const CHECKOUT_CAN_COMPLETE = false;
 const TRIAL_OPEN = false;
+const INTERIM = CHECKOUT_OPEN && !CHECKOUT_CAN_COMPLETE;
 // The project inbox (Cloudflare Email Routing), never a personal address.
 const CONTACT_EMAIL = "hello@beatyourleague.com";
 const PLANNER_URL = "https://beatyourleague.com/byes/";
@@ -1117,7 +1121,8 @@ $("cta").addEventListener("change", () => {
 
 // ---- the weekly report -----------------------------------------------------
 // Closed (the static page): the email capture. Open: one link into join/
-// carrying this roster, which join/ restores ready to check out.
+// carrying this roster, which join/ restores ready to check out. Interim
+// (join sells, the capture stays): that link, then the capture.
 function drawCta() {
   if (state.listed && state.ref !== state.listedRef) {
     // Another roster or setting is another row (run/waitlist keeps the newest).
@@ -1128,14 +1133,20 @@ function drawCta() {
   }
   // The button promises a kept roster only when one really rides the row: a
   // list endpoint to keep it, and a checked, clean roster on screen. Otherwise
-  // it is the site's closed CTA, word for word.
-  $("cta-button").textContent = NOTIFY_LIST_ENDPOINT && state.ready
-    ? "Keep my roster for launch" : "Tell me when it opens";
+  // it is the site's closed CTA, word for word. While join sells, it is the
+  // landing's interim button: there is no launch left to keep a roster for.
+  $("cta-button").textContent = INTERIM ? "Email me once"
+    : NOTIFY_LIST_ENDPOINT && state.ready ? "Keep my roster for launch" : "Tell me when it opens";
   // Scoring and size only shape the ref, so they ask nothing until there is one.
   $("cta-settings").hidden = !state.ready;
   const ref = state.ref ? encodeURIComponent(state.ref) : "";
   if (!CHECKOUT_CAN_COMPLETE) {
     $("cta-check").setAttribute("href", carryVia("../join/index.html" + (ref ? "?ref=" + ref : ""), VIA));
+    // The interim's gold link is the open state's, on the closed state's node.
+    if (INTERIM) {
+      $("cta-check").textContent = ref ? "Get the weekly report for this roster"
+        : "Get the weekly report";
+    }
     return;
   }
   // "This roster" only once a clean check has put one in the link (T7).
@@ -1150,6 +1161,14 @@ if (CHECKOUT_CAN_COMPLETE) {
   $("cta-check").remove();
   $("cta-go").hidden = false;
   if (TRIAL_OPEN) $("cta-try").hidden = false;
+  drawCta();
+} else if (INTERIM) {
+  // FUN-1: the landing's interim state. Join sells while the capture stays
+  // for whoever isn't ready, so the page stops saying checkout isn't open and
+  // promises no message on a day it can't keep (FUN-5).
+  $("cta-closed").remove();
+  $("cta-form-note").textContent = "Not ready yet? One message from us, nothing else. " +
+    "Unsubscribe any time.";
   drawCta();
 }
 
@@ -1210,7 +1229,13 @@ $("cta-form").addEventListener("submit", async (event) => {
       state.listedRef = ref;
       if (window.bylCount) window.bylCount("waitlist", "closed");
       note.className = "ctanote ok";
-      note.textContent = ref
+      // While join sells (INTERIM) checkout is open, and the one message has
+      // no date we can promise (FUN-1, FUN-5).
+      note.textContent = INTERIM
+        ? (ref ? "We kept your email and this roster. One message from us, with a link " +
+                 "that brings this roster back ready to check out."
+               : "You're on the list. One message from us, nothing else.")
+        : ref
         ? "Checkout isn't open yet. We kept your email and this roster. " +
           "The morning it opens you'll get one email, with a link that brings this " +
           "roster back ready to check out."
