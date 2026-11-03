@@ -702,6 +702,31 @@ def test_the_thank_you_page_gives_a_buyer_their_next_steps() -> None:
         "a display:grid block ignores the hidden attribute without it"
 
 
+def test_the_thank_you_page_sells_no_league_pass_while_it_is_held() -> None:
+    """LEG-5/FUN-4, reproduced in the launch state: join's STRIPE_LINK_PASS
+    was empty and league-pass.html's SEATS_OPEN false, and the page a Monthly
+    buyer lands on after Stripe still said "Buy it with this same email,
+    cancel your Monthly plan, and reply to any report while its refund window
+    is open: we'll refund it." Nobody could buy it, so the card invited a
+    refund request for a swap that could not happen. The card keeps its words
+    in the markup (pinned above) and its script hides it while PASS_HELD,
+    which must say held unless the pass link is set AND the League Pass page
+    sells it."""
+    code = _js_code(THANKS)
+    flag = re.search(r"^const PASS_HELD = (true|false);", code, re.M)
+    assert flag, "thanks.html lost its League Pass hold"
+    assert "if (PASS_HELD) document.getElementById(\"lp-next\").hidden = true;" in code
+    card = THANKS.split('<div class="nextcard" id="lp-next">')[1].split("</div>")[0]
+    assert "Run this league?" in card and 'href="league-pass.html"' in card
+    link = re.search(r'^const STRIPE_LINK_PASS = "([^"]*)";', JOIN, re.M).group(1).strip()
+    seats = re.search(r"^const SEATS_OPEN = (true|false);", LEAGUE_PASS, re.M).group(1)
+    on_sale = bool(link) and seats == "true"
+    assert (flag.group(1) == "true") == (not on_sale), \
+        "thanks.html's PASS_HELD disagrees with join's STRIPE_LINK_PASS / league-pass's SEATS_OPEN"
+    if not link:
+        assert flag.group(1) == "true", "an empty pass link is a held pass"
+
+
 # --------------------------------------------------------------------- #
 # M8 — the posts: the link in the first reply, a card to attach
 # --------------------------------------------------------------------- #
