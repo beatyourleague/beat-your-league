@@ -98,6 +98,9 @@
  *                                counts; with COUNTS unbound it does nothing.
  *                                Blob order: event, page, via, referrer host,
  *                                device, checkout state, country.
+ *   POST /stripe  a Stripe webhook event  →  instant delivery (Nov 3 2026, below):
+ *                                a signed purchase starts the hourly intake now.
+ *                                Nothing from the event is stored or logged.
  * Every kind may also carry an optional `via` (^[a-z0-9-]{1,24}$, e.g. "x" or
  * "reply-kit"): where the visitor came from, read off the page's own URL, so
  * the owner can see which channel brings people without a cookie or a
@@ -147,6 +150,43 @@
  * With GH_DISPATCH_TOKEN unset the scheduler does nothing at all and the
  * GitHub schedules carry on alone. A failed dispatch shows as an error under
  * the Worker's Cron Events; the next tick and the GitHub backup both still run.
+ *
+ * ── INSTANT DELIVERY (Nov 3 2026) ─────────────────────────────────────────
+ * Stripe calls POST /stripe the moment a Checkout Session completes, and the
+ * Worker starts daily.yml exactly as the hourly :47 dispatch does
+ * ({daily: "false"}), so the welcome and the first report arrive in minutes
+ * instead of up to an hour. The Worker DECIDES NOTHING about the purchase: the
+ * intake reads Stripe itself, so the plan, refunds and every send key stay in
+ * Python. The rules:
+ * - Verified or nothing. The Stripe-Signature header is checked as Stripe
+ *   documents it: HMAC-SHA256 over "<t>.<raw body>" with the endpoint's
+ *   signing secret, against every v1 value, in constant time, and a `t` more
+ *   than 5 minutes from now is refused. Unverified answers 400.
+ * - Nothing from the event is stored, logged or forwarded. It carries the
+ *   buyer's address; the dispatch carries only the workflow and its input.
+ * - Only checkout.session.completed and .async_payment_succeeded start a
+ *   run. Any other verified event answers 200 and does nothing.
+ * - A QUIET WINDOW around the Wednesday report runs and the Saturday check
+ *   (QUIET_FOR): from QUIET_LEAD_MINUTES before each of their SCHEDULE times
+ *   until the hourly run's minute (:47). A purchase there is left to the :47
+ *   run, which the schedule already keeps clear of them. Without it, a buyer
+ *   who paid while weekly.yml was running got that week's report of record
+ *   from it AND an early look from this run minutes apart: the two runs sit
+ *   in different concurrency groups, and this one's checkout of the send log
+ *   holds neither the report's key nor the run's marker until weekly.yml
+ *   pushes (tests/test_instant_delivery.py reproduces it).
+ * - The dispatch is awaited, not left to waitUntil: it is one GitHub call,
+ *   and a failure answers 502, so Stripe retries it (live mode retries for up
+ *   to three days) and its webhook page shows the failure. A 200 sent before
+ *   the dispatch would lose a failed one in silence. A retry that dispatches
+ *   twice is safe: daily.yml queues in one concurrency group (one running,
+ *   one pending), and every email has a send key.
+ * - Unset STRIPE_WEBHOOK_SECRET: the route answers 404. Unset
+ *   GH_DISPATCH_TOKEN: a purchase answers 503. Either way nothing is
+ *   dispatched and the hourly run still serves the buyer.
+ * Setup (LAUNCH.md step 4, "Before you buy"): Stripe (live) → Developers →
+ * Webhooks → Add endpoint https://forms.beatyourleague.com/stripe, those two
+ * events; its signing secret (whsec_…) → Worker secret STRIPE_WEBHOOK_SECRET.
  */
 
 // The same set the join page and run/rosters.py accept (anything@anything.tld,
@@ -450,7 +490,7 @@ function due(at) {
   });
 }
 
-async function dispatch(entry, env) {
+async function dispatch(entry, env, signal) {
   const repo = env.GH_REPO || REPO;
   const url = `https://api.github.com/repos/${repo}/actions/workflows/${entry.workflow}/dispatches`;
   // Inputs are strings: the API refuses a JSON boolean for a boolean input.
@@ -466,6 +506,7 @@ async function dispatch(entry, env) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
     throw new Error(`${entry.workflow} (${entry.cron}): HTTP ${response.status}`);
@@ -473,10 +514,161 @@ async function dispatch(entry, env) {
   return `${entry.workflow} (${entry.cron})`;
 }
 
+// ── instant delivery: POST /stripe ─────────────────────────────────────
+
+// The two events that mean money arrived for a Checkout Session. The intake
+// still checks payment_status itself; a dispatch for an unpaid one costs a
+// run that finds nothing to do.
+const STRIPE_EVENTS = ["checkout.session.completed", "checkout.session.async_payment_succeeded"];
+// A Checkout Session event is a few KB. Anything far bigger is not Stripe.
+const MAX_STRIPE_BODY = 64 * 1024;
+// Stripe's own libraries allow five minutes between signing and checking.
+const STRIPE_TOLERANCE_SECONDS = 300;
+// The same run the hourly dispatch starts (tests/test_instant_delivery.py
+// holds the two together). `cron` only labels a failure in the log.
+const PURCHASE_RUN = { cron: "purchase", workflow: "daily.yml", inputs: { daily: "false" } };
+// The runs a purchase-started intake must not overlap (see the header).
+const QUIET_FOR = ["weekly.yml", "saturday.yml"];
+// How long before one of them the window opens: daily.yml's intake job
+// timeout (timeout-minutes: 15), the longest a run started just before can
+// still be sending when the report run checks out the send log.
+const QUIET_LEAD_MINUTES = 15;
+
+// The minute the hourly intake runs (:47 in SCHEDULE). A quiet window ends
+// there, because from then on this dispatch is no worse than that one.
+function hourlyMinute() {
+  const hourly = SCHEDULE.find((entry) => entry.workflow === PURCHASE_RUN.workflow
+    && entry.inputs && entry.inputs.daily === PURCHASE_RUN.inputs.daily);
+  return Number(hourly.cron.split(" ")[0]);
+}
+
+// Whether `ms` falls in a quiet window: from QUIET_LEAD_MINUTES before a
+// QUIET_FOR run's SCHEDULE time until the next hourly minute after it.
+function quietAt(ms) {
+  const minute = 60 * 1000;
+  const resume = hourlyMinute();
+  const base = Math.floor(ms / minute) * minute;
+  for (let offset = -60; offset <= QUIET_LEAD_MINUTES; offset += 1) {
+    const fire = new Date(base + offset * minute);
+    if (!due(fire).some((entry) => QUIET_FOR.includes(entry.workflow))) continue;
+    let wait = resume - fire.getUTCMinutes();
+    if (wait <= 0) wait += 60;
+    if (ms >= fire.getTime() - QUIET_LEAD_MINUTES * minute
+        && ms < fire.getTime() + wait * minute) return true;
+  }
+  return false;
+}
+
+// The body, as bytes, or null once it passes `cap` (read no further).
+async function readCapped(request, cap) {
+  if (!request.body) return new Uint8Array(0);
+  const reader = request.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > cap) {
+      try { await reader.cancel(); } catch { /* already closed */ }
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) { out.set(chunk, at); at += chunk.length; }
+  return out;
+}
+
+const hex = (buffer) => [...new Uint8Array(buffer)]
+  .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+// Stripe's documented check: header "t=<unix>,v1=<hex>[,v1=<hex>…]";
+// expected = hex HMAC-SHA256(secret, "<t>." + the RAW body bytes); any v1
+// equal to it (constant time) and |now - t| within the tolerance. `nowMs` is
+// passed in so the check is the same function under test.
+async function stripeSigned(header, raw, secret, nowMs) {
+  if (!header || !secret) return false;
+  let t = null;
+  const signatures = [];
+  for (const part of String(header).split(",")) {
+    const at = part.indexOf("=");
+    if (at < 1) continue;
+    const name = part.slice(0, at).trim();
+    const value = part.slice(at + 1).trim();
+    if (name === "t" && t === null) t = value;
+    if (name === "v1") signatures.push(value.toLowerCase());
+  }
+  if (!t || !/^\d{1,12}$/.test(t) || !signatures.length) return false;
+  if (Math.abs(nowMs / 1000 - Number(t)) > STRIPE_TOLERANCE_SECONDS) return false;
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const prefix = encoder.encode(`${t}.`);
+  const message = new Uint8Array(prefix.length + raw.length);
+  message.set(prefix, 0);
+  message.set(raw, prefix.length);
+  const expected = hex(await crypto.subtle.sign("HMAC", key, message));
+  // Every v1 is compared in full, whichever one matches.
+  let ok = false;
+  for (const signature of signatures) ok = sameSecret(signature, expected) || ok;
+  return ok;
+}
+
+// The route. Its answers are plain words for Stripe's webhook page; none of
+// them, and no log line, carries anything from the event.
+async function stripeWebhook(request, env) {
+  const answer = (status, text) => new Response(text, {
+    status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+  });
+  if (!env.STRIPE_WEBHOOK_SECRET) return answer(404, "not found");
+  if (request.method !== "POST") return answer(405, "method");
+  if (Number(request.headers.get("Content-Length") || "0") > MAX_STRIPE_BODY) {
+    return answer(413, "too large");
+  }
+  // The raw body, read once, as bytes: the signature covers the bytes Stripe
+  // sent, and nothing is parsed before it is checked.
+  let raw;
+  try { raw = await readCapped(request, MAX_STRIPE_BODY); } catch { return answer(400, "unreadable"); }
+  if (raw === null) return answer(413, "too large");
+  if (!(await stripeSigned(request.headers.get("Stripe-Signature"), raw,
+    env.STRIPE_WEBHOOK_SECRET, Date.now()))) {
+    return answer(400, "signature");
+  }
+  // Parsed only once verified, and only to read its type.
+  let type = null;
+  try {
+    const event = JSON.parse(new TextDecoder().decode(raw));
+    if (event && typeof event === "object" && typeof event.type === "string") type = event.type;
+  } catch { return answer(400, "bad json"); }
+  if (!STRIPE_EVENTS.includes(type)) return answer(200, "ignored");
+  if (!env.GH_DISPATCH_TOKEN) {
+    console.log("stripe: GH_DISPATCH_TOKEN is not set; nothing dispatched "
+      + "(the hourly run serves the purchase)");
+    return answer(503, "dispatch not configured");
+  }
+  if (quietAt(Date.now())) {
+    console.log("stripe: a report run is due or running; the :47 hourly run serves the purchase");
+    return answer(200, "left for the hourly run");
+  }
+  try {
+    await dispatch(PURCHASE_RUN, env, AbortSignal.timeout(8000));
+  } catch (error) {
+    // dispatch's own message: the workflow and GitHub's HTTP status, or a
+    // timeout. Never the event.
+    console.log(`stripe: dispatch failed: ${error && error.message ? error.message : "error"}`);
+    return answer(502, "dispatch failed");
+  }
+  console.log("stripe: dispatched daily.yml for a purchase");
+  return answer(200, "dispatched");
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/e") return count(request, env);
+    // Before any CORS or Origin logic: Stripe is not a browser.
+    if (url.pathname === "/stripe") return stripeWebhook(request, env);
 
     const origin = siteOrigin(request, env);
     // CORS names the site, never "*" (fail closed when SITE_ORIGIN is unset).
@@ -552,7 +744,11 @@ export default {
       // rows): the site's TRIAL_OPEN must agree with this one, or every free
       // report request is refused while the page offers it.
       if (url.searchParams.get("status") === "1") {
-        return json({ trial_open: env.TRIAL_OPEN === "true", counts: Boolean(env.COUNTS) });
+        // instant_delivery: both halves of POST /stripe are set (a boolean,
+        // never either secret).
+        return json({ trial_open: env.TRIAL_OPEN === "true", counts: Boolean(env.COUNTS),
+                      instant_delivery: Boolean(env.STRIPE_WEBHOOK_SECRET)
+                        && Boolean(env.GH_DISPATCH_TOKEN) });
       }
       const asked = (url.searchParams.get("kinds") || "").split(",")
         .map((kind) => kind.trim()).filter(Boolean);

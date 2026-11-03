@@ -324,9 +324,11 @@ def test_the_forms_address_is_the_custom_domain_path_everywhere() -> None:
     assert "hostname equals" not in rule and "request method" not in rule
     assert "slows a flood" in rule and "doesn't stop one" in rule
     # And the Worker serves forms on any path but the counter's, so /rows works
-    # with no change to it, and /e stays outside the rule.
+    # with no change to it, and /e stays outside the rule. /stripe (instant
+    # delivery, Nov 3 2026) is outside it too: it acts only on a request
+    # signed with Stripe's secret, and stores nothing.
     worker_js = (ROOT / "infra" / "form-worker.js").read_text(encoding="utf-8")
-    assert re.findall(r'url\.pathname === "([^"]+)"', worker_js) == ["/e"]
+    assert re.findall(r'url\.pathname === "([^"]+)"', worker_js) == ["/e", "/stripe"]
 
 
 # --------------------------------------------------------------------- #

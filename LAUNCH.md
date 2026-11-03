@@ -25,9 +25,9 @@ Pass is held. What's left, in order:
 2. **Keep your own visits out of the count** (~10 min) —
    [step 5b](#5b-the-page-counter-10-min-right-after-step-5), items 8 and 11: the Cloudflare rule
    that drops your own page views, and `TRAFFIC_FROM` in `.env` set to the end of today's checks.
-3. **Your own purchase** (~1 hour) — [step 4](#4-the-proving-run-1-hour): the Monthly plan on
-   your own card, every email read in your mail apps. Bought today, or Wednesday before about
-   5:17pm ET: the welcome and an early look at Week 9's report, then Wednesday evening's report
+3. **Your own purchase** (~1 hour) — [step 4](#4-the-proving-run-1-hour): first the Stripe
+   webhook for instant delivery (~10 min, "Before you buy"), then the Monthly plan on your own
+   card, every email read in your mail apps. Bought today, or Wednesday before about 5:17pm ET: the welcome and an early look at Week 9's report, then Wednesday evening's report
    with everyone else. Bought after Wednesday's run and before Thursday's 8:15pm ET kickoff: the
    welcome and Week 9's report within the hour.
 4. **Tell me it arrived** (~5 min) — [step 6](#6-opening-morning): I turn on
@@ -359,11 +359,48 @@ join page and switch the pricing buttons on; it's live on the next push.
 
 Nobody else's money moves until you've watched your own go all the way through.
 
+### Before you buy: instant delivery (~10 min)
+
+Without this, a buyer waits up to an hour for the welcome and the first report: the intake
+only runs at :47 past each hour. With it, Stripe tells the form Worker the moment someone pays,
+and the intake starts within a minute. It goes here, right before your purchase, because the
+Worker and its `GH_DISPATCH_TOKEN` are already live (step 5), and your purchase is the test.
+
+1. Stripe, in **live** mode (the toggle top right is off "Test mode") → **Developers →
+   Webhooks → Add endpoint**.
+   - Endpoint URL: `https://forms.beatyourleague.com/stripe`
+   - Events: `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
+     Nothing else.
+   - **Add endpoint.**
+2. Cloudflare → **Workers & Pages →** the form Worker → **Edit code** → paste the current
+   `infra/form-worker.js` over all of it → **Deploy**. (The `/stripe` route is new.)
+3. Back in Stripe, on the new endpoint's page → **Signing secret → Reveal**. It starts
+   `whsec_`. Copy it **last**, right before the next step, so it isn't left on the clipboard.
+4. Cloudflare → the form Worker → **Settings → Variables and Secrets → Add**, type
+   **Secret**, name `STRIPE_WEBHOOK_SECRET`, value the `whsec_` secret → **Deploy**.
+5. **Check it.** `make launch-check-fast` says PASS on "Stripe tells the form Worker the
+   moment someone pays" (it needs `FORM_ENDPOINT` and `FORM_API_KEY` in the shell). After
+   your purchase in item 1 below, Stripe's webhook page lists the event with a **200**, and
+   a daily-intake run appears in GitHub **Actions** within a minute.
+
+What it does and doesn't do:
+- The Worker only starts the intake. It keeps nothing from Stripe's message (it carries the
+  buyer's email) and decides nothing: the intake still reads Stripe itself.
+- A message that isn't signed with that secret does nothing.
+- Four times a week a purchase waits for the :47 hourly run instead: from 15 minutes before
+  the Wednesday report runs and the Saturday check until :47 of that hour. In Eastern time
+  from Nov 1: Wednesday 8:02 to 8:47 AM, 5:02 to 5:47 PM and 7:02 to 7:47 PM, and Saturday
+  11:02 to 11:47 AM. That keeps a new buyer from getting two reports for the same week.
+- If GitHub refuses the start, Stripe shows the failure and retries on its own. The hourly
+  run still serves the buyer either way.
+- Buyer-facing pages keep saying "usually within the hour" until your purchase proves this.
+
 1. **Any day** (when matters only for which emails come — below), buy the
    **Monthly plan** at https://beatyourleague.com/join/ with your own email, a real card and
    your real roster. Stripe's page must show $14.99 a month, the terms box, and the text
    saying billing stops on its own.
-2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should go green, and
+2. **Actions → daily-intake:** a run should start within a minute (instant delivery, above).
+   If none does, **Run workflow**, or wait up to an hour. It should go green, and
    its log should say the sealed registry was saved (the "Seal the registry" step).
 3. **The emails:**
    - **The welcome:** $14.99 a month, **billing stops on its own** (no renewal after Week

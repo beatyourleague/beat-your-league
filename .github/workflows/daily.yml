@@ -36,9 +36,12 @@ on:
     # each is keyed by its renewal date, so an hourly pass sends nothing twice,
     # and a notice the law requires is never held for a once-a-day gate.
     #
-    # This is the interim. Once the form Worker is deployed, a Stripe webhook
-    # can trigger this workflow directly and the wait drops from an hour to a
-    # minute — same pipeline, better trigger.
+    # Instant delivery (Nov 3 2026): Stripe's webhook calls the form Worker
+    # (POST /stripe), which dispatches this workflow with daily "false" the
+    # moment someone pays, so the wait is a minute, not an hour. Same
+    # pipeline, better trigger; this hourly cron stays as the backup, and a
+    # purchase near the Wednesday or Saturday runs is left to it (the Worker's
+    # quiet window). Bursts collapse in the concurrency group below.
     #
     # Half an hour from the others (Oct 9 2026): at the same minute it fired
     # together with the Tuesday runs and the Saturday check, each in its own

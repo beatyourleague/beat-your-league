@@ -564,7 +564,8 @@ def collect_github(ctx: Context, fetch: Callable[[str], Any] | None = None) -> S
 FAST_GATES = ("check_links", "check_page_basics", "check_selling_copy", "check_prices",
               "check_funnel_config", "check_week_json", "check_record", "check_compliance",
               "check_secrets", "check_link_map", "check_resend_read_key", "check_economics",
-              "check_security_txt", "check_seat_link", "check_worker_switches")
+              "check_security_txt", "check_seat_link", "check_worker_switches",
+              "check_instant_delivery")
 # Owner steps the owner may decline for good (LAUNCH.md calls the bounce key
 # optional): shown as a low "Optional" item, never counted as a step left.
 OPTIONAL_OWNER_GATES = ("The bounce check has a Resend key that can read sent email",)
@@ -2802,6 +2803,8 @@ def attention(issues: list[Issue]) -> str:
 
 
 WORKER_GATE = "The form Worker takes free-report requests exactly when the site offers them"
+# run.launch_check.INSTANT_GATE, by its own name (tests hold the two together).
+INSTANT_GATE = "Stripe tells the form Worker the moment someone pays"
 
 
 def launch_status(S: Mapping[str, Source], now: datetime) -> str:
@@ -2855,6 +2858,15 @@ def launch_status(S: Mapping[str, Source], now: datetime) -> str:
         nxt = "TRIAL_OPEN goes on with checkout (LAUNCH.md step 6): the launch check fails until it does."
     rows = (("Checkout", checkout), ("Free report", free), ("League Pass", league),
             ("First sale", sale))
+    instant = None
+    if S["launch"].ok:
+        instant = next((g for g in S["launch"].data["gates"] if g.get("name") == INSTANT_GATE), None)
+    if instant and instant["status"] in ("PASS", "OWNER"):
+        # Shown only when the Worker answered: a gate that couldn't read it
+        # says nothing about whether it is set up.
+        rows += (("Instant delivery", "On: Stripe starts the intake the moment someone pays"
+                  if instant["status"] == "PASS" else
+                  "Not set up: buyers wait for the hourly run (LAUNCH.md step 4)"),)
     items = "".join(f'<li><span>{h(k)}</span><b>{h(v)}</b></li>' for k, v in rows)
     tail = f'<p class="next"><b>Next:</b> {h(nxt)}</p>' if nxt else ""
     return (f'<div class="card launch"><div class="cardhead"><h3>Where launch stands</h3>'

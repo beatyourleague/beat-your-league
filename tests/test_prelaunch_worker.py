@@ -446,8 +446,10 @@ def test_the_worker_tells_the_read_key_its_switches_and_nobody_else(tmp_path) ->
                lists: kv.lists };
     """)
     assert got["anon"][0] == 401
-    assert got["off"] == [200, {"trial_open": False, "counts": False}]
-    assert got["on"] == [200, {"trial_open": True, "counts": True}]
+    assert got["off"] == [200, {"trial_open": False, "counts": False,
+                                "instant_delivery": False}]
+    assert got["on"] == [200, {"trial_open": True, "counts": True,
+                               "instant_delivery": False}]
     assert got["lists"] == 0
 
 

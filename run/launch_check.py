@@ -1783,6 +1783,39 @@ def check_worker_switches() -> list[Gate]:
     return [Gate("Owner", name, "PASS", f"both {'on' if site else 'off'}")]
 
 
+INSTANT_GATE = "Stripe tells the form Worker the moment someone pays"
+
+
+def check_instant_delivery() -> list[Gate]:
+    """Instant delivery (Nov 3 2026): Stripe's webhook calls the Worker's
+    POST /stripe, which starts the intake at once. The Worker answers only
+    whether BOTH its halves are set (STRIPE_WEBHOOK_SECRET and
+    GH_DISPATCH_TOKEN), never either value. Without it a buyer still gets
+    everything, from the hourly run, so this is an owner step and never a
+    failure. It cannot see the Stripe side: the webhook page's 200 is the
+    proof (LAUNCH.md step 4)."""
+    endpoint = os.environ.get("FORM_ENDPOINT", "").strip()
+    key = os.environ.get("FORM_API_KEY", "").strip()
+    if not endpoint or not key:
+        return [Gate("Owner", INSTANT_GATE, "SKIP", "needs FORM_ENDPOINT and FORM_API_KEY in the shell")]
+    try:
+        status = worker_status(endpoint, key)
+    except Exception as exc:  # noqa: BLE001 — reported, never guessed
+        return [Gate("Owner", INSTANT_GATE, "SKIP", f"could not read the Worker's switches: {exc}")]
+    if status.get("instant_delivery") is True:
+        return [Gate("Owner", INSTANT_GATE, "PASS",
+                     "the Worker has its Stripe signing secret and its dispatch token")]
+    if "instant_delivery" not in status:
+        return [Gate("Owner", INSTANT_GATE, "OWNER",
+                     "Instant delivery isn't set up: the Worker runs older code. Re-paste "
+                     "infra/form-worker.js, then add the Stripe webhook (LAUNCH.md step 4, "
+                     "\"Before you buy\"). Until then buyers wait for the hourly run.")]
+    return [Gate("Owner", INSTANT_GATE, "OWNER",
+                 "Instant delivery isn't set up: add the Stripe webhook and the Worker secret "
+                 "STRIPE_WEBHOOK_SECRET (LAUNCH.md step 4, \"Before you buy\"). Until then "
+                 "buyers wait for the hourly run.")]
+
+
 def check_resend_read_key() -> list[Gate]:
     """The bounce check (run/delivery.check_bounces) reads each sent email
     back from Resend, which the sending key cannot do: without a Full access
@@ -3016,6 +3049,7 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
     if not offline:
         steps += [("email DNS", check_dns), ("live site", check_live),
                   ("form Worker switches", check_worker_switches),
+                  ("instant delivery", check_instant_delivery),
                   ("Resend domain", check_resend_domain), ("Stripe public details",
                                                            check_stripe_account),
                   ("Stripe billing page", check_billing_portal),

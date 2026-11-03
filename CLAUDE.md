@@ -1517,6 +1517,34 @@ without `SENDER_POSTAL_ADDRESS`. Rules it left:
   file outside `site/`.
 - **`TRAFFIC_FROM`** (shell or `.env`) starts the traffic counts after the owner's own testing.
 
+**Instant delivery (Nov 3 2026) — `infra/form-worker.js` POST /stripe.** The intake ran only on the
+clock (:47 hourly), so a buyer waited up to an hour. Stripe's webhook now calls the form Worker,
+which dispatches daily.yml with `{daily: "false"}` (`PURCHASE_RUN`, held to the hourly SCHEDULE
+entry by test), so the welcome and first report arrive within minutes. Rules
+(`tests/test_instant_delivery.py`, every guard mutation-checked):
+- **Verified or nothing.** Stripe-Signature checked as Stripe documents it: HMAC-SHA256 under
+  `STRIPE_WEBHOOK_SECRET` over `t + "." + the raw body BYTES` (read once, capped at 64 KB, 413
+  above), any v1 in constant time, `|now - t|` at most 300 s. Unverified: 400, nothing else.
+- **Store nothing, log nothing from the event, decide nothing.** It carries the buyer's address.
+  Only `checkout.session.completed` and `.async_payment_succeeded` dispatch; other verified events
+  answer 200. The intake reads Stripe itself, so every purchase rule stays in Python.
+- **Awaited, not `waitUntil`:** a failed dispatch answers 502 so Stripe retries (up to 3 days
+  live) and shows it. No secret: 404; no `GH_DISPATCH_TOKEN`: 503. The hourly run serves the
+  buyer in every case; no throttle ever drops a dispatch (daily.yml's concurrency group keeps
+  one running and one pending, so bursts collapse into runs that serve everybody).
+- **The quiet window.** A purchase-started intake overlapping the Wednesday run mailed a new
+  buyer the report of record (from weekly.yml) AND an early look (from daily.yml) minutes apart:
+  different concurrency groups, and weekly.yml pushes its report keys and `run-tuesday-…` marker
+  only at the end, so `_first_file` read `tuesday_finished` as False (reproduced with the real
+  intake). So from `QUIET_LEAD_MINUTES` (15 = daily.yml's intake timeout) before each weekly.yml
+  and saturday.yml SCHEDULE time until the hourly minute (:47), the Worker answers 200 and leaves
+  the purchase to the :47 run, which the schedule already keeps clear. Four windows a week, 45
+  minutes each. Residual, unchanged: a GitHub backup run that starts late is not in any window.
+- **Status:** `GET ?status=1` carries `instant_delivery` (both halves set, a boolean only);
+  `run.launch_check.check_instant_delivery` is OWNER when false, PASS when true, SKIP when
+  unreadable, and the dashboard runs it and shows it on the launch card. Setup is LAUNCH step 4,
+  "Before you buy". Buyer copy keeps "usually within the hour" until the owner's purchase proves it.
+
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
 30. You lost by four." and its answer is "Stop making that call five minutes before kickoff. Every
 Wednesday, one email decides your lineup." (owner decision, Nov 1 2026, replacing "Don't make that
