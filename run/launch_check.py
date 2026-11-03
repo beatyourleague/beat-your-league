@@ -1,7 +1,7 @@
 """Launch readiness — `make launch-check`.
 
 Usage:
-    python -m run.launch_check            # everything (≈8 minutes)
+    python -m run.launch_check            # everything (≈15 minutes)
     python -m run.launch_check --fast     # skip the test suite, browser and proving run
     python -m run.launch_check --offline  # skip DNS, the live site and the account APIs
 

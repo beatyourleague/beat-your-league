@@ -359,6 +359,28 @@ def test_a_late_run_before_the_workers_trigger_does_not_ask_for_the_trigger() ->
         assert "before the Worker" not in title and fix == "Set the Worker's Cron Trigger so it starts on time."
 
 
+def test_a_late_run_after_the_trigger_was_on_still_asks() -> None:
+    """The hourly intake dispatches every hour, so "an on-time dispatch came
+    after the late run" is true of nearly every late run. Reproduced: with the
+    trigger on since Nov 3, a Saturday run the Worker failed to start on Nov 7
+    read "Nothing to do" because daily dispatched at 20:47 that evening."""
+    import test_dashboard as td
+    now = datetime(2026, 11, 8, 2, 0, tzinfo=timezone.utc)
+    src = dash._source("github", data={
+        "saturday.yml": {"label": "Saturday final check",
+                         "runs": _runs(("2026-11-07T20:03:00Z", "schedule"))},
+        "daily.yml": {"label": "Daily intake",
+                      "runs": _runs(("2026-11-07T20:47:09Z", "workflow_dispatch"),
+                                    ("2026-11-03T14:17:08Z", "workflow_dispatch"))}},
+        read_at=now)
+    health = dash.workflow_health(src, now)
+    S = td.rich_sources(now)
+    [issue] = [i for i in dash.build_issues(S, now, health, None, dash.metrics_for(S, "7d", now))
+               if "minutes after its slot" in i.title]
+    assert "before the Worker" not in issue.title
+    assert issue.fix == "Set the Worker's Cron Trigger so it starts on time."
+
+
 # --------------------------------------------------------------------- #
 # TOOLS-13, 14, 15 — what the dashboard's words say
 # --------------------------------------------------------------------- #

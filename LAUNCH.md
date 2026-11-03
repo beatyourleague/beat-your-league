@@ -13,7 +13,7 @@ The form Worker is live and starts the crons on time, the page counter is on, an
 link is on the join page. Checkout can't complete yet, the free report is off, and the League
 Pass is held. What's left, in order:
 
-1. **Check what's still yours** (~10 min) — run `gh auth login` once, then `make launch-check`
+1. **Check what's still yours** (~20 min) — run `gh auth login` once, then `make launch-check`
    ([Where things stand](#where-things-stand)). It confirms the GitHub secrets, the Stripe keys,
    Resend and the crons. Anything it still lists as OWNER is still to do, and each line names
    its step: the accounts in [step 0](#0-lock-the-accounts-45-min-today), the payment links in
@@ -51,7 +51,7 @@ private (section 11, A2).
 
 ## Where things stand
 
-**Run `make launch-check`** (about 8 minutes; `make launch-check-fast` takes one). Every
+**Run `make launch-check`** (about 15 minutes; `make launch-check-fast` takes one). Every
 remaining item shows as OWNER (yours) or FAIL (code), and it says READY when nothing is left.
 It reads more when you give it more, all read-only:
 - `gh auth login` once: secrets, cron timing, the fork-PR setting.
@@ -684,10 +684,9 @@ open issue instead, so close each once it's fixed.
 kickoff, run that workflow by hand from Actions (nobody is mailed twice). After kickoff,
 don't: the Wednesday run refuses a week already underway.
 
-**A red Wednesday run saying "box scores are not all in"** names a game. Usually Monday
-night's game isn't published yet and the 7:17pm retry builds: do nothing. Monday's box
-score is normally in by Tuesday morning, so a red Wednesday-evening run naming a game usually
-means it was postponed. If that game was
+**A red Wednesday run saying "box scores are not all in"** names a game. Monday night's box
+score is normally in by Tuesday morning, so check the news for that game first. If nothing
+happened to it, the data is only late and the 7:17pm retry builds: do nothing. If that game was
 **postponed or suspended** (the news says so — BUF@CIN in 2022 is the precedent), the report
 would wait for a score that isn't coming, and so would first reports and free reports. Then:
 1. GitHub → repo Settings → Secrets and variables → Actions → **Variables** → New repository

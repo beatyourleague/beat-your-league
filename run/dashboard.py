@@ -1286,14 +1286,17 @@ ON_TIME = timedelta(minutes=10)
 
 
 def on_time_dispatch(runs: list[dict], crons: list[str]) -> datetime | None:
-    """The newest workflow_dispatch run that started within ON_TIME after one
-    of this workflow's own cron slots: the evidence the Worker's Cron Trigger
-    is on, or None."""
+    """The OLDEST workflow_dispatch run in ``runs`` that started within
+    ON_TIME after one of this workflow's own cron slots: the earliest
+    evidence that the Worker's Cron Trigger was on, or None. The oldest, not
+    the newest: the hourly intake dispatches every hour, so "some on-time run
+    came after the late one" is true of nearly every late run, including one
+    the Worker failed to start after its trigger was on."""
     from run.launch_check import _cron_fires
     best = None
     for run in runs:
         at = _gh_when(run["created_at"]) if run.get("event") == "workflow_dispatch" else None
-        if at is None or (best is not None and at <= best):
+        if at is None or (best is not None and at >= best):
             continue
         days = (at - timedelta(days=1), at)
         fires = [t for cron in crons for d in days
@@ -1442,10 +1445,13 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
             minutes = int(wf["late"][1].total_seconds() // 60)
             started = wf["late"][0] + wf["late"][1]
             # TOOLS-12: a late GitHub-scheduled run from before the Worker's
-            # trigger was on is history once any workflow shows an on-time
-            # Worker dispatch after it. Telling the owner to set a trigger
-            # that is already working sends them looking for a fault.
-            if any(w.get("on_time_dispatch") and w["on_time_dispatch"] > started for w in health):
+            # trigger was on is history: it started before the first on-time
+            # Worker dispatch any workflow shows. Telling the owner to set a
+            # trigger that is already working sends them looking for a fault.
+            # A late run AFTER that first dispatch is a real miss (the Worker
+            # was on and didn't start it), so it still asks.
+            firsts = [w["on_time_dispatch"] for w in health if w.get("on_time_dispatch")]
+            if firsts and started < min(firsts):
                 issues.append(Issue("low", f"{wf['label']} started {minutes} minutes after its slot "
                                            f"last time, before the Worker's trigger was on.",
                                     "Nothing to do: this clears after the next on-time run.",
