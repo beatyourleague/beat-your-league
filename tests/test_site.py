@@ -4575,7 +4575,7 @@ def test_join_pages_load_no_third_party_fonts_and_declare_their_colours(page, na
                           r' type="font/woff2" crossorigin>', page)
     assert 1 <= len(preloads) <= 2, name
     assert '<meta name="theme-color" content="#101E33">' in page, name
-    assert '<meta name="color-scheme" content="light">' in page, name
+    assert '<meta name="color-scheme" content="only light">' in page, name
     assert not re.search(r"font-family:'Barlow(?: Condensed)?';", page), \
         f"{name}: a face with no fallback stack renders in Times until the font lands"
 
@@ -5199,13 +5199,17 @@ def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
 
 @pytest.mark.parametrize("name,scheme,colour", [
     ("index.html", "dark", "#05090F"), ("league-pass.html", "dark", "#05090F"),
-    *[(p, "light", "#101E33") for p in _PAPER]])
+    *[(p, "only light", "#101E33") for p in (*_PAPER, "byes/index.html")]])
 def test_every_page_declares_its_colour_scheme_and_bar_colour(name: str, scheme: str,
                                                                colour: str) -> None:
     """Launch review I12: no page declared color-scheme or theme-color, so the
     dark landing drew light native controls and scrollbars, and Safari's bar
     stayed untinted. Dark pages say dark; paper pages say light with the
-    masthead's navy, as the generated report pages do (render.report.PAGE_META)."""
+    masthead's navy, as the generated report pages do (render.report.PAGE_META).
+    DES-9: "light" alone let a browser's auto-dark (Chrome's force-dark, as
+    Samsung Internet does) repaint a paper page, turning the gold button's
+    navy label near-white, about 1.6:1. "only light" opts out of that and
+    still keeps native controls light, which "light dark" would not."""
     head = (SITE / name).read_text(encoding="utf-8").split("</head>")[0]
     assert f'<meta name="color-scheme" content="{scheme}">' in head
     assert f'<meta name="theme-color" content="{colour}">' in head
