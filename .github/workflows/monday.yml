@@ -25,8 +25,8 @@ on:
   schedule:
     # Mondays 13:17 UTC — 09:17 ET on daylight time, 08:17 ET from Nov 1 2026.
     # Deliberately BEFORE Monday Night Football: the Sunday slate settles now
-    # and the MNF calls settle next week, because RULE L1 refuses to grade a
-    # call whose game is not final rather than guessing at it.
+    # and the MNF calls settle on Tuesday's run below, because RULE L1 refuses
+    # to grade a call whose game is not final rather than guessing at it.
     - cron: "17 13 * * 1"
     # Tuesdays 13:17 UTC (08:17 ET from Nov 1, 09:17 on daylight time): the
     # Monday-night box score lands about 09:15 UTC, so this run settles the MNF
