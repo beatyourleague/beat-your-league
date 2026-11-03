@@ -1385,6 +1385,19 @@ def preheader_for(report: Mapping[str, Any]) -> str:
                  if (item.get("zero") or {}).get("certain")), None)
     if hole is not None:
         return f"{str(hole['action']).rstrip('.')}. Your whole lineup is inside."
+    # A zero that waits on somebody's news outranks a close call too (launch
+    # review EM-9): card 01 opened "Heads up: no projected total — your QB
+    # can't play this week…" under a preview leading with a 57% FLEX call.
+    # Not the subject's "empty spot" (that counts certain zeros only), so it
+    # says "may".
+    maybe = next((item for item in report.get("checklist") or []
+                  if (item.get("zero") or {}).get("slots")), None)
+    if maybe is not None:
+        slots = [SLOT_DISPLAY.get(slot, slot)
+                 for slot in dict.fromkeys(maybe["zero"]["slots"])]
+        named = (slots[0] if len(slots) == 1 else
+                 ", ".join(slots[:-1]) + " and " + slots[-1])
+        return f"Heads up: your {named} may score zero. The plan is inside."
     regret = report.get("regret") or {}
     if "gate" not in regret and regret.get("start_name") and \
             regret.get("over_name") and regret.get("confidence") is not None:
