@@ -367,7 +367,10 @@ def test_the_rankings_objection_is_answered_with_facts_only() -> None:
     for claim in (r"\bbetter\b", r"\bmore accurate\b", r"\bbeats?\b", r"\bsmarter\b",
                   r"\bwin\b", r"\bproven\b", r"\btested\b", r"\bbest\b", r"\bonly\b"):
         assert not re.search(claim, text, re.I), claim
-    for fact in ("roster", "Every slot decided", "bench", "if/then", "Saturday", "title game"):
+    # "with odds where we can", not "the odds" on every close call: most rows
+    # of a report carry none (sweep SELL-8, Nov 3 2026).
+    for fact in ("roster", "Every slot decided", "odds where we can", "if/then", "Saturday",
+                 "title game"):
         assert fact in text, fact
     for brand in ("ESPN", "Yahoo", "Sleeper", "CBS", "FantasyPros", "Rotowire", "4for4"):
         assert brand not in text, brand

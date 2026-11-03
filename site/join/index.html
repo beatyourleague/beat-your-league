@@ -586,7 +586,8 @@
                aria-label="Add a player by name">
         <div class="suggest" id="suggest" role="group" aria-label="Matching players"></div>
       </div>
-    <textarea id="roster-text" spellcheck="false" placeholder="Josh Allen
+    <textarea id="roster-text" spellcheck="false" placeholder="Paste your roster here
+Josh Allen
 Bijan Robinson
 Ja'Marr Chase
 Baltimore Ravens
@@ -1244,6 +1245,22 @@ if (addWrap) {
   });
 }
 if (searchBox) {
+  // The one-name field sits above the paste box, so a buyer who copied a
+  // whole roster often pastes it here first, and a text input drops the line
+  // breaks: fifteen names became one search (sweep SELL-10). A paste with a
+  // line break in it belongs in the roster box, so it goes there, and the box
+  // hears an input event so a checked list is marked stale like any edit.
+  searchBox.addEventListener("paste", (event) => {
+    const text = event.clipboardData ? event.clipboardData.getData("text") : "";
+    if (!/[\r\n]/.test(text)) return;
+    event.preventDefault();
+    const box = $("roster-text");
+    box.value = (box.value.trim() ? box.value.replace(/\s+$/, "") + "\n" : "") + text;
+    searchBox.value = "";
+    closeSuggestions();
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    box.focus();
+  });
   searchBox.addEventListener("input", renderSuggestions);
   searchBox.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
