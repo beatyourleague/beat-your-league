@@ -49,7 +49,8 @@ Rules, each because a post is the one place we speak without a report around it:
 - **A Thursday starter gets his own post, for Thursday** (launch review M8).
   The one game the Saturday check is too late for: his kickoff as his row
   prints it, and the if/then the report printed for him when there is one
-  that moves somebody — else the report's own "check his status" line. No
+  that moves somebody — else the report's own line for him ("set your
+  lineup before then", or "check his status" when it asks that). No
   number of any kind. Drafted with the rest on Tuesday, marked for Thursday.
 - **A week with no call still says something true.** No call means no
   number, never an empty page: the rising roles, or failing those the
@@ -75,7 +76,7 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-from render.report import SITE_ORIGIN
+from render.report import SITE_ORIGIN, regret_tossup
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT = REPO_ROOT / "content" / "this-week.md"
@@ -182,6 +183,12 @@ def _call_post(report: Mapping[str, Any]) -> str | None:
     regret = report.get("regret") or {}
     if regret.get("confidence") is None:
         return None
+    # A toss-up is "either is fine" on the card this post links, the
+    # landing's strip and the share card (render.report.regret_tossup); a post
+    # saying "starts X: 52%" would make the pick the report declined to make
+    # (sweep OPS-2).
+    if regret_tossup(regret):
+        return None
     a, b = _short_names(regret["start_name"], regret["over_name"])
     # The preregistered disclosure travels with a seeded call on every surface
     # (reports/early-season-method.md §5); a post quoting one is a surface.
@@ -228,7 +235,7 @@ def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str] | None:
     """(post, card) for the first starter whose game is Thursday night, or
     None. His if/then — a printed plan ABOUT him that moves somebody, and not
     the one Tuesday's if/then post already quotes — when it fits, else the
-    report's own instruction to check his status before kickoff."""
+    report's own early-kickoff instruction for him (``_early_ask``)."""
     for row in report.get("lineup") or []:
         found = _THURSDAY.match(str(row.get("game") or ""))
         if not (found and row.get("player_name")):
@@ -249,10 +256,37 @@ def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str] | None:
             tries.append((f"{head} The if/then we set on Wednesday for our sample "
                           f"roster: if {plan['condition']}, {action}.",
                           "If/Then for Gameday"))
-        tries.append((f"{head} Our sample roster's Wednesday report flags it: check "
-                      f"his status before then.", CARDS["Thursday night"]))
+        tries.append((f"{head} Our sample roster's Wednesday report flags it: "
+                      f"{_early_ask(report, name)}.", CARDS["Thursday night"]))
         return next(((t, c) for t, c in tries if len(t) <= LIMIT), None)
     return None
+
+
+def _early_ask(report: Mapping[str, Any], name: str) -> str:
+    """What the report's own early-kickoff item asks about ``name``
+    (engine.solo_report.early_kickoff_items: "Thursday night: X kicks off at
+    8:15 PM ET — set your lineup before then."), so the post never gives an
+    instruction the report did not (sweep OPS-4: a healthy Thursday starter's
+    post said "check his status", while the report said to set the lineup).
+    "Check his status" only when the report asks for HIS status; an item that
+    asks about somebody else in the same game, or no item at all, is the
+    lock-time note."""
+    lock = "set your lineup before then"
+    for entry in report.get("checklist") or []:
+        action = str(entry.get("action") or "")
+        if not action.startswith("Thursday night:") or " — " not in action:
+            continue
+        who, ask = action.split(" — ", 1)
+        if name not in who:
+            continue
+        ask = ask.strip().rstrip(".")
+        if not ask.startswith("check "):
+            return lock
+        if ask in ("check his status before then", "check their status before then") \
+                or name in ask:
+            return "check his status before then"
+        return lock
+    return lock
 
 
 def _short_rising(row: Mapping[str, Any]) -> str:

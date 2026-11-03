@@ -93,11 +93,57 @@ def test_the_map_links_this_weeks_report_only_under_the_heros_rule() -> None:
     # DES-1: a week whose card 01 printed no projected total (a starter who
     # can't play, nobody cleared behind him) is not the page to show off.
     assert re.search(r"w\.cards === true &&\s*w\.total !== false", script)
+    # DATA-02: nor once the week's last game day (week_ends, ET) is past.
+    assert "today > w.week_ends" in script
     assert '(w.phase || "season") !== "season"' in script and "today > w.lands_on" in script
     digest = hashlib.sha256((SITE / "footer.js").read_bytes()).hexdigest()[:10]
     assert f'<script src="/footer.js?v={digest}" defer></script>' in block
     assert "footer .footmap a[hidden]{display:none;}" in rr.SITE_FOOTER_CSS, \
         "a block link ignores [hidden] without this rule"
+
+
+_FOOTER_RUN = r"""
+const fs = require("fs");
+const [src, clockJson, now] = process.argv.slice(1);
+const link = { hidden: true };
+global.document = { querySelectorAll: () => [link] };
+global.window = { fetch: true };
+const RealDate = Date;
+const at = RealDate.parse(now);
+global.Date = class extends RealDate {
+  constructor(...a) { super(...(a.length ? a : [at])); }
+  static now() { return at; }
+};
+global.fetch = () => Promise.resolve({ ok: true, json: () => JSON.parse(clockJson) });
+eval(fs.readFileSync(src, "utf8"));
+setTimeout(() => process.stdout.write(JSON.stringify(!link.hidden)), 20);
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_the_footer_link_hides_once_the_weeks_last_game_is_over() -> None:
+    """Sweep OPS-1 / DATA-02, run in node: Week 8's clock (lands Wed Nov 4,
+    last game Monday Nov 2, ET) linked its finished page until Wednesday's
+    build. The link shows while the week is live, hides once Eastern "today"
+    is past week_ends, and a clock without week_ends links nothing."""
+    clock = {"season": "2026", "week": 8, "last_week": 18, "lands_on": "2026-11-04",
+             "odds": 3, "closest_call": True, "cards": True, "phase": "season",
+             "week_ends": "2026-11-02"}
+
+    def shown(w: dict, now: str) -> bool:
+        done = subprocess.run(["node", "-e", _FOOTER_RUN, str(SITE / "footer.js"),
+                               json.dumps(w), now], capture_output=True, text=True,
+                              timeout=60)
+        assert done.returncode == 0, done.stderr
+        return json.loads(done.stdout)
+
+    assert shown(clock, "2026-11-02T20:00:00Z"), "a live week's link is hidden"
+    assert shown(clock, "2026-11-03T04:30:00Z"), "hidden on Monday night, ET"
+    assert not shown(clock, "2026-11-03T05:30:00Z"), "a finished week is still linked"
+    assert not shown(clock, "2026-11-04T12:00:00Z")
+    older = {k: v for k, v in clock.items() if k != "week_ends"}
+    assert not shown(older, "2026-11-02T20:00:00Z"), "a clock without week_ends linked"
+    assert not shown({**clock, "total": False}, "2026-11-02T20:00:00Z")
 
 
 def test_a_subscribers_own_report_carries_no_site_furniture() -> None:

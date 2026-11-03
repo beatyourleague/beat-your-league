@@ -672,10 +672,12 @@ win-loss totals, nothing about betting.
 | Wednesday about 5:17pm, retry about 7:17pm (8:17am too in a week with a Wednesday game) | **weekly-report:** new signups, every subscriber's report, this week's live sample (its odds are recorded before kickoff) | Open your own report |
 | Daily 9:17am, plus every hour at :47 | **daily-intake:** purchases, welcomes, first reports, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
 | Saturday 11:17am | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
-| Monday 8:17am | **monday-receipts:** grades last week's calls, republishes the record | Nothing, unless it goes red |
+| Monday 8:17am, again Tuesday 8:17am | **monday-receipts:** grades last week's calls, republishes the record; Tuesday's run settles the Monday-night calls | Nothing, unless it goes red |
 
-UTC: Wed 22:17 and Thu 00:17 (plus Wed 13:17), daily 14:17 and :47 hourly, Sat 16:17, Mon
-13:17. The Worker starts each on time (`17,47 * * * *`); GitHub's schedules are the backup.
+UTC: Wed 22:17 and Thu 00:17 (plus Wed 13:17 in a week with a Wednesday game), daily 14:17 and
+:47 hourly, Sat 16:17, Mon and Tue 13:17. The Worker starts each on time (`17,47 * * * *`);
+GitHub's schedules are the backup. Cron has no time zone, so on daylight time (until early
+November, and from March) every ET time above is an hour later.
 
 A red run opens a GitHub issue and GitHub emails you. The same failure again comments on the
 open issue instead, so close each once it's fixed.

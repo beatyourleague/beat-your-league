@@ -306,7 +306,7 @@ def rough_week_line(report: Mapping[str, Any]) -> str | None:
     said = (clauses[0] if len(clauses) == 1
             else ", ".join(clauses[:-1]) + ", and " + clauses[-1])
     return (f"This week's sample roster is a rough one: {said}. Your Game Plan "
-            f"shows exactly what its manager should do.")
+            f"shows what its manager should do.")
 
 
 def week_note(report: Mapping[str, Any],

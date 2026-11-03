@@ -1,4 +1,4 @@
-# Tuesday weekly pipeline (PLAN.md season ops: reports generate Tue morning).
+# Wednesday weekly pipeline (reports go out Wednesday evening, after waivers).
 #
 # This drives the ROSTER product (PLAN §0): payments become subscribers via
 # run.intake, and run.tuesday builds and mails one report per typed roster. No
@@ -12,9 +12,9 @@
 #
 # Secrets that matter here:
 #   STRIPE_API_KEY        — restricted; its exact permissions are LAUNCH.md step 3
-#   STRIPE_PAYMENT_LINKS  — s:plink_A,o:plink_B,p:plink_C in 2026 ($29, $19
-#                           Playoff, $69; m: is monthly, from 2027) — the plan
-#                           is a FACT about the link that took the money
+#   STRIPE_PAYMENT_LINKS  — m:<$14.99 link>,p:<$34.99 link> (y: beside them
+#                           once the 2027 pass is on) — the plan is a FACT
+#                           about the link that took the money
 #   EMAIL_PROVIDER + that provider's key — unset means dry-run, which FAILS the
 #                           job rather than silently mailing nobody.
 #   SENDER_POSTAL_ADDRESS — the sender line every commercial email carries;
@@ -625,7 +625,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TITLE: Weekly run failed
         run: |
-          body="$(date -u +%Y-%m-%d): the Tuesday pipeline failed. Subscribers may not have been mailed.
+          body="$(date -u +%Y-%m-%d): the Wednesday pipeline failed. Subscribers may not have been mailed.
 
           Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
 

@@ -435,6 +435,34 @@ def test_no_selling_page_uses_a_banned_word(name: str) -> None:
         assert not re.search(rf"\b{word}\b", rendered, re.I), (name, word)
 
 
+@pytest.mark.parametrize("name", ("this-week.html", "sample-report.html",
+                                  "sample-first-week.html"))
+def test_no_sample_page_says_exactly(name: str) -> None:
+    """Sweep OPS-3: the live sample's banner read "for a sample roster, exactly
+    the way yours is built", and its rough-week note "Your Game Plan shows
+    exactly what its manager should do". "Exactly" is on the plain-words
+    banned list, and the samples are selling pages. Rendered text only: code
+    comments elsewhere still use the word."""
+    rendered = _flat(_markup((SITE / name).read_text(encoding="utf-8")))
+    assert not re.search(r"\bexactly\b", rendered, re.I), name
+
+
+def test_the_sample_banner_and_rough_week_note_never_say_exactly() -> None:
+    """The same words at their source, so Wednesday's rebuild cannot bring
+    them back."""
+    from render import anatomy, live_sample
+    banner = " ".join(b["text"] for b in anatomy.bands(
+        {"meta": {"live_demo": True, "week": 6, "season": "2026", "solo": True,
+                  "generated_at": "2026-10-14T22:20:00+00:00"}}))
+    assert "the same way yours is." in banner
+    note = live_sample.rough_week_line({"lineup": [
+        {"slot": "QB", "player_id": "00-1", "status": "out",
+         "status_reason": "on bye"}], "bench": []})
+    assert note and "Your Game Plan shows what its manager should do" in note
+    for text in (banner, note):
+        assert not re.search(r"\bexactly\b", text, re.I), text
+
+
 @pytest.mark.parametrize("name", SELLING)
 def test_no_selling_page_talks_about_misses_or_minimizes(name: str) -> None:
     """DES-7/FUN-8: How it works said the season review covers "how your calls
