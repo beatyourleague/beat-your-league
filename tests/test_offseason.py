@@ -533,3 +533,132 @@ def test_the_workflows_carry_both() -> None:
 
 def test_the_calendar_knows_about_the_rookie_report() -> None:
     assert 5 in plans.months_covered() and not plans.bills_all_year()
+
+
+# --------------------------------------------------------------------- #
+# launch review OPS-3: no sender address is red once, never every run
+# --------------------------------------------------------------------- #
+
+class _Provider:
+    name = "fake"
+
+
+def _held_env(tmp_path, monkeypatch) -> tuple[Path, list]:
+    """A send log in tmp_path, LOG_SECRET set, SENDER_POSTAL_ADDRESS unset, and
+    a send_all that records what it was handed."""
+    import run.delivery as delivery
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    monkeypatch.setenv("LOG_SECRET", SECRET)
+    monkeypatch.delenv("SENDER_POSTAL_ADDRESS", raising=False)
+    monkeypatch.delenv("FORM_ENDPOINT", raising=False)
+    monkeypatch.setattr(delivery, "build_provider", lambda *a: _Provider())
+    handed: list = []
+
+    def send_all(messages, provider=None):
+        handed.extend(messages)
+        return [delivery.SendResult(m, True, "id") for m in messages]
+    monkeypatch.setattr(delivery, "send_all", send_all)
+    return log, handed
+
+
+def test_a_season_review_held_for_its_sender_address_is_red_once(tmp_path, monkeypatch,
+                                                                   capsys) -> None:
+    """Reproduction (launch review OPS-3): the owner launched without
+    SENDER_POSTAL_ADDRESS, and the season review refused with exit 1 on every
+    Wednesday of its window, failing the weekly job and commenting on its issue
+    each time. Without the address it still sends nothing, but only the first
+    run that holds it goes red; the later ones say so with a warning and exit
+    0. Once the address is set, the next run sends."""
+    import ingest.nflverse as nflverse
+    import engine.season_review as engine_review
+    import render.season_review as render_review
+    import run.delivery as delivery
+    import run.rosters as rosters
+    import run.saturday as saturday
+    import run.solo as solo
+    import run.tuesday as tuesday
+    from types import SimpleNamespace
+    from run.watchdog import held_key
+    log, handed = _held_env(tmp_path, monkeypatch)
+    registry = tmp_path / "rosters.json"
+    registry.write_text("{}", encoding="utf-8")
+    team = SimpleNamespace(email="fan@example.com", slug="abcdef0123", label="Work league",
+                           league_type="redraft", player_ids=(),
+                           spec=lambda: SimpleNamespace(rule=RULE))
+    monkeypatch.setattr(nflverse, "season_rows", lambda *a, **k: {})
+    monkeypatch.setattr(nflverse, "fetch", lambda *a, **k: (_ for _ in ()).throw(
+        nflverse.NflverseError("offline")))
+    monkeypatch.setattr(solo, "assert_week_is_complete", lambda *a, **k: None)
+    monkeypatch.setattr(solo, "last_week", lambda *a, **k: 18)
+    monkeypatch.setattr(solo, "season_ends", lambda *a, **k: {"2026": "2027-01-10"})
+    monkeypatch.setattr(rosters, "load_rosters", lambda *a, **k: [team])
+    monkeypatch.setattr(tuesday, "paid_subscribers", lambda subscribers, *a, **k: subscribers)
+    monkeypatch.setattr(saturday, "load_plans", lambda *a, **k: [plan(5, [])])
+    monkeypatch.setattr(engine_review, "review_team", lambda *a, **k: {"calls": []})
+    monkeypatch.setattr(render_review, "review_message",
+                        lambda email, season, teams, key, url: delivery.Message(
+                            key=key, to=email, subject="s", text="t", html="h"))
+    args = ["--season", "2026", "--registry", str(registry),
+            "--plans-dir", str(tmp_path / "plans")]
+
+    assert season_review.main(args) == 1
+    err = capsys.readouterr().err
+    assert "SEASON REVIEW NOT SENT" in err and "1 waiting" in err and "until Jan 31" in err
+    assert held_key("review", "2026") in delivery.load_sent(log)
+
+    assert season_review.main(args) == 0, "red every Wednesday about the same secret"
+    out = capsys.readouterr()
+    assert "SEASON REVIEW NOT SENT" in out.err and "::warning::" in out.out
+    assert not handed, "a commercial email went out with no postal address"
+
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 9, Toronto ON")
+    assert season_review.main(args) == 0
+    assert [m.to for m in handed] == ["fan@example.com"]
+
+
+def test_a_rookie_report_held_for_its_sender_address_is_red_once_a_year(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Reproduction (launch review OPS-3): from May, with anyone having asked,
+    the rookie report refused with exit 1 on every hourly run, so the daily
+    intake job went red every hour and its issue gathered a comment an hour,
+    burying a real blocked signup in the same job. Held for want of the
+    address, it is red on the first run of the year and green with a warning
+    after; a failed read of the requests still fails."""
+    import engine.rookies as engine_rookies
+    import ingest.nflverse as nflverse
+    import render.rookies as rookies_page
+    import run.delivery as delivery
+    import run.rosters as rosters
+    from run.watchdog import held_key
+    log, handed = _held_env(tmp_path, monkeypatch)
+    registry = tmp_path / "rosters.json"
+    append_holds([HoldEntry("fan@example.com", "2026", "2027-01-14")],
+                 tmp_path / season_review.HOLD_LOG_NAME)
+
+    class May(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2027, 5, 3, 14, tzinfo=timezone.utc)
+    monkeypatch.setattr(rookie_runner, "datetime", May)
+    monkeypatch.setattr(nflverse, "fetch", lambda *a, **k: tmp_path / "players.csv")
+    monkeypatch.setattr(engine_rookies, "load_players", lambda *a, **k: [])
+    monkeypatch.setattr(engine_rookies, "picks_in", lambda *a, **k: 300)
+    monkeypatch.setattr(engine_rookies, "near_your_players", lambda *a, **k: [])
+    monkeypatch.setattr(rosters, "load_rosters", lambda *a, **k: [])
+    monkeypatch.setattr(rookies_page, "load_report", lambda *a, **k: {"rookies": []})
+    monkeypatch.setattr(rookies_page, "rookie_email",
+                        lambda report, near, email, key, *a: delivery.Message(
+                            key=key, to=email, subject="s", text="t", html="h"))
+    args = ["--registry", str(registry)]
+
+    assert rookie_runner.main(args) == 1
+    assert "ROOKIE REPORT NOT SENT" in capsys.readouterr().err
+    assert held_key("rookies", "2027") in delivery.load_sent(log)
+    assert rookie_runner.main(args) == 0, "red every hour about the same secret"
+    assert "::warning::" in capsys.readouterr().out
+    assert not handed, "a commercial email went out with no postal address"
+
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 9, Toronto ON")
+    assert rookie_runner.main(args) == 0
+    assert [m.to for m in handed] == ["fan@example.com"]

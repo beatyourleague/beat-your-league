@@ -161,6 +161,37 @@ def claim_day(day: date, sent_log: Path | None = None) -> bool:
     return _mark(day_key(day), "", sent_log)
 
 
+def held_key(what: str, period: str) -> str:
+    """The marker a send held for want of setup leaves: one per product and
+    period, ``run-held-<what>-<period>``."""
+    return f"run-held-{what}-{period}"
+
+
+def held_once(what: str, period: str, reason: str,
+              sent_log: Path | None = None) -> int:
+    """The exit code for a send held for want of setup the owner chose to
+    leave for later (SENDER_POSTAL_ADDRESS, launch review OPS-3).
+
+    1 the first time ``what`` is held in ``period``: that run goes red and its
+    workflow files the one issue that names the missing setting. 0 on every
+    run after, with a warning on the run page, because the season review runs
+    every Wednesday of its window and the rookie report every hour from May,
+    and a step red each time about the same unset secret buries a real
+    failure in the same job (a blocked signup, a failed send) under comments
+    nobody reads any more. Nothing is lost by waiting: the send goes out on
+    the first run after the setting exists, while its window is open. A
+    marker that cannot be written answers 1: loud is the safe side."""
+    try:
+        first = _mark(held_key(what, period), reason, sent_log)
+    except OSError:
+        return 1
+    if first:
+        return 1
+    print(f"::warning::{reason} (already reported by an earlier run, so this "
+          f"one stays green)")
+    return 0
+
+
 def tuesday_finished(keys: set[str], season: str, week: int) -> bool:
     return run_key(TUESDAY, season, week) in keys
 
