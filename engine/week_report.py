@@ -1281,7 +1281,7 @@ def checklist(
     planned: Collection[str] | None = None,
     unplanned: Mapping[str, str] | None = None,
     standins: Mapping[str, Sequence[str]] | None = None,
-    late_news_when: Callable[[str], datetime | None] | None = None,
+    late_news_when: Callable[[str], datetime | Sequence[datetime] | None] | None = None,
     standin_ids: Mapping[str, Sequence[str]] | None = None,
 ) -> list[dict[str, str]]:
     """The game plan. ``extra`` items (the solo report's kickoff and
@@ -1592,7 +1592,8 @@ def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
                     news: list[tuple[str, SlotPick, bool, str]] | None = None,
                     planned: Collection[str] | None = None,
                     unplanned: Mapping[str, str] | None = None,
-                    when: Callable[[str], datetime | None] | None = None,
+                    when: Callable[[str], datetime | Sequence[datetime] | None]
+                    | None = None,
                     ) -> list[dict[str, str]]:
     """``skip``: players another item already times — a Thursday-night player
     told to check his status on Sunday morning is told it three days after his
@@ -1608,7 +1609,12 @@ def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
     (panel review RQ2-07): a Monday-night questionable whose cover plays the
     same game was told "Sunday morning: check his status (gameday morning)"
     while the call is made at Monday's inactives, about 6:45 PM ET. Sunday,
-    or no clock at all, keeps the Sunday-morning line."""
+    or no clock at all, keeps the Sunday-morning line.
+
+    ``when`` may give one player several moments, one per ruling whose plan
+    acts at a different time (launch review PROD-1): a Monday-night starter
+    whose final-report cover plays Sunday is checked Sunday morning AND at
+    Monday's inactives, so he is on both days' lines, at each day's earliest."""
     if news is None:
         news = late_news(my_picks, players, availability)
     watch = [entry for entry in news if entry[3] not in skip]
@@ -1616,9 +1622,17 @@ def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
         return []
     buckets: dict[date | None, list[tuple[tuple, datetime | None]]] = {}
     for entry in watch:
-        moment = when(entry[3]) if when is not None else None
-        day = moment.date() if moment is not None and moment.weekday() != 6 else None
-        buckets.setdefault(day, []).append((entry, moment))
+        timed = when(entry[3]) if when is not None else None
+        moments = ([timed] if timed is None or isinstance(timed, datetime)
+                   else list(timed) or [None])
+        days: dict[date | None, datetime | None] = {}
+        for moment in moments:
+            day = moment.date() if moment is not None and moment.weekday() != 6 else None
+            if day not in days or (moment is not None
+                                   and (days[day] is None or moment < days[day])):
+                days[day] = moment
+        for day, moment in days.items():
+            buckets.setdefault(day, []).append((entry, moment))
     sunday = next((m.date() for group in buckets.values() for _, m in group
                    if m is not None and m.weekday() == 6), None)
     order = sorted(buckets, key=lambda day: day or sunday or date.min)

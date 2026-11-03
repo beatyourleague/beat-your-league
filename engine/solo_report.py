@@ -287,21 +287,22 @@ def build_solo_report(
     # if/then has an answer only if that player is elevated, so the late-news
     # line may not say "the answer either way".
     elevation: dict[str, str] = {}
-    # When each player's news must be acted on (RQ2-07), for the late-news line.
-    decide_at: dict[str, datetime] = {}
+    # When each player's news must be acted on (RQ2-07), for the late-news
+    # line: one moment per ruling that has its own plan (``ruling_moments``).
+    decide_at: dict[str, list[datetime]] = {}
     for name, pick, is_starter, pid in news:
         if not is_starter:
             moment = decision_moment(pid, game_of, before=pick.player_id)
             if moment is not None:
-                decide_at[pid] = moment
+                decide_at[pid] = [moment]
             continue
         options = covers(pick, spec, picks, players, model, availability, week,
                          unconfirmed)
         found = stand_in(pick, options, game_of, sunday, taken)
         final, late, early = found.final, found.late, found.too_early
-        moment = decision_moment(pid, game_of, cover=None if found.late else found.early)
-        if moment is not None:
-            decide_at[pid] = moment
+        moments = ruling_moments(pid, found, game_of)
+        if moments:
+            decide_at[pid] = moments
         rows = starter_plans(name, pick, found, options, players, game_of, taken)
         gameday = found.late or found.early
         if gameday is not None:
@@ -1206,6 +1207,40 @@ def decision_moment(player_id: str,
         theirs = kickoff(game_of(before))
         moments += [theirs] if theirs is not None else []
     return min(moments) if moments else None
+
+
+def ruling_moments(player_id: str, found: StandIn,
+                   game_of: Callable[[str], Mapping[str, Any] | None]
+                   ) -> list[datetime]:
+    """When a questionable starter's news must be acted on, once per ruling
+    whose plan acts at a different time (launch review PROD-1, Nov 2026).
+
+    Report C: DJ Moore and Dalton Kincaid, both Monday night, shared one
+    Sunday 4:25 PM bench back. Kincaid's game-day plan took him, so Moore's
+    only plan was "ruled out before game day: move TreVeyon Henderson in",
+    and the game plan said "Monday: check DJ Moore's status (by Monday 6:45
+    PM ET)", a day after Henderson had locked. The moment was timed by the
+    game-day cover alone, and Moore had none.
+
+    - A game-day plan at the inactives (``late``) is acted on then. When the
+      plan for a ruling BEFORE game day needs a cover who kicks off earlier,
+      that is a second, earlier moment, and the reader is told both: Sunday
+      morning for the final report, Monday's inactives for the game-day call.
+    - No game-day plan at the inactives: the earliest kickoff any plan needs,
+      the final-report cover's or the game-day cover's who kicks off first.
+      A starter whose game-day answer is "keep him and take a zero" has
+      nothing to do at his inactives, so he gets no second line.
+    - No plan at all: his own inactives."""
+    if found.late is not None:
+        moments = [decision_moment(player_id, game_of)]
+        if found.final is not None and found.final != found.late:
+            moments.append(decision_moment(player_id, game_of, cover=found.final))
+    else:
+        timed = [decision_moment(player_id, game_of, cover=cover)
+                 for cover in (found.final, found.early) if cover is not None]
+        timed = [moment for moment in timed if moment is not None]
+        moments = [min(timed)] if timed else [decision_moment(player_id, game_of)]
+    return sorted(set(moment for moment in moments if moment is not None))
 
 
 def no_stand_in_line(name: str, slot: str, early: Sequence[str],
