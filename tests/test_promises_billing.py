@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -382,6 +383,15 @@ def _set(page: Path, old: str, new: str) -> None:
     page.write_text(text.replace(old, new))
 
 
+def _flag(page: Path, name: str, value: str) -> None:
+    """Set a page constant whatever it reads now (the live pages move as
+    launch steps land, so a test builds its own state)."""
+    new, n = re.subn(rf"^const {name} = [^;]*;", f"const {name} = {value};", page.read_text(),
+                     flags=re.M)
+    assert n == 1, name
+    page.write_text(new)
+
+
 def _gate(gates, part):
     hits = [g for g in gates if part.lower() in g.name.lower()]
     assert hits, [g.name for g in gates]
@@ -401,7 +411,7 @@ def test_the_launch_gates_this_round_added(site, monkeypatch) -> None:
     assert _gate(lc.check_funnel_config(), "confirm page posts") == "PASS"
 
     assert _gate(lc.check_funnel_config(), "opens the day seats") == "PASS"
-    _set(site / "index.html", "const CHECKOUT_OPEN = false;", "const CHECKOUT_OPEN = true;")
+    _flag(site / "index.html", "CHECKOUT_OPEN", "true")
     _set(site / "join/index.html", 'const STRIPE_LINK_PASS = "";',
          'const STRIPE_LINK_PASS = "https://buy.stripe.com/x";')
     assert _gate(lc.check_funnel_config(), "opens the day seats") == "FAIL"
@@ -413,6 +423,6 @@ def test_the_launch_gates_this_round_added(site, monkeypatch) -> None:
     monkeypatch.setattr(lc, "_runs", lambda w: [])
     monkeypatch.setattr(lc, "audit_cron_runs", lambda runs, now: late)
     assert lc.check_cron_timing()[0].status == "FAIL"
-    _set(site / "index.html", "const CHECKOUT_OPEN = true;", "const CHECKOUT_OPEN = false;")
+    _flag(site / "index.html", "CHECKOUT_OPEN", "false")
     assert lc.check_cron_timing()[0].status == "WARN"
     assert lc.log_secret_gate({"EMAIL_PROVIDER"}) == []

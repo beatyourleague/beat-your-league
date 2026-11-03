@@ -27,6 +27,15 @@ def site(tmp_path, monkeypatch):
     return copy
 
 
+def _flag(page, name: str, value: str) -> None:
+    """Set a page constant whatever it reads now (the live pages move as
+    launch steps land, so a test builds its own state)."""
+    text = page.read_text()
+    new, n = re.subn(rf"^const {name} = [^;]*;", f"const {name} = {value};", text, flags=re.M)
+    assert n == 1, name
+    page.write_text(new)
+
+
 def _status(gates, name_part):
     hits = [g for g in gates if name_part.lower() in g.name.lower()]
     assert hits, f"no gate named like {name_part!r}: {[g.name for g in gates]}"
@@ -34,9 +43,9 @@ def _status(gates, name_part):
 
 
 def test_selling_a_closed_checkout_fails(site) -> None:
-    page = site / "index.html"
-    page.write_text(page.read_text().replace("const CHECKOUT_OPEN = false;",
-                                             "const CHECKOUT_OPEN = true;"))
+    _flag(site / "join" / "index.html", "STRIPE_LINK_MONTHLY", '""')
+    _flag(site / "league-pass.html", "CHECKOUT_OPEN", "false")
+    _flag(site / "index.html", "CHECKOUT_OPEN", "true")
     gates = lc.check_funnel_config()
     assert _status(gates, "never sells a checkout") == "FAIL"
     assert _status(gates, "agree on whether checkout is open") == "FAIL"
@@ -122,9 +131,7 @@ def test_a_personal_address_anywhere_fails(site) -> None:
 def test_a_script_that_does_not_parse_fails(site) -> None:
     if not shutil.which("node"):
         pytest.skip("node is not installed")
-    page = site / "index.html"
-    page.write_text(page.read_text().replace("const CHECKOUT_OPEN = false;",
-                                             "const CHECKOUT_OPEN = = false;"))
+    _flag(site / "index.html", "CHECKOUT_OPEN", "= false")
     assert _status(lc.check_scripts(), "script parses") == "FAIL"
 
 
@@ -168,9 +175,7 @@ def test_opening_checkout_before_the_form_worker_fails(site) -> None:
     reply the owner applies by hand. CHECKOUT_OPEN on the landing with the join
     page's FORM_ENDPOINT empty is a FAIL; with the Worker wired it passes."""
     _no_form_worker(site)
-    page = site / "index.html"
-    page.write_text(page.read_text().replace("const CHECKOUT_OPEN = false;",
-                                             "const CHECKOUT_OPEN = true;"))
+    _flag(site / "index.html", "CHECKOUT_OPEN", "true")
     assert _status(lc.check_funnel_config(), "before roster changes have a route") == "FAIL"
     join = site / "join" / "index.html"
     join.write_text(join.read_text().replace('const FORM_ENDPOINT = "";',

@@ -422,7 +422,11 @@ def check_funnel_config() -> list[Gate]:
     join = js_constants((SITE / "join/index.html").read_text(encoding="utf-8"))
     lp = js_constants((SITE / "league-pass.html").read_text(encoding="utf-8"))
     links = {k: join.get(k, "") for k in ("STRIPE_LINK_MONTHLY", "STRIPE_LINK_PASS")}
-    empty = [k for k, v in links.items() if not v]
+    # LAUNCH.md: the League Pass may be held back until the lawyer's consult
+    # (section 12). An empty pass link with SEATS_OPEN off is that hold, so it
+    # is not a link missing from a plan on sale.
+    pass_held = not links["STRIPE_LINK_PASS"] and lp.get("SEATS_OPEN") != "true"
+    empty = [k for k, v in links.items() if not v and not (k == "STRIPE_LINK_PASS" and pass_held)]
     open_ = landing.get("CHECKOUT_OPEN") == "true"
     can = landing.get("CHECKOUT_CAN_COMPLETE") == "true"
     trial = landing.get("TRIAL_OPEN") == "true"
@@ -434,7 +438,9 @@ def check_funnel_config() -> list[Gate]:
                           f"Worker) and steps 1–3, then fresh links go into "
                           f"site/join/index.html"))
     else:
-        gates.append(Gate("Funnel", "Checkout can take money", "PASS", "every payment link on sale is set"))
+        gates.append(Gate("Funnel", "Checkout can take money", "PASS",
+                          "the Monthly link is set; the League Pass is held (SEATS_OPEN off)"
+                          if pass_held else "every payment link on sale is set"))
     gates.append(_gate("Funnel", "The landing never sells a checkout that cannot complete",
                        not (open_ and links["STRIPE_LINK_MONTHLY"] == "")
                        and not (can and empty),
@@ -700,9 +706,14 @@ def check_product() -> list[Gate]:
         from render.live_sample import build
         report = build()
     except Exception as exc:  # noqa: BLE001
-        from run.solo import SeasonOver
+        from run.solo import SeasonOver, SoloError
         if isinstance(exc, SeasonOver):
             return [Gate("Product", "This week's report builds", "SKIP", f"offseason: {exc}")]
+        if isinstance(exc, SoloError):
+            # The last week's box scores aren't all in (Monday night, usually):
+            # the Wednesday run refuses the same way, then succeeds.
+            return [Gate("Product", "This week's report builds", "WARN",
+                         f"not yet: {exc}")]
         return [Gate("Product", "This week's report builds", "FAIL", f"{type(exc).__name__}: {exc}")]
     gates = [Gate("Product", "This week's report builds", "PASS",
                   f"{report['meta']['season']} week {report['meta']['week']}, sample roster")]
@@ -909,10 +920,10 @@ def battery_reports() -> tuple[tuple[str, dict], ...] | str:
     per run: the battery's gates and the email-width gate read the same
     reports. A string is the reason there are none (the offseason)."""
     from engine.subscriber import RosterSpec
-    from run.solo import CACHE_DIR, SeasonOver, load_week_data, report_for
+    from run.solo import CACHE_DIR, SoloError, load_week_data, report_for
     try:
         data = load_week_data(CACHE_DIR)
-    except SeasonOver as exc:
+    except SoloError as exc:  # the offseason, or a week whose box scores aren't in
         return str(exc)
     today = players_today(CACHE_DIR)
     byes = schedule_byes(CACHE_DIR, data.season, data.week) or set()
@@ -1197,13 +1208,16 @@ def check_email_widths() -> list[Gate]:
     announcement could scroll sideways on launch day with this gate green."""
     from render.email import render_email
     from render.live_sample import build
-    from run.solo import SeasonOver
+    from run.solo import SeasonOver, SoloError
     emails: list[tuple[str, str]] = []
     try:
         sample = build()
         emails.append(("this week's sample", render_email(sample)))
     except SeasonOver as exc:
         return [Gate("Browser", "Every email fits a 390px phone", "SKIP", f"offseason: {exc}")]
+    except SoloError as exc:
+        return [Gate("Browser", "Every email fits a 390px phone", "SKIP",
+                     f"this week's report can't be built yet: {exc}")]
     built = battery_reports()
     if not isinstance(built, str):
         emails += [(label, render_email(report)) for label, report in built]
@@ -2302,7 +2316,7 @@ def check_email_senders() -> list[Gate]:
     that the variable was set — and the final check, all four welcomes, the
     renewal notice and the roster report never printed it (launch audit L3)."""
     from render.sender import postal_address, sender_line
-    from run.solo import SeasonOver
+    from run.solo import SeasonOver, SoloError
     real = postal_address()
     try:
         with _env("SENDER_POSTAL_ADDRESS", real or PROBE_ADDRESS):
@@ -2311,6 +2325,12 @@ def check_email_senders() -> list[Gate]:
     except SeasonOver as exc:
         return [Gate("Email", "Every email names its sender and a way out", "SKIP",
                      f"offseason: {exc}")]
+    except SoloError as exc:
+        # Monday night, before the last game's box score lands, this week's
+        # report refuses to build (run.solo.assert_week_is_complete): no
+        # sample to read, which is not a fault in any email.
+        return [Gate("Email", "Every email names its sender and a way out", "SKIP",
+                     f"this week's report can't be built yet: {exc}")]
     found = audit_senders(samples, line)
     names = [n for n, *_ in samples]
     gates = []

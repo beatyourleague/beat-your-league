@@ -577,7 +577,7 @@ function carryVia(href, via) {
 // Closed — the static markup — the asks are the roster check. Open, the same
 // page under the buy label (D15). A season that is over has no week left to
 // check, so they go to the landing's email capture.
-const CHECKOUT_OPEN = false;
+const CHECKOUT_OPEN = true;
 function setCheckoutCta(state) {
   document.querySelectorAll("[data-checkout-cta]").forEach((a) => {
     const over = state === "over";

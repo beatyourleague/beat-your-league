@@ -152,11 +152,17 @@ def test_the_apps_and_the_planner_have_a_visible_home_on_the_landing() -> None:
 
 @pytest.mark.parametrize("name", NEXT_STEP)
 def test_every_proof_and_tool_page_ends_with_the_same_next_step(name: str) -> None:
-    """The label on every page that leads to join/ is the same, closed."""
+    """The label on every page that leads to join/ is the same: the roster
+    check while checkout is closed, the buy label once it is open. Generated
+    pages bake the label in from the landing's CHECKOUT_OPEN; how-it-works and
+    the planner ship the closed markup and relabel it in the browser."""
     page = markup_only(_page(name))
     main = page.split("<footer", 1)[0]
+    static = name in ("how-it-works.html", "byes/index.html")
+    label = rr.CHECK_LABEL if static or not rr.checkout_open() else rr.SAMPLE_CTA
     assert re.search(r'<a class="(?:btn gold|golink)"[^>]*href="(?:\.\./)?join/index\.html'
-                     r'(?:\?(?:t=[a-z0-9-]+|league=dynasty))?"[^>]*>Check my team free</a>', main), name
+                     r'(?:\?(?:t=[a-z0-9-]+|league=dynasty))?"[^>]*>' + re.escape(label) + '</a>',
+                     main), name
 
 
 @pytest.mark.parametrize("name", NEXT_STEP + ("index.html",))

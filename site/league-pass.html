@@ -548,7 +548,7 @@
 // only the commissioner) has to pick their league before paying, because the
 // payment carries the league it covers — that is what tells us whose seats to
 // honour. They paste a roster too: the pass buys them their own report as well.
-const CHECKOUT_OPEN = false;
+const CHECKOUT_OPEN = true;
 // A pass sold before seats can be claimed is a $99 promise to eleven people we
 // cannot keep: seats arrive through the form Worker. Flip this the day
 // FORM_ENDPOINT is set on the join page (launch audit, Oct 2026).
@@ -601,7 +601,7 @@ if (CHECKOUT_OPEN && SEATS_OPEN) {
     own.href = "join/index.html";
     own.textContent = "Set up your own team";
     const small = document.createElement("small");
-    small.textContent = "The League Pass opens the day your league can claim its seats.";
+    small.textContent = "The League Pass opens soon. Your own team can start today.";
     slot.replaceChildren(own, small);
   });
 }

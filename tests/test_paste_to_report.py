@@ -166,11 +166,14 @@ def test_the_operator_tool_reads_what_the_join_page_reads(app) -> None:
     """run.trial promises "positions, bye weeks, app junk and all" and read one
     line at a time, so it refused every app whose copy spreads a player over
     several lines: "'Buf - QB' — no current player by that name"."""
-    from run.solo import CACHE_DIR, load_week_data
+    from run.solo import CACHE_DIR, SoloError, load_week_data
     from run.trial import resolve_roster
     if not any(Path(CACHE_DIR).glob("stats_player_week_*.csv")):
         pytest.skip("no cached nflverse data on a fresh checkout")
-    directory = load_week_data(CACHE_DIR).directory
+    try:
+        directory = load_week_data(CACHE_DIR).directory
+    except SoloError as exc:  # Monday night: last week's box scores aren't all in
+        pytest.skip(f"this week can't be built yet: {exc}")
     assert len(resolve_roster(FORMATS[app](_players()), directory)) == len(ROSTER), app
 
 
