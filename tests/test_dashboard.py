@@ -10,6 +10,7 @@ or missing never takes the page down.
 from __future__ import annotations
 
 import math
+import os
 import random
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -200,8 +201,6 @@ def rich_sources(now: datetime = NOW, root: Path = dash.REPO_ROOT) -> dict[str, 
              {"area": "Email", "name": "Payouts in USD keep the currency-conversion fee", "status": "WARN",
               "detail": "a USD bank account saves about 2%"},
              {"area": "Site", "name": "Every internal link and asset resolves", "status": "PASS", "detail": ""}]
-    plan_text = (root / "PLAN.md").read_text(encoding="utf-8").replace(
-        "D = ____", "D = 2026-10-26")
     S = {
         "traffic": traffic_source(now),
         "forms": dash._source("forms", data={"rows": forms_rows, "summary": summary,
@@ -227,10 +226,22 @@ def rich_sources(now: datetime = NOW, root: Path = dash.REPO_ROOT) -> dict[str, 
                                                     "built_at": (now - timedelta(hours=22)).isoformat()},
                                            "players_at": (now - timedelta(hours=22)).isoformat()},
                              read_at=now),
-        "plan": dash._source("plan", data=dash.parse_plan_gates(plan_text), read_at=now),
+        "plan": dash._source("plan", data=dash.parse_plan_gates(plan_text(root, "2026-10-26")),
+                             read_at=now),
         "books": dash._source("books", data=books_fixture(now), read_at=now),
     }
     return S
+
+
+def plan_text(root: Path = dash.REPO_ROOT, d: str | None = None) -> str:
+    """PLAN.md with its D line set to ``d`` (unwritten when None), whatever
+    PLAN.md itself says today: D gets written there the day the owner adopts
+    the gates (LAUNCH.md section 10), and a test that leaned on "D = ____"
+    would break that day."""
+    text = (root / "PLAN.md").read_text(encoding="utf-8")
+    line = "(write the date here when it happens: D = "
+    assert line in text, "PLAN §6's D line moved; parse_plan_gates reads it"
+    return re.sub(rf"{re.escape(line)}[^)]*\)", f"{line}{d or '____'})", text, count=1)
 
 
 def books_fixture(now: datetime = NOW):
@@ -567,7 +578,12 @@ def test_an_on_time_tuesday_is_not_a_missed_slot() -> None:
 
 
 def test_refund_rate_over_plans_red_line_is_an_issue() -> None:
+    """With D unwritten every purchase this season counts: 6 of 18 refunded
+    is over the 25% line. (With D written the rate counts from D; see
+    test_a_refund_before_d_never_moves_the_refund_rate.)"""
     S = rich_sources()
+    S["plan"] = dash._source("plan", data=dash.parse_plan_gates(plan_text()), read_at=NOW)
+    assert not S["plan"].data["d_written"]
     for s in S["stripe"].data["sessions"][:6]:
         s.update(full_refund=True, refunded=s.get("amount") or 0)
     m = dash.metrics_for(S, "7d", NOW)
@@ -739,3 +755,426 @@ def test_a_bad_line_in_the_books_is_a_low_issue() -> None:
 
 def test_the_books_reader_is_listed_with_the_sources() -> None:
     assert "books" in dash.COLLECTORS and "books" in dash.FRESHNESS_KEYS
+
+
+# --------------------------------------------------------------------- #
+# the launch-readiness review (Nov 2026)
+# --------------------------------------------------------------------- #
+
+# 346171e, the commit that moved the weekly report from Tuesday to Wednesday.
+SCHEDULE_MOVED = datetime(2026, 10, 31, 19, 13, 39, tzinfo=timezone.utc)
+
+
+def _utc(*args: int) -> datetime:
+    return datetime(*args, tzinfo=timezone.utc)
+
+
+def _weekly_runs(*starts: datetime) -> Source:
+    runs = [{"created_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"), "status": "completed",
+             "conclusion": "success", "event": "schedule",
+             "url": f"https://github.com/{dash.GITHUB_REPO}/actions/runs/{k}"}
+            for k, at in enumerate(starts)]
+    return dash._source("github", data={"weekly.yml": {"label": "Wednesday reports", "runs": runs}},
+                        read_at=NOW)
+
+
+def test_a_slot_from_before_the_schedule_existed_is_not_missed(monkeypatch) -> None:
+    """DASH-02. On Nov 3 the top "Needs you now" item read "Wednesday reports
+    didn't run after its Wed 8:17 PM ET slot": Oct 28 22:17 UTC, a slot of
+    the Wednesday schedule committed Oct 31. Under the schedule in force
+    then, the week's runs were Tuesday Oct 27 at 18:03 and 20:44, green."""
+    now = _utc(2026, 11, 3, 16, 0)
+    src = _weekly_runs(_utc(2026, 10, 27, 20, 44), _utc(2026, 10, 27, 18, 3))
+    monkeypatch.setattr(dash, "schedule_changed", lambda root, name: SCHEDULE_MOVED)
+    weekly = dash.workflow_health(src, now)[0]
+    # The slot is the main 22:17 one; the 00:17 retry only backs it up.
+    assert weekly["slot"] == _utc(2026, 10, 28, 22, 17)
+    assert not weekly["missing"]
+    titles = [i.title for i in dash.build_issues(rich_sources(), now, [weekly], None,
+                                                 dash.metrics_for(rich_sources(), "7d", now))]
+    assert not any("didn't run" in t for t in titles)
+    # When git can't say when the schedule changed, a missed slot still shows.
+    monkeypatch.setattr(dash, "schedule_changed", lambda root, name: None)
+    assert dash.workflow_health(src, now)[0]["missing"]
+
+
+def test_the_thursday_retry_is_never_a_slot_of_its_own(monkeypatch) -> None:
+    """DASH-02, going forward. The 00:17 UTC retry falls on Thursday, so it
+    was read as Thursday's own slot: with Wednesday's 13:17 and 22:17 runs
+    green and no retry run (none is needed), the cron read as missed from
+    Thursday 02:17 UTC until the next week."""
+    monkeypatch.setattr(dash, "schedule_changed", lambda root, name: SCHEDULE_MOVED)
+    now = _utc(2026, 11, 5, 3, 0)
+    both = _weekly_runs(_utc(2026, 11, 4, 22, 19), _utc(2026, 11, 4, 13, 18))
+    weekly = dash.workflow_health(both, now)[0]
+    assert weekly["slot"] == _utc(2026, 11, 4, 22, 17) and not weekly["missing"]
+    # The morning run never answers for the evening one.
+    morning = _weekly_runs(_utc(2026, 11, 4, 13, 18))
+    assert dash.workflow_health(morning, now)[0]["missing"]
+
+
+def test_schedule_changed_reads_the_commit_that_moved_a_cron_line(tmp_path) -> None:
+    """A comment that mentions a cron is not a schedule change."""
+    import subprocess
+    wf = tmp_path / ".github" / "workflows"
+    wf.mkdir(parents=True)
+
+    def commit(text: str, when: str) -> None:
+        (wf / "weekly.yml").write_text(text, encoding="utf-8")
+        env = {"GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when, "HOME": str(tmp_path),
+               "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"}
+        for cmd in (["git", "add", "-A"],
+                    ["git", "-c", "user.name=t", "-c", "user.email=t@t.invalid", "commit",
+                     "-q", "-m", "x"]):
+            subprocess.run(cmd, cwd=tmp_path, check=True, env=env, capture_output=True)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, capture_output=True)
+    commit('on:\n  schedule:\n    - cron: "17 22 * * 3"\n', "2026-10-31T19:13:39+00:00")
+    commit('# the cron: moved to Wednesday\non:\n  schedule:\n    - cron: "17 22 * * 3"\n',
+           "2026-11-02T10:00:00+00:00")
+    assert dash.schedule_changed(tmp_path, "weekly.yml") == SCHEDULE_MOVED
+    assert dash.schedule_changed(tmp_path, "nothing.yml") is None
+
+
+def _site(built_at: str, **switches: bool) -> Source:
+    base = {"checkout_open": True, "can_complete": False, "trial_open": False,
+            "monthly_link": True, "pass_link": False, "seats_open": False}
+    return dash._source("site", data={"week": {"season": "2026", "week": 9, "phase": "season",
+                                               "built_at": built_at},
+                                      "players_at": built_at, "switches": {**base, **switches}},
+                        read_at=NOW)
+
+
+def test_the_sample_is_not_stale_before_wednesday_evenings_run(monkeypatch) -> None:
+    """M-01. The sample and the player directory were built Tue Oct 27 18:04.
+    The move to Wednesday made that week's gap 8 days 4 hours, so a fixed
+    eight days said "stale" from 2 PM ET on Nov 4, and its advice (run
+    weekly-report) would have sent Week 9's reports hours before 5:17 PM."""
+    monkeypatch.setattr(dash, "schedule_changed", lambda root, name: SCHEDULE_MOVED)
+    built = "2026-10-27T18:04:03+00:00"
+    for now in (_utc(2026, 11, 4, 19, 0), _utc(2026, 11, 4, 23, 30)):
+        assert not dash.site_is_stale(built, now)
+        S = rich_sources(now)
+        S["site"] = _site(built)
+        titles = [i.title for i in dash.build_issues(S, now, [], None, dash.metrics_for(S, "7d", now))]
+        assert not any("sample page" in t or "player directory" in t for t in titles), now
+    # Two hours after the evening slot with no rebuild, it is stale, and the
+    # advice never starts with running the workflow.
+    late = _utc(2026, 11, 5, 0, 30)
+    assert dash.site_is_stale(built, late)
+    S = rich_sources(late)
+    S["site"] = _site(built)
+    hit = [i for i in dash.build_issues(S, late, [], None, dash.metrics_for(S, "7d", late))
+           if "sample page" in i.title]
+    assert hit and "Wednesday evening's run should have rebuilt it" in hit[0].title
+    assert "git pull" in hit[0].fix[0] and "only before the week's first kickoff" in hit[0].fix[1]
+    # The evening run's own build is fresh, and in a week with a Wednesday
+    # game the morning run's build answers for that day.
+    assert not dash.site_is_stale("2026-11-04T22:21:00+00:00", late)
+    assert not dash.site_is_stale("2026-11-25T13:30:00+00:00", _utc(2026, 11, 26, 1, 0))
+
+
+def test_without_the_link_map_a_served_sale_is_never_a_critical_alarm(monkeypatch, tmp_path) -> None:
+    """DASH-01. With the owner's Stripe key and no STRIPE_PAYMENT_LINKS on the
+    Mac, the read-only sweep called a $14.99 Monthly sale PAID-UNATTRIBUTED,
+    and the page raised a critical whose last step was "refund in full", for
+    a buyer the hourly run (which has the map) served. The sweep's other
+    findings still show."""
+    import run.intake as intake
+    ref = _a_roster_ref()
+    sold = _raw_session(1, "buyer@example.net") | {"client_reference_id": ref,
+                                                   "payment_link": "plink_M"}
+    no_email = _raw_session(2, "") | {"client_reference_id": ref, "payment_link": "plink_M",
+                                      "customer_details": {}, "customer_email": None}
+    monkeypatch.setattr(intake, "sweep_sessions", lambda key, since, plans: ([sold, no_email], None))
+    ctx = Context(env={"STRIPE_STATS_KEY": SECRET}, now=NOW, root=tmp_path)
+    src = dash.collect_intake(ctx)
+    assert src.ok and src.data["link_map"] is False and "STRIPE_PAYMENT_LINKS" in src.note
+    assert not any("STRIPE_PAYMENT_LINKS is not set" in p for p in src.data["problems"])
+    assert any("no email" in p for p in src.data["problems"])
+    S = rich_sources()
+    S["intake"] = src
+    issues = dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+    critical = [i.title for i in issues if i.severity == "critical"]
+    assert not any("cs_live_1" in t for t in critical)        # the served sale
+    assert any("cs_live_2" in t for t in critical)            # nobody to send to: real
+    # With the map, the same sale is served and nothing about it is reported.
+    with_map = dash.collect_intake(Context(env={"STRIPE_STATS_KEY": SECRET,
+                                                "STRIPE_PAYMENT_LINKS": "m:plink_M,p:plink_P"},
+                                           now=NOW, root=tmp_path))
+    assert with_map.data["link_map"] and with_map.note == ""
+    assert with_map.data["signups"] == 1
+
+
+def test_a_key_without_the_sweeps_permission_is_a_note_not_an_error(monkeypatch, tmp_path) -> None:
+    """The owner-stats key may lack a permission the sweep needs: that is a
+    check this key can't make, said once, never a red source every build."""
+    import run.intake as intake
+    from run.subscriptions import SubscriptionError
+
+    def refuse(key, since, plans):
+        raise SubscriptionError("403", status=403, permissions=("rak_customer_read",))
+    monkeypatch.setattr(intake, "sweep_sessions", refuse)
+    src = dash.collect_intake(Context(env={"STRIPE_STATS_KEY": SECRET}, now=NOW, root=tmp_path))
+    assert src.status == "off" and "rak_customer_read" in src.note
+
+
+def test_a_sale_without_the_link_map_is_named_by_its_price() -> None:
+    """DASH-01's other half: "other price ($14.99)" for a Monthly sale."""
+    assert stats._pass_type({"amount_subtotal": 1499}, {}) == "Monthly"
+    assert stats._pass_type({"amount_subtotal": 3499}, {}) == "League Pass"
+
+
+def test_the_two_views_read_the_same_names_from_dotenv(tmp_path) -> None:
+    """DASH-03 and M-02: make stats and the dashboard read the form Worker,
+    the link map and the payout currency from one list each, from the shell
+    first and then .env."""
+    for name in (*stats.CF_NAMES, *stats.FORM_NAMES, "STRIPE_PAYOUT_CURRENCY"):
+        assert name in dash.ENV_NAMES
+    assert "STRIPE_PAYOUT_CURRENCY" not in dash.SECRET_NAMES
+    env_file = tmp_path / ".env"
+    env_file.write_text("FORM_ENDPOINT=https://forms.example/rows\nSTRIPE_PAYMENT_LINKS=m:plink_M\n"
+                        "STRIPE_PAYOUT_CURRENCY=usd\n")
+    env = dash.env_from({"FORM_ENDPOINT": "https://shell.example/rows"}, env_file)
+    assert env["FORM_ENDPOINT"] == "https://shell.example/rows"
+    assert env["STRIPE_PAYMENT_LINKS"] == "m:plink_M" and env["STRIPE_PAYOUT_CURRENCY"] == "usd"
+
+
+def test_the_launch_gates_see_what_the_dashboard_read_from_dotenv(monkeypatch) -> None:
+    """DASH-04 and M-02. The gates read os.environ, so with the link map and
+    the payout currency in .env the page still said "isn't in this shell"
+    and "paid out in CAD". For the gates' run they see .env too; a value in
+    the shell wins, and nothing outlives the run."""
+    import run.launch_check as lc
+    assert "check_worker_switches" in dash.FAST_GATES
+    monkeypatch.delenv("STRIPE_PAYOUT_CURRENCY", raising=False)
+    monkeypatch.setenv("FORM_ENDPOINT", "https://shell.example/rows")
+    seen = {}
+
+    def probe():
+        seen.update({n: os.environ.get(n) for n in dash.GATE_ENV})
+        return [lc.Gate("Owner", "probe", "PASS", "")]
+    monkeypatch.setattr(lc, "check_probe", probe, raising=False)
+    monkeypatch.setattr(dash, "FAST_GATES", ("check_probe", "check_economics"))
+    env = {"STRIPE_PAYMENT_LINKS": "m:plink_M", "STRIPE_PAYOUT_CURRENCY": "usd",
+           "FORM_ENDPOINT": "https://dotenv.example/rows"}
+    src = dash.collect_launch(Context(env=env, now=NOW))
+    assert seen["STRIPE_PAYMENT_LINKS"] == "m:plink_M"
+    assert seen["FORM_ENDPOINT"] == "https://shell.example/rows"
+    payout = next(g for g in src.data["gates"] if g["name"].startswith("Payouts in USD"))
+    assert payout["status"] == "PASS"
+    assert "STRIPE_PAYMENT_LINKS" not in os.environ and "STRIPE_PAYOUT_CURRENCY" not in os.environ
+    assert os.environ["FORM_ENDPOINT"] == "https://shell.example/rows"
+
+
+def test_launch_switches_are_read_off_the_pages(tmp_path) -> None:
+    (tmp_path / "site" / "join").mkdir(parents=True)
+    (tmp_path / "site" / "index.html").write_text(
+        "const CHECKOUT_OPEN = true;\nconst CHECKOUT_CAN_COMPLETE = false;\nconst TRIAL_OPEN = false;\n")
+    (tmp_path / "site" / "join" / "index.html").write_text(
+        'const STRIPE_LINK_MONTHLY = "https://buy.stripe.com/x";\nconst STRIPE_LINK_PASS = "";\n')
+    (tmp_path / "site" / "league-pass.html").write_text("const SEATS_OPEN = false;\n")
+    assert dash.launch_switches(tmp_path) == {
+        "checkout_open": True, "can_complete": False, "trial_open": False,
+        "monthly_link": True, "pass_link": False, "seats_open": False}
+
+
+def test_the_page_says_where_launch_stands_and_the_step_next() -> None:
+    """DASH-04. Nothing on the page said "Monthly link live, checkout can't
+    complete yet, League Pass held, next: your own purchase"."""
+    S = rich_sources()
+    S["stripe"] = dash._source("stripe", data={"sessions": [], "link_map": True,
+                                               "dispute_errors": 0}, read_at=NOW)
+    S["site"] = _site((NOW - timedelta(hours=2)).isoformat())
+    card = dash.launch_status(S, NOW)
+    assert "Where launch stands" in card and "Monthly link live" in card
+    assert "Held" in card and "None yet" in card
+    assert "Your own purchase of the Monthly plan" in card and "step 4" in card
+    # After the owner's purchase: the emails, then the two switches together.
+    S["stripe"] = dash._source("stripe", data={"sessions": stripe_sessions()[:1], "link_map": True,
+                                               "dispute_errors": 0}, read_at=NOW)
+    card = dash.launch_status(S, NOW)
+    assert "1 paid purchase so far" in card and "step 6" in card and "TRIAL_OPEN" in card
+    # Once checkout completes and the free report is on, the card goes.
+    S["site"] = _site((NOW - timedelta(hours=2)).isoformat(), can_complete=True, trial_open=True)
+    assert dash.launch_status(S, NOW) == ""
+    assert "Where launch stands" not in dash.render_page(S, NOW, fonts=False)
+
+
+def _with_d(S: dict, d: str | None) -> None:
+    S["plan"] = dash._source("plan", data=dash.parse_plan_gates(plan_text(d=d)), read_at=NOW)
+
+
+def test_a_refund_before_d_never_moves_the_refund_rate() -> None:
+    """DASH-05. The owner buys first and may refund. With D written, the
+    refund-rate gate still counted every purchase ever: an owner refund on
+    Nov 3 plus one buyer after D read "Refund rate 50% Behind" forever."""
+    sessions = stripe_sessions()[:6]
+    owner, buyers = sessions[0], sessions[1:]
+    owner.update(created=int(_utc(2026, 10, 20, 15, 0).timestamp()), full_refund=True,
+                 refunded=owner["amount"])
+    for k, s in enumerate(buyers):
+        s.update(created=int(_utc(2026, 10, 26, 12 + k, 0).timestamp()), full_refund=False,
+                 refunded=0.0, dispute=None)
+    S = rich_sources()
+    S["stripe"] = dash._source("stripe", data={"sessions": sessions, "link_map": True,
+                                               "dispute_errors": 0}, read_at=NOW)
+    _with_d(S, "2026-10-26")
+    gates = dash.gates_html(S, NOW, None, None, S["registry"])
+    row = next(r for r in gates.split("<tr>") if "Refund rate" in r)
+    assert ">0%<" in row
+    assert "1 purchase before D is left out" in gates
+    # Every purchase counts until D is written, the owner's too.
+    _with_d(S, None)
+    row = next(r for r in dash.gates_html(S, NOW, None, None, S["registry"]).split("<tr>")
+               if "Refund rate" in r)
+    assert ">17%<" in row
+
+
+def test_checkout_completing_with_d_unwritten_is_a_low_reminder() -> None:
+    S = rich_sources()
+    _with_d(S, None)
+    S["site"] = _site((NOW - timedelta(hours=2)).isoformat(), can_complete=True)
+    issues = dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+    hit = [i for i in issues if "D isn't written" in i.title]
+    assert hit and hit[0].severity == "low" and "section 10" in hit[0].fix[0]
+    S["site"] = _site((NOW - timedelta(hours=2)).isoformat(), can_complete=False)
+    issues = dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+    assert not any("D isn't written" in i.title for i in issues)
+
+
+def test_the_waitlist_insight_never_points_at_a_send_that_will_refuse(monkeypatch) -> None:
+    """DASH-06. "make waitlist-send MAX=<n> sends the one launch email" while
+    SENDER_POSTAL_ADDRESS is unset, so the command refuses. Also "1 people"."""
+    S = rich_sources()
+    S["forms"].data["rows"] = [{"kind": "waitlist", "at": (NOW - timedelta(days=1)).isoformat(),
+                                "via": None, "who": "p1"}]
+    monkeypatch.delenv("SENDER_POSTAL_ADDRESS", raising=False)
+    ins = [i for i in dash.build_insights(S, dash.metrics_for(S, "7d", NOW), NOW, None, None)
+           if "on the list" in i.text]
+    assert ins and "1 waitlist sign-up in" in ins[0].text and "1 person on the list" in ins[0].text
+    assert "waits for a postal address" in ins[0].action and "step 2.6" in ins[0].action
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 1, Somewhere")
+    ins = [i for i in dash.build_insights(S, dash.metrics_for(S, "7d", NOW), NOW, None, None)
+           if "on the list" in i.text]
+    assert "make waitlist-send MAX=<n>" in ins[0].action
+
+
+def test_trade_check_requests_are_counted() -> None:
+    """DASH-07. The Worker takes trade_check rows; neither view showed them."""
+    S = rich_sources()
+    S["forms"].data["rows"] += [{"kind": "trade_check", "at": (NOW - timedelta(hours=k)).isoformat(),
+                                 "via": None, "who": "s1"} for k in (1, 30)]
+    S["forms"].data["summary"]["trade_check"] = {"total": 2, "week": 2, "day": 1, "people": 1}
+    assert dash.forms_metrics(S["forms"], "7d", NOW)["trade_check"]["total"] == 2
+    assert "Trade Check requests" in dash.render_page(S, NOW, fonts=False)
+
+
+def test_an_optional_or_unverifiable_launch_step_never_reads_as_undone(monkeypatch) -> None:
+    """DASH-08. "3 launch steps are waiting on you. Next: GitHub Actions
+    secrets are set." counted the bounce key the owner declined (LAUNCH
+    calls it optional) and stated as fact a check this Mac can't make."""
+    import run.launch_check as lc
+    monkeypatch.setattr(lc.shutil, "which", lambda name: None)
+    monkeypatch.delenv("RESEND_READ_KEY", raising=False)
+    gates = [g.__dict__.copy() for g in lc.check_secrets() + lc.check_resend_read_key()]
+    assert gates[-1]["name"].rstrip(".") in dash.OPTIONAL_OWNER_GATES
+    S = rich_sources()
+    S["launch"] = dash._source("launch", data={"gates": gates}, read_at=NOW)
+    issues = dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+    steps = [i for i in issues if "waiting on you" in i.title]
+    assert steps and steps[0].title == "1 launch step is waiting on you."
+    assert steps[0].fix[0] == "Check by hand: GitHub Actions secrets are set."
+    optional = [i for i in issues if i.title.startswith("Optional:")]
+    assert optional and optional[0].severity == "low"
+
+
+def test_a_secret_missing_from_this_shell_is_a_check_not_an_undone_step(monkeypatch) -> None:
+    """DASH-08's other half. With gh signed in and the link map neither in
+    the shell nor in .env, the first step read "Not done yet: The
+    payment-link map names each pass under its own prefix." The map is a
+    GitHub secret the owner set in step 3; this Mac can't see it, which says
+    nothing about whether it is right. A gate that found a real gap still
+    reads "Not done yet"."""
+    import run.launch_check as lc
+    monkeypatch.delenv("STRIPE_PAYMENT_LINKS", raising=False)
+    gates = [g.__dict__.copy() for g in lc.check_link_map() if g.status == "OWNER"]
+    assert gates and "in this shell" in gates[0]["detail"]
+    S = rich_sources()
+    S["launch"] = dash._source("launch", data={"gates": gates}, read_at=NOW)
+    steps = [i for i in dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+             if "waiting on you" in i.title]
+    assert steps[0].fix[0] == ("Check by hand: The payment-link map names each pass under "
+                               "its own prefix.")
+    missing = {"area": "Owner", "name": "GitHub Actions secrets are set", "status": "OWNER",
+               "detail": "missing: LOG_SECRET — the send log can't be keyed"}
+    S["launch"] = dash._source("launch", data={"gates": [missing]}, read_at=NOW)
+    steps = [i for i in dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+             if "waiting on you" in i.title]
+    assert steps[0].fix[0] == "Not done yet: GitHub Actions secrets are set."
+
+
+def test_a_worker_it_cant_reach_is_never_called_a_mismatch(monkeypatch) -> None:
+    """The launch card said "The Worker's own switch doesn't match" whenever
+    the Worker gate warned, and the gate also warns when it can't reach the
+    Worker at all: a timeout on Nov 3 would have told the owner the Worker's
+    TRIAL_OPEN was wrong. The card names the gate by its own name, so the
+    two must not drift apart either."""
+    import run.launch_check as lc
+    monkeypatch.delenv("FORM_ENDPOINT", raising=False)
+    assert lc.check_worker_switches()[0].name == dash.WORKER_GATE
+    S = rich_sources()
+    S["stripe"] = dash._source("stripe", data={"sessions": [], "link_map": True,
+                                               "dispute_errors": 0}, read_at=NOW)
+    S["site"] = _site((NOW - timedelta(hours=2)).isoformat())
+
+    def card(status: str, detail: str) -> str:
+        S["launch"] = dash._source("launch", data={"gates": [
+            {"area": "Owner", "name": dash.WORKER_GATE, "status": status, "detail": detail}]},
+            read_at=NOW)
+        return dash.launch_status(S, NOW)
+    unread = card("WARN", "could not read the Worker's switches: timed out")
+    assert "couldn&#x27;t be read" in unread and "match" not in unread
+    stray = card("WARN", "the Worker takes free-report rows while the site's TRIAL_OPEN is off")
+    assert "doesn&#x27;t match" in stray
+    assert "match" not in card("PASS", "both off") and "be read" not in card("PASS", "both off")
+
+
+def test_the_page_names_plans_not_passes() -> None:
+    """DASH-09: the site sells monthly plans, and the $19 Playoff Pass was
+    retired Oct 31."""
+    page = dash.render_page(rich_sources(), NOW, fonts=False)
+    assert "Plans sold" in page and "Plans by type" in page
+    for old in ("Passes sold", "Passes per day", "Passes by type", "No passes sold",
+                "Every pass from here"):
+        assert old not in page, old
+    assert all("PLAYOFF" not in shows for _l, _s, shows in dash.SOURCE_INFO.values())
+
+
+def test_an_empty_sparkline_is_a_flat_line_not_a_setup_box() -> None:
+    """DASH-10. `<svg class="spark empty">` took the setup card's dashed
+    `.empty` box under every KPI at zero."""
+    svg = dash.spark([0, 0, 0])
+    assert 'class="spark flat"' in svg and "empty" not in svg
+    assert ".spark.flat line{" in dash.CSS and ".spark.empty" not in dash.CSS
+
+
+def test_small_samples_read_as_flat_or_too_few_not_as_alarms() -> None:
+    """DASH-11. 0 then 0 read "no prior period", and one landing view drew
+    "100% drop off" in red beside an insight saying it was too few."""
+    assert dash.delta(0, 0) == 0.0 and "flat" in dash.delta_chip(dash.delta(0, 0))
+    assert dash.delta(3, 0) == math.inf and dash.delta(None, 0) is None
+    thin = dash.funnel_html([("Landing views", 1), ("Buy-page views", 0), ("Paid", 0)],
+                            min_views=dash.MIN_FUNNEL_VIEWS)
+    assert "drop off" not in thin and "too few views to read yet" in thin
+    full = dash.funnel_html([("Landing views", 150), ("Buy-page views", 30)],
+                            min_views=dash.MIN_FUNNEL_VIEWS)
+    assert "80% drop off" in full
+
+
+def test_on_a_phone_the_issues_tab_comes_second() -> None:
+    """DASH-12. At 390px the Issues tab and its red count sat past the right
+    edge of the scrolling tab bar. Desktop keeps the page's order."""
+    phone = dash.CSS.split("@media (max-width:700px){", 1)[1].split("@media", 1)[0]
+    assert '.tabs a[data-nav="overview"]{order:-2}' in phone
+    assert '.tabs a[data-nav="issues"]{order:-1}' in phone
+    assert [k for k, _v in dash.NAV][:2] == ["overview", "traffic"]

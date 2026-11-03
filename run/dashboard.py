@@ -73,6 +73,7 @@ import time
 import urllib.request
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -96,10 +97,18 @@ GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 # What the dashboard reads from this shell or the gitignored .env. The Stripe
 # key may be a dedicated read-only one (STRIPE_STATS_KEY, LAUNCH.md step 3's
 # owner-stats key); STRIPE_API_KEY is the fallback make stats already uses.
-ENV_NAMES = ("CF_ACCOUNT_ID", "CF_ANALYTICS_TOKEN", "STRIPE_STATS_KEY", "STRIPE_API_KEY",
-             "STRIPE_PAYMENT_LINKS", "FORM_ENDPOINT", "FORM_API_KEY", "RESEND_READ_KEY")
+# The counter's and the form Worker's names are make stats' own lists, so the
+# two views can't read different places. STRIPE_PAYOUT_CURRENCY=usd says the
+# USD payout account exists (run/economics.py's launch line).
+ENV_NAMES = (*stats.CF_NAMES, "STRIPE_STATS_KEY", "STRIPE_API_KEY", *stats.FORM_NAMES,
+             "RESEND_READ_KEY", "STRIPE_PAYOUT_CURRENCY")
 SECRET_NAMES = ("CF_ANALYTICS_TOKEN", "STRIPE_STATS_KEY", "STRIPE_API_KEY", "FORM_API_KEY",
                 "RESEND_READ_KEY", "STRIPE_PAYMENT_LINKS")
+# The names the launch gates read from the shell (os.environ). For the length
+# of the gates' run they also see what this dashboard read from .env, so a
+# gate never says "isn't in this shell" about a value the page itself is using.
+GATE_ENV = ("STRIPE_PAYMENT_LINKS", "FORM_ENDPOINT", "FORM_API_KEY", "RESEND_READ_KEY",
+            "STRIPE_PAYOUT_CURRENCY")
 
 PERIODS = (("7d", "7 days", 7), ("30d", "30 days", 30), ("all", "All", None))
 TRAFFIC_ALL_DAYS = 90          # Analytics Engine keeps three months
@@ -154,10 +163,10 @@ SOURCE_INFO = {
     "forms": ("Form Worker", "LAUNCH.md step 5 — the form Worker",
               "Waitlist sign-ups, free-report requests, roster updates and seat claims."),
     "stripe": ("Stripe", "LAUNCH.md step 3 — Stripe keys (the read-only owner-stats key)",
-               "Passes sold by type, gross, fees, refunds and net, disputes, and paid "
+               "Plans sold by type, gross, fees, refunds and net, disputes, and paid "
                "signups by channel."),
     "intake": ("Intake check", "LAUNCH.md step 3 — Stripe keys",
-               "Payments the hourly intake can't serve (PAID-UNATTRIBUTED, PLAYOFF-EARLY)."),
+               "Payments the hourly intake can't serve (PAID-UNATTRIBUTED)."),
     "sends": ("Send log", "`git pull` — the crons commit data/processed/sent.jsonl",
               "Emails sent per week, welcomes, free reports and stop requests."),
     "registry": ("Registry", "`make stats-registry` opens a copy; pass --registry PATH",
@@ -372,24 +381,49 @@ def collect_stripe(ctx: Context) -> Source:
     return _source("stripe", data=data, read_at=ctx.now)
 
 
+NO_LINK_MAP = "STRIPE_PAYMENT_LINKS is not set"
+LINK_MAP_NOTE = ("STRIPE_PAYMENT_LINKS isn't on this Mac, so plans can't be checked here. "
+                 "Put the same m:…,p:… map as the GitHub secret in .env (link ids, not a key).")
+
+
 def collect_intake(ctx: Context) -> Source:
     """The hourly intake's own sweep, read-only (``promote=False``): the
     payments it would report as PAID-UNATTRIBUTED or PLAYOFF-EARLY this
-    season, plus any it remembers in a local roster-sync-state.json."""
+    season, plus any it remembers in a local roster-sync-state.json.
+
+    The payment-link map is a GitHub secret, so this Mac may not have it.
+    Without it the sweep calls EVERY sale unattributable, while the hourly
+    run, which has the map, serves it: a critical alarm advising a refund to
+    a buyer who was served (DASH-01). Those lines are dropped here and the
+    source says plans aren't checked; the sweep's other findings still show."""
     key = stripe_key(ctx.env)
     if not key:
         return off("intake", "Needs the Stripe key to run the intake's sweep read-only.")
     from run.checkout import parse_link_plans, playoff_links, season_2027_links
     from run.intake import STATE_NAME, _SESSION_IN, read_state, sweep
+    from run.subscriptions import SubscriptionError
     raw_links = ctx.env.get("STRIPE_PAYMENT_LINKS", "")
-    signups, _newest, problems = sweep(
-        key, stats._season_start(_season(ctx)), parse_link_plans(raw_links), promote=False,
-        playoff=playoff_links(raw_links), season_2027=season_2027_links(raw_links))
+    plans = parse_link_plans(raw_links)
+    try:
+        signups, _newest, problems = sweep(
+            key, stats._season_start(_season(ctx)), plans, promote=False,
+            playoff=playoff_links(raw_links), season_2027=season_2027_links(raw_links))
+    except SubscriptionError as exc:
+        if exc.status != 403:
+            raise
+        # A read-only key without a permission the sweep needs: not a fault
+        # to raise every build, a check this key can't make.
+        missing = ", ".join(exc.permissions) or "a Read permission"
+        return off("intake", f"Stripe won't run the intake's sweep with this key (it needs "
+                             f"{missing}). The hourly run checks every payment with its own key "
+                             f"and goes red on one it can't serve.")
     state = read_state(ctx.root / "data" / "registry" / STATE_NAME)
     acknowledged = set(state.get("acknowledged") or [])
     remembered = [p for p in state.get("unresolved") or [] if isinstance(p, str)]
     found = []
     for problem in [*problems, *remembered]:
+        if not plans and NO_LINK_MAP in problem:
+            continue
         session = _SESSION_IN.search(problem)
         if session and session.group(1) in acknowledged:
             continue
@@ -397,7 +431,8 @@ def collect_intake(ctx: Context) -> Source:
         if text not in found:
             found.append(text)
     return _source("intake", data={"problems": found, "signups": len(signups),
-                                   }, read_at=ctx.now)
+                                   "link_map": bool(plans)},
+                   note="" if plans else LINK_MAP_NOTE, read_at=ctx.now)
 
 
 # --- local files ------------------------------------------------------ #
@@ -500,21 +535,47 @@ def collect_github(ctx: Context, fetch: Callable[[str], Any] | None = None) -> S
 
 # --- launch check (fast, local gates only) ---------------------------- #
 
+# check_worker_switches makes one read-only GET (?status=1, with the read key)
+# to the form Worker: opening day turns TRIAL_OPEN on in the site AND in the
+# Worker, and a Worker left off refuses every free-report request in silence.
 FAST_GATES = ("check_links", "check_page_basics", "check_selling_copy", "check_prices",
               "check_funnel_config", "check_week_json", "check_record", "check_compliance",
               "check_secrets", "check_link_map", "check_resend_read_key", "check_economics",
-              "check_security_txt", "check_seat_link")
+              "check_security_txt", "check_seat_link", "check_worker_switches")
+# Owner steps the owner may decline for good (LAUNCH.md calls the bounce key
+# optional): shown as a low "Optional" item, never counted as a step left.
+OPTIONAL_OWNER_GATES = ("The bounce check has a Resend key that can read sent email",)
+
+
+@contextmanager
+def gate_env(env: Mapping[str, str]):
+    """The shell as the gates see it, with what the dashboard read from .env
+    filled in where the shell has nothing. Put back afterwards, so nothing
+    outlives the gates' run."""
+    before = {name: os.environ.get(name) for name in GATE_ENV}
+    try:
+        for name in GATE_ENV:
+            if env.get(name) and not before[name]:
+                os.environ[name] = env[name]
+        yield
+    finally:
+        for name, value in before.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def collect_launch(ctx: Context) -> Source:
     import run.launch_check as lc
     gates = []
-    for name in FAST_GATES:
-        try:
-            gates.extend(g.__dict__.copy() for g in getattr(lc, name)())
-        except Exception as exc:  # noqa: BLE001 — one broken check never hides the rest
-            gates.append({"area": "Check", "name": f"{name} could not run", "status": "FAIL",
-                          "detail": f"{type(exc).__name__}: {exc}"})
+    with gate_env(ctx.env):
+        for name in FAST_GATES:
+            try:
+                gates.extend(g.__dict__.copy() for g in getattr(lc, name)())
+            except Exception as exc:  # noqa: BLE001 — one broken check never hides the rest
+                gates.append({"area": "Check", "name": f"{name} could not run", "status": "FAIL",
+                              "detail": f"{type(exc).__name__}: {exc}"})
     for gate in gates:
         gate["detail"] = redact(gate.get("detail", ""))
     return _source("launch", data={"gates": gates}, read_at=ctx.now)
@@ -565,7 +626,29 @@ def collect_site(ctx: Context) -> Source:
     keep = ("season", "week", "last_week", "built_at", "phase", "lands_on", "first_kickoff")
     return _source("site", data={"week": {k: week.get(k) for k in keep}
                                  if isinstance(week, dict) else None,
-                                 "players_at": players_at}, read_at=ctx.now)
+                                 "players_at": players_at,
+                                 "switches": launch_switches(ctx.root)}, read_at=ctx.now)
+
+
+def launch_switches(root: Path = REPO_ROOT) -> dict[str, bool]:
+    """Where launch stands, read off the pages' own switches (the same
+    `const NAME = value;` lines the launch check reads): is checkout on, can
+    a purchase finish, is the free report on, which links are live."""
+    from run.launch_check import js_constants
+
+    def consts(rel: str) -> dict[str, str]:
+        try:
+            return js_constants((root / rel).read_text(encoding="utf-8"))
+        except OSError:
+            return {}
+    landing, join = consts("site/index.html"), consts("site/join/index.html")
+    league = consts("site/league-pass.html")
+    return {"checkout_open": landing.get("CHECKOUT_OPEN") == "true",
+            "can_complete": landing.get("CHECKOUT_CAN_COMPLETE") == "true",
+            "trial_open": landing.get("TRIAL_OPEN") == "true",
+            "monthly_link": bool(join.get("STRIPE_LINK_MONTHLY")),
+            "pass_link": bool(join.get("STRIPE_LINK_PASS")),
+            "seats_open": league.get("SEATS_OPEN") == "true"}
 
 
 # --- PLAN.md §6 ------------------------------------------------------- #
@@ -704,11 +787,14 @@ def daily_series(daily: list[dict], days: list[str], test) -> list[int]:
 
 def delta(cur: float | None, prev: float | None) -> float | None:
     """Change on the previous period; ``inf`` when there was nothing before
-    (shown as "New", never as a percentage)."""
+    (shown as "New", never as a percentage). Nothing then and nothing now is
+    no change, not a missing period."""
     if cur is None or prev is None:
         return None
     if prev == 0:
-        return math.inf if cur > 0 else None
+        # Below zero from zero (a refund in a period with no sale) has no
+        # percentage at all.
+        return math.inf if cur > 0 else 0.0 if cur == 0 else None
     return (cur - prev) / prev
 
 
@@ -853,7 +939,8 @@ def forms_metrics(src: Source, period: str, now: datetime) -> dict | None:
     days = period_days(period)
     rows = src.data["rows"]
     out: dict[str, Any] = {}
-    for kind in ("waitlist", "trial", "update_request", "confirm", "seat", "update"):
+    for kind in ("waitlist", "trial", "update_request", "confirm", "seat", "trade_check",
+                 "update"):
         mine = [r for r in rows if r["kind"] == kind]
         out[kind] = {
             "total": len(mine),
@@ -1093,20 +1180,59 @@ def _gh_when(stamp: str) -> datetime | None:
         return None
 
 
+# A slot this soon after another is that one's retry (weekly.yml's 00:17 UTC
+# Thursday after its 22:17 Wednesday), whatever UTC day it falls on.
+RETRY_WITHIN = timedelta(hours=3)
+
+
 def last_slot(crons: list[str], now: datetime, grace: timedelta) -> datetime | None:
-    """The slot a run must have started after, ``grace`` ago: on a day with
-    one or two slots (Tuesday's 12:17 plus its retry) the day's FIRST one —
-    the retry is a backup, and one run that day is the day's run; for an
-    hourly workflow the newest slot."""
+    """The slot a run must have started after, ``grace`` ago. For an hourly
+    workflow, the newest slot. Otherwise the newest slot, unless it is a
+    retry (under RETRY_WITHIN after another slot): then the slot it backs up,
+    so a run since the main slot answers for both, and a missing retry run
+    is never a missed slot (DASH-02). Slots further apart are each their own:
+    Wednesday's 13:17 morning run never answers for its 22:17 evening one."""
     from run.launch_check import _cron_fires
     cutoff = now - grace
-    for back in range(0, 9):
-        day = (cutoff - timedelta(days=back)).replace(hour=0, minute=0, second=0, microsecond=0)
-        every = sorted(t for cron in crons for t in _cron_fires(cron, day))
-        fires = [t for t in every if t <= cutoff]
-        if fires:
-            return max(fires) if len(every) > 2 else fires[0]
-    return None
+    days = [(cutoff - timedelta(days=back)).replace(hour=0, minute=0, second=0, microsecond=0)
+            for back in range(0, 9)]
+    per_day = [[t for cron in crons for t in _cron_fires(cron, day)] for day in days]
+    past = sorted(t for fires in per_day for t in fires if t <= cutoff)
+    if not past:
+        return None
+    slot = past[-1]
+    if max(len(fires) for fires in per_day) > 2:
+        return slot
+    backed_up = [t for t in past if slot - RETRY_WITHIN <= t < slot]
+    return backed_up[0] if backed_up else slot
+
+
+def workflow_crons(root: Path, name: str) -> list[str]:
+    path = root / ".github" / "workflows" / name
+    if not path.is_file():
+        return []
+    return re.findall(r'^\s*-\s*cron:\s*"([^"]+)"', path.read_text(encoding="utf-8"), re.M)
+
+
+def schedule_changed(root: Path, name: str) -> datetime | None:
+    """When a workflow's cron lines last changed (its newest commit adding or
+    removing a ``- cron: "…"`` line, never a comment that mentions one), or
+    None when git can't say."""
+    try:
+        done = subprocess.run(["git", "log", "-1", "--format=%cI", '-G[-] cron: "', "--",
+                               f".github/workflows/{name}"], cwd=root,
+                              capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return _gh_when(done.stdout.strip()) if done.stdout.strip() else None
+
+
+def before_schedule(slot: datetime | None, changed: datetime | None, now: datetime) -> bool:
+    """A slot the current schedule names but that came before the schedule
+    itself did (the move from Tuesday to Wednesday, Oct 31 2026, made Oct 28
+    22:17 a slot that never existed). Nothing was due then, so nothing was
+    missed."""
+    return bool(slot and changed and slot < changed <= now)
 
 
 def workflow_health(src: Source, now: datetime, root: Path = REPO_ROOT) -> list[dict]:
@@ -1119,14 +1245,14 @@ def workflow_health(src: Source, now: datetime, root: Path = REPO_ROOT) -> list[
     for name, info in src.data.items():
         runs = sorted(info["runs"], key=lambda r: r["created_at"], reverse=True)
         last = runs[0] if runs else None
-        crons = []
-        path = root / ".github" / "workflows" / name
-        if path.is_file():
-            crons = re.findall(r'^\s*-\s*cron:\s*"([^"]+)"', path.read_text(encoding="utf-8"), re.M)
+        crons = workflow_crons(root, name)
         grace = timedelta(hours=3) if name == "daily.yml" else timedelta(hours=2)
         slot = last_slot(crons, now, grace) if crons else None
         missing = bool(slot and not any((_gh_when(r["created_at"]) or now) >= slot - timedelta(minutes=10)
                                         for r in runs))
+        # Asked only when it would matter: one git call per missed slot.
+        if missing and before_schedule(slot, schedule_changed(root, name), now):
+            missing = False
         completed = [r for r in runs if r["status"] == "completed"]
         late = None
         if name in ("weekly.yml", "saturday.yml") and crons:
@@ -1147,8 +1273,46 @@ def _age(stamp: Any, now: datetime) -> timedelta | None:
     return now - when if when else None
 
 
+def _days(age: timedelta | None) -> str:
+    n = age.days if age else 0
+    return f"{n} day{'s' if n != 1 else ''}"
+
+
+SITE_MAX_AGE = timedelta(days=8)    # only when weekly.yml's schedule can't be read
+
+
+def site_is_stale(stamp: Any, now: datetime, root: Path = REPO_ROOT) -> bool:
+    """Was this (the sample's build, the player directory's) left behind by
+    the Wednesday evening run that should have rebuilt it, two hours on?
+
+    Judged against the schedule, never a fixed age (M-01): a fixed eight
+    days said "stale" for four hours on Nov 4 2026, before the evening run,
+    because the move from Tuesday made that one gap eight days and four
+    hours, and following its advice would have sent the week's reports
+    early. A slot from before the schedule itself existed asks for nothing;
+    in a week with a Wednesday game the morning run rebuilds it instead, so
+    anything since that day's first slot counts."""
+    when = _ts(stamp)
+    if when is None:
+        return False
+    from run.launch_check import _cron_fires
+    from run.watchdog import REPORT_MORNING_HOUR
+    crons = workflow_crons(root, "weekly.yml")
+    evening = [c for c in crons if c.split()[1] != str(REPORT_MORNING_HOUR)]
+    if not evening:
+        return now - when > SITE_MAX_AGE
+    due = last_slot(evening, now, timedelta(hours=2))
+    if due is None:
+        return False
+    day = due.replace(hour=0, minute=0, second=0, microsecond=0)
+    since = min([t for cron in crons for t in _cron_fires(cron, day)] + [due])
+    if when >= since - timedelta(minutes=10):
+        return False
+    return not before_schedule(due, schedule_changed(root, "weekly.yml"), now)
+
+
 def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict],
-                 ledger: dict | None, metrics: Metrics) -> list[Issue]:
+                 ledger: dict | None, metrics: Metrics, root: Path = REPO_ROOT) -> list[Issue]:
     issues: list[Issue] = []
     actions = f"https://github.com/{GITHUB_REPO}/actions"
 
@@ -1242,34 +1406,51 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
                 issues.append(Issue("high", f"Launch check fails: {g['name'].rstrip('.')}.",
                                     (g["detail"] or "Run make launch-check for detail.")[:240],
                                     "", "Launch check"))
-        owner = [g for g in gates if g["status"] == "OWNER"]
+        owner = [g for g in gates if g["status"] == "OWNER"
+                 and g["name"].rstrip(".") not in OPTIONAL_OWNER_GATES]
         if owner:
-            first = owner[0]["name"].rstrip(".")
+            first = owner[0]
+            name = first["name"].rstrip(".")
+            detail = (first.get("detail") or "").strip()
             rest = len(owner) - 1
+            # A gate this Mac can't verify is a check to make by hand, never
+            # a statement that the step is undone (DASH-08). That is "can't
+            # read" (gh signed out) and a value that isn't in this shell or
+            # .env: the link map is a GitHub secret, set or not.
+            lead = ("Check by hand" if re.search(r"can't read|in (?:this|the) shell", detail)
+                    else "Not done yet")
+            steps = [f"{lead}: {name}."]
+            if detail:
+                steps.append((detail[0].upper() + detail[1:])[:240])
+            steps.append(f"Then the other {rest} in the weekend list, and run make launch-check."
+                         if rest else "Then run make launch-check.")
             issues.append(Issue("medium", f"{len(owner)} launch step{'s are' if len(owner) != 1 else ' is'} "
                                           f"waiting on you.",
-                                (f"Next: {first}.",
-                                 (f"Then the other {rest} in the weekend list, and run make launch-check."
-                                  if rest else "Then run make launch-check.")),
-                                "", "Launch check", "weekend"))
+                                tuple(steps), "", "Launch check", "weekend"))
+        for g in gates:
+            if g["status"] == "OWNER" and g["name"].rstrip(".") in OPTIONAL_OWNER_GATES:
+                issues.append(Issue("low", f"Optional: {g['name'].rstrip('.')}.",
+                                    (g["detail"] or "")[:240], "", "Launch check"))
         for g in gates:
             if g["status"] == "WARN":
                 issues.append(Issue("low", f"Launch check warns: {g['name'].rstrip('.')}.",
                                     (g["detail"] or "")[:240], "", "Launch check"))
 
     site = sources["site"].data if sources["site"].ok else None
-    if site and site.get("week"):
-        age = _age(site["week"].get("built_at"), now)
-        if age and age > timedelta(days=8) and site["week"].get("phase", "season") == "season":
-            issues.append(Issue("medium", f"This week's sample page is {age.days} days old.",
-                                "Actions → weekly-report → Run workflow (before the week's first kickoff).",
-                                actions, "Site"))
-    if site and site.get("players_at"):
+    rebuild_fix = ("If weekly-report's last evening run is green, git pull and build this page again.",
+                   "Re-run weekly-report only if that run failed, and only before the week's "
+                   "first kickoff: a run in the afternoon sends the week's reports early.")
+    if site and site.get("week") and site["week"].get("phase", "season") == "season":
+        if site_is_stale(site["week"].get("built_at"), now, root):
+            age = _age(site["week"]["built_at"], now)
+            issues.append(Issue("medium", f"This week's sample page is {_days(age)} old: Wednesday "
+                                          f"evening's run should have rebuilt it.",
+                                rebuild_fix, actions, "Site"))
+    if site and site.get("players_at") and site_is_stale(site["players_at"], now, root):
         age = _age(site["players_at"], now)
-        if age and age > timedelta(days=8):
-            issues.append(Issue("medium", f"The player directory the join page uses is {age.days} days old.",
-                                "It's rebuilt by the Wednesday run — check weekly-report is green, then git pull.",
-                                actions, "Site"))
+        issues.append(Issue("medium", f"The player directory the join page uses is {_days(age)} old: "
+                                      f"Wednesday evening's run should have rebuilt it.",
+                            rebuild_fix, actions, "Site"))
 
     if ledger:
         for broken in ledger["unreadable"]:
@@ -1289,21 +1470,46 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
                             "https://dash.cloudflare.com/", "Traffic", "5b"))
 
     plan = sources["plan"].data if sources["plan"].ok else None
-    money_all = money_metrics(sources["stripe"], "all", now) if sources["stripe"].ok else None
-    if plan and money_all and money_all["count"] >= MIN_REFUND_SAMPLE:
+    # PLAN §6's gates count from D, so a purchase before it (the owner's own
+    # test purchase, refunded or kept) never moves the red line (DASH-05).
+    since = plan_start(plan)
+    paid = paid_since(sources["stripe"], since, now)
+    if plan and len(paid) >= MIN_REFUND_SAMPLE:
         red = plan_threshold(plan, "Refund rate", "red")
-        if red is not None and money_all["refund_rate"] is not None \
-                and money_all["refund_rate"] * 100 >= red:
-            issues.append(Issue("high", f"The refund rate is {money_all['refund_rate']:.0%}, at or above "
-                                        f"PLAN §6's red line of {red:g}%.",
+        rate = sum(bool(s.get("full_refund")) for s in paid) / len(paid)
+        if red is not None and rate * 100 >= red:
+            issues.append(Issue("high", f"The refund rate is {rate:.0%}"
+                                        + (" since D" if since else "")
+                                        + f", at or above PLAN §6's red line of {red:g}%.",
                                 "PLAN §6 says: talk to every refunder before another selling hour.",
                                 "", "Money"))
+    switches = (site or {}).get("switches") or {}
+    if plan and not plan.get("d_written") and switches.get("can_complete"):
+        issues.append(Issue("low", "Checkout is open, and PLAN §6's D isn't written yet.",
+                            ("Say the day you adopt PLAN §6's gates, and D is written into "
+                             "PLAN §6 (LAUNCH.md section 10).",
+                             "The gates then count from D, so a test purchase of your own drops "
+                             "out of them."), "", "Money"))
     if sources["books"].ok:
         for problem in sources["books"].data.problems[:5]:
             issues.append(Issue("low", problem, "Open the file in a text editor and fix or delete that "
                                                 "line; the rest of the file still counts.", "", "Books"))
     issues.sort(key=lambda i: SEVERITY[i.severity])
     return issues
+
+
+def plan_start(plan: dict | None) -> datetime | None:
+    """D, the day checkout opens, as PLAN §6 has it written; None until it is."""
+    d_date = (plan or {}).get("d_date")
+    return datetime.fromisoformat(d_date).replace(tzinfo=timezone.utc) if d_date else None
+
+
+def paid_since(stripe: Source, since: datetime | None, now: datetime) -> list[dict]:
+    """Paid purchases on or after ``since`` (every one when it is None)."""
+    if not stripe.ok:
+        return []
+    return [s for s in stripe.data["sessions"] if s.get("paid")
+            and (since is None or (_ts(s.get("created")) or now) >= since)]
 
 
 def plan_threshold(plan: dict, metric_word: str, column: str) -> float | None:
@@ -1332,7 +1538,7 @@ def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
         if t["landing"] < MIN_FUNNEL_VIEWS:
             need = MIN_FUNNEL_VIEWS - t["landing"]
             out.append(Insight("info", f"Not enough traffic for a reliable funnel read yet: "
-                                       f"{t['landing']} landing views in {span}.",
+                                       f"{_n(t['landing'], 'landing view')} in {span}.",
                                f"About {need} more landing views and the biggest drop-off shows here.",
                                f"{t['landing']} landing views; floor {MIN_FUNNEL_VIEWS}"))
         else:
@@ -1436,10 +1642,16 @@ def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
                                f"{young} newer requests not judged yet"))
     if forms is not None and forms["waitlist"]["total"] and m.days:
         w = forms["waitlist"]
-        out.append(Insight("info", f"{w['period']} waitlist sign-ups in {span}, "
-                                   f"{w['people']:,} people on the list.",
-                           "When checkout opens, make waitlist-send MAX=<n> sends the one launch email.",
-                           "form Worker rows"))
+        from render.sender import sender_line
+        # waitlist-send refuses without the sender's postal address, so never
+        # point at it while that is missing (DASH-06).
+        action = ("When checkout opens, make waitlist-send MAX=<n> sends the one launch email."
+                  if sender_line() else
+                  "The one launch email waits for a postal address (LAUNCH.md step 2.6): make "
+                  "waitlist-send refuses until SENDER_POSTAL_ADDRESS is set in the shell.")
+        out.append(Insight("info", f"{_n(w['period'], 'waitlist sign-up')} in {span}, "
+                                   f"{_n(w['people'], 'person', 'people')} on the list.",
+                           action, "form Worker rows"))
     if ledger and ledger["hit_rate"] is not None and m.period == "all":
         n = ledger["hits"] + ledger["misses"]
         out.append(Insight("info", f"This season's published calls: {ledger['hits']} of {n} hit "
@@ -1471,7 +1683,7 @@ def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
                                "Stripe net revenue and data/costs.csv"))
         else:
             out.append(Insight("good", f"Costs are covered: {money_fmt(pr['profit'], True)} profit so far.",
-                               "Every pass from here is profit after Stripe's fee.",
+                               "Every plan sold from here is profit after Stripe's fee.",
                                "Stripe net revenue and data/costs.csv"))
     order = {"warn": 0, "good": 1, "info": 2}
     out.sort(key=lambda i: order[i.tone])
@@ -1497,6 +1709,11 @@ PAGE_NAMES = {"index": "landing", "join": "buy", "join-pass": "League Pass buy",
 
 def h(value: object) -> str:
     return _html.escape(str(value), quote=True)
+
+
+def _n(n: int, one: str, many: str = "") -> str:
+    """'1 landing view', '3 landing views', '1 person', '2 people'."""
+    return f"{n:,} {one if n == 1 else (many or one + 's')}"
 
 
 def num(n: float | int | None) -> str:
@@ -1590,7 +1807,9 @@ def spark(values: list[float], klass: str = "spark") -> str:
         values = [sum(values[max(0, i - 1):i + 2]) / len(values[max(0, i - 1):i + 2])
                   for i in range(len(values))]
     if not values or max(values) <= 0:
-        return f'<svg class="{klass} empty" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="28" x2="100" y2="28"/></svg>'
+        # "flat", never "empty": .empty is the setup card's dashed box, and
+        # an all-zero series drew one where its line belongs (DASH-10).
+        return f'<svg class="{klass} flat" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="28" x2="100" y2="28"/></svg>'
     top = max(values)
     n = len(values)
     pts = [(i / (n - 1) * 100 if n > 1 else 50, 28 - v / top * 24) for i, v in enumerate(values)]
@@ -1828,7 +2047,7 @@ def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | No
                          (f"{num(t['presses_open'])} open · {num(t['presses_closed'])} closed"
                           if t else ""), "Checkout open or closed when pressed",
                          missing=None if t else tr))
-        cards.append(kpi("Passes sold", num(mo["count"]) if mo else "",
+        cards.append(kpi("Plans sold", num(mo["count"]) if mo else "",
                          delta_chip(mo["count_delta"]) if mo else "", spark(mo["spark"]) if mo else "",
                          prev_label(m), missing=None if mo else st))
         cards.append(kpi("Net revenue", money_fmt(mo["net"]) if mo else "",
@@ -1927,15 +2146,23 @@ COUNTRY = {"US": "United States", "CA": "Canada", "GB": "United Kingdom", "AU": 
            "NL": "Netherlands", "SE": "Sweden", "T1": "Tor", "XX": "Unknown"}
 
 
-def funnel_html(steps: list[tuple[str, int | None]], pending_label: str = "") -> str:
+def funnel_html(steps: list[tuple[str, int | None]], pending_label: str = "",
+                min_views: int = 0) -> str:
+    """Steps with their counts. Under ``min_views`` at the first step the
+    rates between steps are left out: "100% drop off" in red from one view
+    reads as an alarm the insight beside it says is too few to judge (DASH-11)."""
     if not steps:
         return ""
     first = steps[0][1] or 0
+    too_few = first < min_views
     out = []
     prev = None
     for i, (label, n) in enumerate(steps):
         if i and prev is not None:
-            if n is None:
+            if too_few:
+                out.append('<div class="drop muted">↓ too few views to read yet</div>' if i == 1
+                           else '<div class="drop muted">↓</div>')
+            elif n is None:
                 out.append('<div class="drop muted">↓</div>')
             elif prev:
                 keep = n / prev
@@ -1970,13 +2197,15 @@ def funnel_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
     def one(p: str) -> str:
         m = M[p]
         t = m.traffic
-        main = funnel_html(m.funnel, "Stripe not connected")
+        main = funnel_html(m.funnel, "Stripe not connected", MIN_FUNNEL_VIEWS)
         tryf = funnel_html([("Free-report page views", t["try_views"]),
                             ("Rosters checked", t["try_rosters"]),
-                            ("Free reports requested", t["try_requests"])])
+                            ("Free reports requested", t["try_requests"])],
+                           min_views=MIN_FUNNEL_VIEWS)
         plan = funnel_html([("Planner views", t["planner_views"]),
                             ("Rosters checked", t["planner_rosters"]),
-                            ("Waitlist joins", t["planner_waitlist"])])
+                            ("Waitlist joins", t["planner_waitlist"])],
+                           min_views=MIN_FUNNEL_VIEWS)
         rows = m.channels[:10]
         if rows:
             trs = "".join(
@@ -2039,15 +2268,11 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
     if not plan.ok:
         return setup_card(plan, compact=True)
     data = plan.data
-    money_all = money_metrics(S["stripe"], "all", now) if S["stripe"].ok else None
     d_date = data["d_date"]
-    since = datetime.fromisoformat(d_date).replace(tzinfo=timezone.utc) if d_date else None
-
-    def paid_since() -> list[dict]:
-        if not S["stripe"].ok:
-            return []
-        return [s for s in S["stripe"].data["sessions"] if s.get("paid")
-                and (since is None or (_ts(s.get("created")) or now) >= since)]
+    since = plan_start(data)
+    # Every gate counts from D, the refund rate too: a purchase refunded
+    # before D (the owner's own test) must not sit in the rate forever.
+    paid = paid_since(S["stripe"], since, now)
     rows = []
     for g in data["gates"]:
         metric = g["metric"]
@@ -2060,11 +2285,11 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
                           if e["key"].startswith(f"trial-{sends['season']}-")
                           and (since is None or (_ts(e["sent_at"]) or now) >= since))
         elif "paid purchases" in low and S["stripe"].ok:
-            current = len(paid_since())
-        elif "refund rate" in low and money_all:
-            current = (money_all["refund_rate"] * 100) if money_all["refund_rate"] is not None else None
+            current = len(paid)
+        elif "refund rate" in low and S["stripe"].ok:
+            current = (100 * sum(bool(s.get("full_refund")) for s in paid) / len(paid)
+                       if paid else None)
         elif "purchases + league passes" in low and S["stripe"].ok:
-            paid = paid_since()
             current = len(paid)
             lp = sum(1 for s in paid if (s.get("pass") or "").startswith("League"))
             g = {**g, "extra": f"{lp} League Pass{'es' if lp != 1 else ''}"}
@@ -2105,9 +2330,14 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
                     f'{"<br><span class=muted>" + h(g["extra"]) + "</span>" if g.get("extra") else ""}</td>'
                     f'<td class="nowrap">{h(g["green"])}</td><td class="num">{h(cur)}</td>'
                     f'<td>{bar}</td><td>{pill}</td></tr>')
-    d_note = (f"D = {d_date} (written in PLAN §6)." if d_date else
-              "D, the day checkout opens, isn't written in PLAN §6 yet — counts below run from the "
-              "season's start until it is.")
+    before = (len(paid_since(S["stripe"], None, now)) - len(paid) if since else 0)
+    left_out = (f" {_n(before, 'purchase')} before D {'is' if before == 1 else 'are'} left out "
+                f"of them (Money's other views still count {'it' if before == 1 else 'them'})."
+                if before else "")
+    d_note = (f"D = {d_date} (written in PLAN §6). Sales, refunds and free reports count from D."
+              + left_out if d_date else
+              "D, the day checkout opens, isn't written in PLAN §6 yet. Until it is, sales and "
+              "refunds count from the season's start, so a test purchase of your own counts too.")
     return (f'<div class="card"><div class="cardhead"><div><h3>PLAN §6 decision gates</h3>'
             f'<p class="muted small">{h(d_note)} Targets are read from PLAN.md, never restated.</p>'
             f'</div></div><div class="tablewrap"><table class="tbl gates"><thead><tr><th>Read by</th>'
@@ -2195,7 +2425,7 @@ def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: dateti
     gates = gates_html(S, now, sends, ledger, S["registry"])
     profit = profit_block(S, M, now)
     if not S["stripe"].ok:
-        return section("money", "Money", "Passes sold, what they left after Stripe, profit and the "
+        return section("money", "Money", "Plans sold, what they left after Stripe, profit and the "
                        "plan's gates.", setup_card(S["stripe"]) + profit + gates)
 
     def one(p: str) -> str:
@@ -2234,23 +2464,23 @@ def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: dateti
             grouped[via if via == stats.NO_VIA else channel_of(via)] += n
         chans = sorted(grouped.items(), key=lambda kv: (kv[0] == stats.NO_VIA, -kv[1]))
         span_days = mo["chart_days"]
-        chart = column_chart(span_days, mo["chart"], "passes") if span_days else ""
+        chart = column_chart(span_days, mo["chart"], "plans") if span_days else ""
         disputes = [s for s in mo["disputes"]]
         dline = (f'{len(disputes)} disputed payment(s) this season.' if disputes else
                  "No disputes this season.")
         other = (f' {mo["other_currency"]} paid in another currency, left out of the dollar figures.'
                  if mo["other_currency"] else "")
         return (f'<div class="minis">{tiles}</div>{convh}'
-                f'<div class="card"><div class="cardhead"><div><h3>Passes per day</h3>'
+                f'<div class="card"><div class="cardhead"><div><h3>Plans per day</h3>'
                 f'<p class="muted small">{num(mo["count"])} sold · {mo["full_refunds"]} refunded in full · '
                 f'{h(dline)}{h(other)}</p></div></div>{chart}</div>'
                 f'<div class="grid2">'
-                + bar_list("Passes by type", "Sold", types, "No passes sold in this period.")
+                + bar_list("Plans by type", "Sold", types, "No plans sold in this period.")
                 + bar_list("Paid by channel", "Sold", chans, "No paid signups in this period.",
                            note="From the ?via= tag on the payment; a post counts under its "
                                 "channel (the Posts table has each post).")
                 + '</div>')
-    return section("money", "Money", "Passes sold, what they left after Stripe, profit and the "
+    return section("money", "Money", "Plans sold, what they left after Stripe, profit and the "
                    "plan's gates.", by_period(one) + season_2027_card(S) + profit + gates)
 
 
@@ -2491,6 +2721,67 @@ def attention(issues: list[Issue]) -> str:
             f'{tail}</div><ol class="issues">{items}</ol></div>')
 
 
+WORKER_GATE = "The form Worker takes free-report requests exactly when the site offers them"
+
+
+def launch_status(S: Mapping[str, Source], now: datetime) -> str:
+    """Where launch stands, from the pages' own switches: checkout, the free
+    report, the League Pass and the first sale, with the one step next
+    (DASH-04). Shown only until checkout can complete and the free report
+    is on; after that the Overview's numbers say it."""
+    site = S["site"].data if S["site"].ok else None
+    sw = (site or {}).get("switches")
+    if not sw or (sw.get("can_complete") and sw.get("trial_open")):
+        return ""
+    if not sw.get("checkout_open"):
+        checkout = "Closed"
+    elif sw.get("can_complete"):
+        checkout = "Open"
+    elif sw.get("monthly_link"):
+        checkout = "Monthly link live. The page still offers the email box (CHECKOUT_CAN_COMPLETE off)"
+    else:
+        checkout = "Buttons on, no payment link on the join page"
+    worker = None
+    if S["launch"].ok:
+        worker = next((g for g in S["launch"].data["gates"] if g.get("name") == WORKER_GATE), None)
+    free = "On" if sw.get("trial_open") else "Off"
+    if worker and worker["status"] in ("FAIL", "WARN"):
+        # The gate also warns when it can't reach the Worker at all, which
+        # says nothing about whether the two switches match.
+        free += (". The Worker's own switch couldn't be read (see Issues)"
+                 if "could not read" in (worker.get("detail") or "") else
+                 ". The Worker's own switch doesn't match (see Issues)")
+    league = ("On sale" if sw.get("pass_link") and sw.get("seats_open") else
+              "Held (no payment link, seats closed)" if not sw.get("pass_link") else
+              "Link set, seats closed")
+    paid = paid_since(S["stripe"], None, now) if S["stripe"].ok else []
+    first = min((_ts(s.get("created")) for s in paid if _ts(s.get("created"))), default=None)
+    if not S["stripe"].ok:
+        sale = "Needs Stripe to say"
+    elif first:
+        at = first.astimezone(ET)
+        sale = f"{at:%a %b} {at.day}, {at:%-I:%M %p} ET ({_n(len(paid), 'paid purchase')} so far)"
+    else:
+        sale = "None yet"
+    if not sw.get("checkout_open") or not sw.get("monthly_link"):
+        nxt = ""
+    elif not sw.get("can_complete"):
+        nxt = ("Check the welcome and first report arrived. Then CHECKOUT_CAN_COMPLETE and "
+               "TRIAL_OPEN go on together (LAUNCH.md step 6)." if first else
+               "Your own purchase of the Monthly plan, and watch it through (LAUNCH.md step 4)."
+               if S["stripe"].ok else
+               "Your own purchase of the Monthly plan, if it hasn't happened (LAUNCH.md step 4).")
+    else:
+        nxt = "TRIAL_OPEN goes on with checkout (LAUNCH.md step 6): the launch check fails until it does."
+    rows = (("Checkout", checkout), ("Free report", free), ("League Pass", league),
+            ("First sale", sale))
+    items = "".join(f'<li><span>{h(k)}</span><b>{h(v)}</b></li>' for k, v in rows)
+    tail = f'<p class="next"><b>Next:</b> {h(nxt)}</p>' if nxt else ""
+    return (f'<div class="card launch"><div class="cardhead"><h3>Where launch stands</h3>'
+            f'<span class="unit">read from the site\'s switches</span></div>'
+            f'<ul class="kv">{items}</ul>{tail}</div>')
+
+
 FRESHNESS_KEYS = ("traffic", "stripe", "forms", "intake", "sends", "bounces", "github", "ledger",
                   "launch", "registry", "plan", "books")
 
@@ -2581,7 +2872,7 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
     sends = sources["sends"].data if sources["sends"].ok else None
     ledger = ledger_view(sources["ledger"], now)
     health = workflow_health(sources["github"], now, root)
-    issues = build_issues(sources, now, health, ledger, M["7d"])
+    issues = build_issues(sources, now, health, ledger, M["7d"], root)
     ftp = free_to_paid(sources["forms"], sources["stripe"], now)
     insights = {p: build_insights(sources, M[p], now, ftp, ledger) for p, _l, _d in PERIODS}
     from render.report import mark_svg
@@ -2612,7 +2903,7 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
         f'{icon("sun", "ic sun")}</button></div>'
         f'<nav class="tabs" aria-label="Sections"><div class="tabsin">{nav}</div></nav></header>'
         f'<main class="wrap">{stale}'
-        f'{attention(issues)}'
+        f'{attention(issues)}{launch_status(sources, now)}'
         f'<div class="filters"><div class="seg" role="group" aria-label="Period">{periods}</div>'
         f'<p class="muted small fnote">Traffic keeps 90 days; money and forms count all time under “All”.</p>'
         f'{freshness(sources, now)}</div>'
@@ -2755,7 +3046,7 @@ box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-
 .kpi.off{background:var(--surface2);box-shadow:none;border-style:dashed}.kpi.off .kval{color:var(--muted)}
 .kpi.off .ks{display:flex;align-items:center;gap:5px;margin-top:2px}
 .spark .l{fill:none;stroke:var(--series);stroke-width:1.75;vector-effect:non-scaling-stroke;stroke-linejoin:round}
-.spark .a{stroke:none}.g0{stop-color:var(--series);stop-opacity:.22}.g1{stop-color:var(--series);stop-opacity:0}.spark.empty line{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.spark .a{stroke:none}.g0{stop-color:var(--series);stop-opacity:.22}.g1{stop-color:var(--series);stop-opacity:0}.spark.flat line{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
 .delta{display:inline-flex;align-items:center;gap:3px;font-size:12.5px;font-weight:700;padding:2px 7px;border-radius:6px;
 font-variant-numeric:tabular-nums}.delta.good{color:var(--good);background:var(--goodbg)}
 .delta.bad{color:var(--bad);background:var(--badbg)}.delta.new{color:var(--series);background:var(--wash)}.delta.flat{color:var(--muted);background:var(--line2);font-weight:600}
@@ -2826,6 +3117,8 @@ background:var(--navy);color:#fff;padding:5px 9px;border-radius:7px;font-size:12
 .tbl td.num{font-weight:700}.tbl .r{text-align:right}
 .kv{list-style:none;margin:0;padding:0}.kv li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line2);font-size:14px}
 .kv li:last-child{border-bottom:0}.kv b{font-variant-numeric:tabular-nums;font-weight:600}
+.launch{margin-top:14px}.launch .kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 20px}.launch .kv li{display:block;border-bottom:0;padding:4px 0}.launch .kv li span{display:block;font-size:12.5px;color:var(--muted)}.launch .kv b{display:block;margin-top:2px}.launch .next{margin:12px 0 0;padding-top:10px;border-top:1px solid var(--line2);font-size:14px}
+@media (max-width:860px){.launch .kv{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:480px){.launch .kv{grid-template-columns:minmax(0,1fr)}}
 .seats li span:first-child{width:56px;flex:none}.seats li b{white-space:nowrap;min-width:60px;text-align:right}
 .meter{display:inline-block;width:100%;min-width:70px;height:8px;background:var(--line2);border-radius:4px;overflow:hidden;vertical-align:middle}
 .meter i{display:block;height:100%;border-radius:4px;background:var(--series)}.meter i.met{background:var(--good)}.meter i.behind{background:var(--warn)}
@@ -2884,7 +3177,7 @@ border-bottom:1px solid var(--line2);font-size:14px}.due li:last-child{border-bo
 @media (max-width:1180px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:960px){.delivery,.grid-funnel,.grid-money,.grid-issues,.grid-record{grid-template-columns:minmax(0,1fr)}
 .insights{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:700px){.hm{display:none}.gates thead{display:none}.gates tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--line2)}.gates tr:last-child{border-bottom:0}.gates td{padding:0!important;border:0!important}.gates td:nth-child(1){grid-column:1;grid-row:2;color:var(--muted);font-size:12.5px}.gates td:nth-child(2){grid-column:1/-1;grid-row:1;font-weight:600}.gates td:nth-child(3){grid-column:1;grid-row:3;color:var(--ink2)}.gates td:nth-child(3)::before{content:"Green: ";color:var(--muted)}.gates td:nth-child(4){grid-column:2;grid-row:3;text-align:right}.gates td:nth-child(5){grid-column:1/-1;grid-row:4}.gates td:nth-child(6){grid-column:2;grid-row:2;text-align:right}.xaxis span:nth-child(even):not(:last-child),.colx span:nth-child(even){display:none}.kpis>:last-child:nth-child(odd){grid-column:1/-1}.brand b{font-size:16px;white-space:nowrap}.brand .logo{width:26px;height:26px}.srclist{position:static;min-width:0;margin-top:8px}.srcs[open]{flex-basis:100%}.chips{margin-left:0}.fnote{display:none}.wrap{padding:16px 16px 48px}.topin{padding:10px 16px 6px;gap:10px}.tabsin{padding:0 8px}
+@media (max-width:700px){.hm{display:none}.gates thead{display:none}.gates tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--line2)}.gates tr:last-child{border-bottom:0}.gates td{padding:0!important;border:0!important}.gates td:nth-child(1){grid-column:1;grid-row:2;color:var(--muted);font-size:12.5px}.gates td:nth-child(2){grid-column:1/-1;grid-row:1;font-weight:600}.gates td:nth-child(3){grid-column:1;grid-row:3;color:var(--ink2)}.gates td:nth-child(3)::before{content:"Green: ";color:var(--muted)}.gates td:nth-child(4){grid-column:2;grid-row:3;text-align:right}.gates td:nth-child(5){grid-column:1/-1;grid-row:4}.gates td:nth-child(6){grid-column:2;grid-row:2;text-align:right}.xaxis span:nth-child(even):not(:last-child),.colx span:nth-child(even){display:none}.kpis>:last-child:nth-child(odd){grid-column:1/-1}.brand b{font-size:16px;white-space:nowrap}.brand .logo{width:26px;height:26px}.srclist{position:static;min-width:0;margin-top:8px}.srcs[open]{flex-basis:100%}.chips{margin-left:0}.fnote{display:none}.wrap{padding:16px 16px 48px}.topin{padding:10px 16px 6px;gap:10px}.tabsin{padding:0 8px}.tabs a[data-nav="overview"]{order:-2}.tabs a[data-nav="issues"]{order:-1}
 .brand em{display:none}.gen{font-size:12px}.live{font-size:0;padding:4px}.live::before{margin:0}.grid2,.grid-cust{grid-template-columns:minmax(0,1fr)}
 .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kpi{min-height:132px;padding:14px 14px 0}.kval{font-size:28px}
 .kpi .spark{margin:auto -14px 0;width:calc(100% + 28px)}

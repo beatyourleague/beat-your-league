@@ -10,8 +10,9 @@ Everything it needs is already stored somewhere the owner can read:
   and ``CF_ANALYTICS_TOKEN`` are in this shell or the gitignored ``.env``:
   page views and signup steps by channel, referring site, device and country.
   Counts of anonymous lines, never of people (privacy section 3).
-- **The form Worker** (``FORM_ENDPOINT`` + ``FORM_API_KEY``): waitlist sign-ups,
-  free-report requests, roster-update requests and confirmations, seat claims.
+- **The form Worker** (``FORM_ENDPOINT`` + ``FORM_API_KEY``, from this shell or
+  ``.env``): waitlist sign-ups, free-report requests, roster-update requests
+  and confirmations, seat claims, Trade Check requests.
 - **The send log** (``data/processed/sent.jsonl``, committed by the crons, so a
   ``git pull`` brings it up to date): what actually went out, week by week.
 - **The registry**, when it is on this machine (it normally lives only in the
@@ -57,6 +58,7 @@ FORM_KINDS = (("waitlist", "Waitlist sign-ups"),
               ("update_request", "Roster-update requests"),
               ("confirm", "Roster-update confirmations"),
               ("seat", "League Pass seat claims"),
+              ("trade_check", "Trade Check requests"),
               ("update", "Roster updates (old link)"))
 
 
@@ -418,7 +420,8 @@ FREE_TO_PAID_DAYS = 14
 
 
 def _pass_type(session: Mapping, link_plans: Mapping[str, str]) -> str:
-    from run.economics import ONE_TIME
+    from run.economics import LEAGUE_MONTHLY, ONE_TIME
+    from run.economics import MONTHLY as MONTHLY_PRICE
     from run.refs import LEAGUE_PASS, MONTHLY
     short = dict(PASS_NAMES)
     plan = link_plans.get(str(session.get("payment_link") or ""))
@@ -428,7 +431,12 @@ def _pass_type(session: Mapping, link_plans: Mapping[str, str]) -> str:
         return short["Monthly"]
     price = session.get("amount_subtotal")
     price = price if isinstance(price, int) else session.get("amount_total")
-    for name, dollars in ONE_TIME.items():
+    # Without the link map (a GitHub secret, so often not on the owner's Mac)
+    # the price still names the plan: a $14.99 sale reads as Monthly, never
+    # "other price". Naming only: the plan the intake serves still comes
+    # from the link that took the money.
+    by_price = {"Monthly": MONTHLY_PRICE, "League Pass": LEAGUE_MONTHLY, **ONE_TIME}
+    for name, dollars in by_price.items():
         if isinstance(price, int) and price == round(dollars * 100):
             return short.get(name, name)
     return f"other price (${price / 100:.2f})" if isinstance(price, int) else "unknown price"
@@ -724,12 +732,25 @@ def send_summary(entries: Iterable[Mapping], season: str) -> dict:
     other: Counter[str] = Counter()
     weekly_re = re.compile(rf"^{re.escape(season)}-w(\d\d)-([0-9a-f]+)$")
     final_re = re.compile(rf"^{re.escape(season)}-w(\d\d)-final-[0-9a-f]+$")
+    early_re = re.compile(rf"^{re.escape(season)}-w\d\d-early-[0-9a-f]+$")
+
+    def this_season(entry: Mapping) -> bool:
+        return str(entry.get("sent_at", "")).startswith(season)
     for entry in entries:
         key = str(entry["key"])
         if m := weekly_re.match(key):
             weekly[int(m.group(1))] += 1
         elif m := final_re.match(key):
             finals[int(m.group(1))] += 1
+        elif early_re.match(key):
+            # A Monday-to-Wednesday buyer's first email (run/tuesday.py).
+            other["early looks (a new buyer's first report)"] += 1
+        elif key.startswith(f"review-{season}-"):
+            other["season reviews"] += 1
+        elif key.startswith("trade-") and this_season(entry):
+            other["Trade Check replies"] += 1
+        elif key.startswith("team-") and this_season(entry):
+            other["extra-team emails"] += 1
         elif key.startswith(f"trial-{season}-"):
             other["free reports"] += 1
         elif key.startswith("welcome-") and str(entry.get("sent_at", "")).startswith(season):
@@ -857,6 +878,10 @@ def _season_start(season: str) -> int | None:
 # .env (LAUNCH.md step 5b) — read by the command line only (`cli`), so a test
 # calling main() can never reach Cloudflare.
 CF_NAMES = ("CF_ACCOUNT_ID", "CF_ANALYTICS_TOKEN")
+# The form Worker's address and read key, and the payment-link map (link ids,
+# not a key), from the same two places: the dashboard reads them from .env
+# too, and the two views must not disagree about whether the Worker exists.
+FORM_NAMES = ("FORM_ENDPOINT", "FORM_API_KEY", "STRIPE_PAYMENT_LINKS")
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
@@ -920,20 +945,23 @@ def in_ci(environ: Mapping[str, str]) -> bool:
 def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
         env_file: Path | None = None) -> int:
     """The command line (`make stats`). Refuses in CI — the repository is
-    public, so its job logs are too — and reads the counter's credentials
-    from this shell, else the gitignored .env."""
+    public, so its job logs are too — and reads the counter's credentials,
+    the form Worker's address and key and the payment-link map from this
+    shell, else the gitignored .env (the dashboard reads the same)."""
     environ = os.environ if environ is None else environ
     if in_ci(environ):
         print("make stats does not run in CI: the repository is public, so the job "
               "log would publish sales and traffic. Run it on your own machine.",
               file=sys.stderr)
         return 2
-    found = read_env_file(env_file or ENV_FILE)
+    found = read_env_file(env_file or ENV_FILE, CF_NAMES + FORM_NAMES)
     cf = {name: environ.get(name) or found.get(name, "") for name in CF_NAMES}
-    return main(argv, cf=cf)
+    form = {name: environ.get(name) or found.get(name, "") for name in FORM_NAMES}
+    return main(argv, cf=cf, form=form)
 
 
-def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None) -> int:
+def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
+         form: Mapping[str, str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--registry", type=Path, default=None)
@@ -948,15 +976,21 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None) -> 
               f"public repository — use a path such as data/stats.html.", file=sys.stderr)
         return 2
 
+    # What the command line read from the shell or .env, else this process's
+    # environment (a caller of main(), a test).
+    form = form or {}
+
+    def setting(name: str) -> str:
+        return form.get(name) or os.environ.get(name, "")
+
     rows: list[dict] | None = None
-    endpoint = os.environ.get("FORM_ENDPOINT", "")
+    endpoint = setting("FORM_ENDPOINT")
     if not endpoint:
-        form_note = ("FORM_ENDPOINT is not set — the form Worker isn't deployed "
-                     "yet, or its address isn't in this shell.")
+        form_note = "FORM_ENDPOINT is not in this shell or .env, so the form rows can't be read."
     else:
         from run.intake import IntakeError, fetch_seats
         try:
-            rows = fetch_seats(endpoint, os.environ.get("FORM_API_KEY"))
+            rows = fetch_seats(endpoint, setting("FORM_API_KEY") or None)
             form_note = ""
         except IntakeError as exc:
             form_note = f"Could not read the form Worker ({exc})."
@@ -989,7 +1023,7 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None) -> 
     if api_key:
         from run.checkout import parse_link_plans, season_2027_links
         since = _season_start(season)
-        raw_links = os.environ.get("STRIPE_PAYMENT_LINKS", "")
+        raw_links = setting("STRIPE_PAYMENT_LINKS")
         payments = stripe_summary(
             api_key, now, rows=rows,
             link_plans=parse_link_plans(raw_links),
