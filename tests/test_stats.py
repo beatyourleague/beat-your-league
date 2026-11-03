@@ -86,7 +86,81 @@ def test_no_address_is_ever_printed(tmp_path, monkeypatch, capsys) -> None:
     # Without the Worker it still prints what it has, and says why the rest is missing.
     monkeypatch.delenv("FORM_ENDPOINT")
     assert stats.main(["--registry", str(registry), "--now", NOW.isoformat()]) == 0
-    assert "FORM_ENDPOINT is not set" in capsys.readouterr().out
+    assert "FORM_ENDPOINT is not in this shell or .env" in capsys.readouterr().out
+
+
+def test_the_form_worker_is_read_from_dotenv_like_the_dashboard(tmp_path, monkeypatch,
+                                                               capsys) -> None:
+    """DASH-03, reproduced: `make stats` printed "FORM_ENDPOINT is not set — the
+    form Worker isn't deployed yet" while the dashboard, run the same minute
+    from the same .env, read the Worker's rows. The command line read only the
+    counter's two names from .env. It reads the Worker's address and key and
+    the payment-link map there too, and the shell still wins."""
+    import run.delivery as delivery
+    import run.intake as intake
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    for name in stats.FORM_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    asked = []
+    monkeypatch.setattr(intake, "fetch_seats",
+                        lambda endpoint, key=None: asked.append((endpoint, key)) or ROWS)
+    env = tmp_path / ".env"
+    env.write_text("FORM_ENDPOINT=https://w.file\nFORM_API_KEY='file-key'\n"
+                   "STRIPE_PAYMENT_LINKS=m:plink_M,p:plink_P\n", encoding="utf-8")
+    argv = ["--registry", str(tmp_path / "none.json"), "--now", NOW.isoformat()]
+    assert stats.cli(argv, environ={}, env_file=env) == 0
+    out = capsys.readouterr().out
+    assert asked == [("https://w.file", "file-key")]
+    assert "not in this shell or .env" not in out and "Waitlist sign-ups" in out
+    asked.clear()
+    assert stats.cli(argv, environ={"FORM_ENDPOINT": "https://w.shell"}, env_file=env) == 0
+    assert asked == [("https://w.shell", "file-key")]
+
+
+def test_a_sale_is_named_by_its_price_when_the_link_map_is_not_here() -> None:
+    """DASH-01, reproduced: the map is a GitHub secret, so on the owner's Mac it
+    was often missing and both $14.99 sales printed as "other price ($14.99)".
+    The price names the plan; the map still wins when it is there."""
+    monthly = {"amount_subtotal": 1499, "amount_total": 1499, "payment_link": "plink_M"}
+    league = {"amount_subtotal": 3499, "amount_total": 3499, "payment_link": "plink_P"}
+    assert stats._pass_type(monthly, {}) == "Monthly"
+    assert stats._pass_type(league, {}) == "League Pass"
+    assert stats._pass_type({"amount_subtotal": 1234}, {}) == "other price ($12.34)"
+    assert stats._pass_type(league, {"plink_P": "monthly"}) == "Monthly"
+
+
+def test_newer_mail_kinds_are_counted_in_the_send_log() -> None:
+    """DASH-07: the early look (a Monday-to-Wednesday buyer's first email),
+    Trade Check replies, season reviews and the extra-team emails were sent
+    and logged, and no summary ever counted them. Last season's are not this
+    season's, and a run marker is never a send."""
+    entries = [{"key": k, "sent_at": at} for k, at in (
+        ("2026-w09-early-0123456789", "2026-11-03T12:00:00+00:00"),
+        ("2026-w09-0123456789", "2026-11-04T22:20:00+00:00"),
+        ("trade-0123abcd-0123456789", "2026-11-02T15:00:00+00:00"),
+        ("trade-0123abcd-9876543210", "2025-11-02T15:00:00+00:00"),
+        ("review-2026-0123456789", "2027-01-13T23:00:00+00:00"),
+        ("team-confirm-0123abcd-0123456789", "2026-11-02T15:00:00+00:00"),
+        ("team-full-0123abcd-0123456789", "2026-11-02T16:00:00+00:00"),
+        ("run-tuesday-2026-w09", "2026-11-04T22:40:00+00:00"))]
+    sends = stats.send_summary(entries, "2026")
+    assert sends["weekly"] == {9: 1}
+    assert sends["other"] == {"early looks (a new buyer's first report)": 1,
+                              "Trade Check replies": 1, "season reviews": 1,
+                              "extra-team emails": 2}
+
+
+def test_trade_check_requests_have_their_own_forms_row() -> None:
+    """DASH-07: the Worker takes ``trade_check`` rows (infra/form-worker.js)
+    and the summary counted them, but the FORMS block listed only the kinds
+    it knew, so they were never printed."""
+    rows = [{"kind": "trade_check", "email": "a@example.com", "received_at": "2026-10-09T08:00:00Z"},
+            {"kind": "trade_check", "email": "b@example.com", "received_at": "2026-10-01T08:00:00Z"}]
+    page = stats.render(stats.form_summary(rows, NOW), "", {"weekly": {}, "finals": {}, "other": {}},
+                        "2026", None, "no registry", None, NOW)
+    line = next(l for l in page.splitlines() if "Trade Check requests" in l)
+    assert line.split()[-4:] == ["2", "1", "1", "2"]
+    assert "@" not in page
 
 
 def test_an_unreadable_worker_is_a_failure_not_a_quiet_zero(monkeypatch, capsys) -> None:

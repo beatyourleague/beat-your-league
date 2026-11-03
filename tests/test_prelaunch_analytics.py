@@ -769,10 +769,17 @@ def test_the_counter_credentials_come_from_the_shell_or_dot_env_and_only_via_the
                    encoding="utf-8")
     assert stats.read_env_file(env) == {"CF_ACCOUNT_ID": ACCOUNT,
                                         "CF_ANALYTICS_TOKEN": "from-file"}
-    handed = {}
-    monkeypatch.setattr(stats, "main", lambda argv=None, cf=None: handed.update(cf) or 0)
+    handed, worker = {}, {}
+
+    def fake_main(argv=None, cf=None, **kw):
+        handed.update(cf)
+        worker.update(kw.get("form") or {})
+        return 0
+    monkeypatch.setattr(stats, "main", fake_main)
     assert stats.cli([], environ={"CF_ANALYTICS_TOKEN": "from-shell"}, env_file=env) == 0
     assert handed == {"CF_ACCOUNT_ID": ACCOUNT, "CF_ANALYTICS_TOKEN": "from-shell"}
+    # The form Worker's names come the same way (DASH-03); a Stripe key never does.
+    assert set(worker) == set(stats.FORM_NAMES) and "sk_live" not in repr(worker)
 
 
 def test_main_never_reaches_cloudflare_without_being_handed_credentials(
