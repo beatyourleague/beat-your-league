@@ -1293,6 +1293,7 @@ $("roster-text").addEventListener("input", () => {
   state.ready = false;
   $("step-email").classList.add("hidden");
   drawPayoff();
+  redrawPassNote();
   const tally = $("tally");
   tally.className = "tally bad";
   tally.textContent = 'Your roster changed — hit "Check my team" again.';
@@ -1489,6 +1490,7 @@ function draw(focusAt) {
   $("resolve").classList.toggle("is-done", state.ready);
   keepInAddress();
   relistIfChanged();
+  redrawPassNote();
   if (Number.isInteger(focusAt)) {
     const rows = list.querySelectorAll(".row");
     const target = rows[Math.min(focusAt, rows.length - 1)];
@@ -2766,7 +2768,7 @@ function closedNoteNodes(action) {
   const lead = WANTS_PASS ? "The League Pass opens soon" : "Checkout opens soon";
   if (WANTS_PASS && OWN_PLAN_HREF) {
     return [text(lead + ". A plan for your own team is open now: "),
-            link(OWN_PLAN_HREF, "set that up instead"), text(".")];
+            link(ownPlanHref(), "set that up instead"), text(".")];
   }
   // The work is kept either way (BE-I3, I1): a checked roster stays in this
   // page's address, and with the list connected it is kept with the email.
@@ -2784,6 +2786,26 @@ function closedNoteNodes(action) {
                  "it opens.")];
   }
   return [head];
+}
+// FUN-10: a pass buyer's way to the open plan, from a held pass. Once a roster
+// is checked it rides along as a MONTHLY ref, so it isn't pasted again; the
+// page's own league_pass ref would restore pass mode (RESTORED_PLAN) and land
+// on this same dead end. An edited, unchecked list sends the bare link.
+function ownPlanHref() {
+  if (!state.ready || state.stale) return OWN_PLAN_HREF;
+  try {
+    return OWN_PLAN_HREF + "?ref=" + encodeURIComponent(R.withVia(R.encodeRoster("monthly",
+      radio("scoring"), template(), state.matches.map((m) => m.player.id), leagueSize(),
+      radio("league")), SOURCE));
+  } catch (err) {
+    return OWN_PLAN_HREF;
+  }
+}
+// The pass note's link follows the roster on screen, checked or edited.
+function redrawPassNote() {
+  if (WANTS_PASS && OWN_PLAN_HREF && !PASS_LINK && !SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {
+    noteClosedFor("", "");
+  }
 }
 function noteClosedFor(link, other) {
   if (seasonOver()) { link = ""; other = ""; }
