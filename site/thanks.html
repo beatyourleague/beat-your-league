@@ -372,6 +372,19 @@ document.getElementById("friend-share").addEventListener("click", () => {
   shareWithFriend(line.textContent.replace(/\s+/g, " ").trim(), line,
                   document.getElementById("friend-msg"));
 });
+// PUR-2, join's "overnight" window (firstReportTiming): from 00:00 UTC the day
+// before the next report (Monday evening ET) the intake serves next week, and
+// that first report waits for Monday night's box score (run/solo.py
+// BOX_SCORE_LAG), which usually lands overnight. Until 16:00 UTC that day,
+// "usually lands within the hour" sent a buyer to the spam folder for a
+// report not built yet. Never in the season's last week: no next week waits.
+function mondayNight(w, now, kick) {
+  if (!Number.isInteger(w.week) || !Number.isInteger(w.last_week) || w.week >= w.last_week ||
+      !/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "") || !(now >= kick)) return false;
+  const [y, m, d] = w.lands_on.split("-").map(Number);
+  const start = Date.UTC(y, m - 1, d - 1);
+  return now >= start && now < start + 16 * 3600 * 1000;
+}
 // D9: site/week.json's phase. "Today" holds only while there is a report to
 // send — once the season is over (phase "over", or past the last week's
 // report day, ET) nothing goes out until next season, and the page says so
@@ -410,6 +423,19 @@ document.getElementById("friend-share").addEventListener("click", () => {
               !Number.isInteger(w.week) || !Number.isInteger(w.last_week) || isNaN(kick)) return;
           if (w.week > 1 && Date.now() < kick) {
             today.textContent = "Your first report: your Week " + w.week + " lineup, decided.";
+          } else if (mondayNight(w, Date.now(), kick)) {
+            // Next week's report, once Monday night is scored: not today, and
+            // not within the hour (PUR-2).
+            const lead = document.createElement("b");
+            lead.textContent = "Your first report lands once Monday night's game is scored, " +
+              "usually by Tuesday morning.";
+            document.getElementById("first-note").replaceChildren(lead, document.createTextNode(
+              " It's built from the roster you just entered. If it hasn't arrived by then, " +
+              "check your spam folder and mark it \"not spam\" once."));
+            const label = document.querySelector("#step-today b");
+            if (label) label.textContent = "Next";
+            today.textContent = "Your first report, once Monday night's game is scored: your " +
+              "Week " + (w.week + 1) + " lineup, decided.";
           } else if (w.week > 1 && w.week < w.last_week) {
             const day = new Date(w.lands_on + "T12:00:00Z").toLocaleDateString("en-US",
               { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });

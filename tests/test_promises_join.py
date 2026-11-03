@@ -117,6 +117,40 @@ def test_a_monday_night_buyer_is_not_promised_a_report_today() -> None:
     assert "your Wednesday report from" not in after
 
 
+def test_the_thank_you_page_waits_for_monday_night_with_the_join_page() -> None:
+    """PUR-2's other half, reproduced on the page a Monday-night buyer lands on
+    after Stripe: join had come to say "lands once Monday night's game is
+    scored, usually by Tuesday morning", and then thanks.html said "Your first
+    report is on its way. It usually lands within the hour" and, after that
+    hour, to check the spam folder, for a report the intake would not build
+    until the box score was in. Inside the same window as join's "overnight"
+    (checked against firstReportTiming on the same times) it says the wait;
+    outside it the static words stand."""
+    fn = _js_function(THANKS, "mondayNight")
+    wk8 = {**WEEK, "week": 8, "lands_on": "2026-11-04", "first_kickoff": "2026-10-30T00:15:00Z"}
+    last = {**wk8, "week": 18}
+    cases = [[wk8, "2026-11-02T23:59:00Z"], [wk8, "2026-11-03T01:55:00Z"],
+             [wk8, "2026-11-03T09:00:00Z"], [wk8, "2026-11-03T16:00:00Z"],
+             [last, "2026-11-03T01:55:00Z"], [{**wk8, "first_kickoff": "2026-11-05T01:15:00Z"},
+                                              "2026-11-03T01:55:00Z"]]
+    got = _node(fn + "\n" + PHASE + "\nconsole.log(JSON.stringify(" + json.dumps(cases) +
+                ".map(([w, now]) => { const t = firstReportTiming(w, new Date(now));"
+                " return [mondayNight(w, Date.parse(now), Date.parse(w.first_kickoff)),"
+                " Boolean(t && t.when === 'overnight')]; })));")
+    assert [g[0] for g in got] == [False, True, True, False, False, False]
+    assert [g[0] for g in got] == [g[1] for g in got], "thanks.html and join disagree"
+    handler = _js_code(THANKS).split("mondayNight(w, Date.now(), kick)) {")[1].split("} else if")[0]
+    words = " ".join(s for s in re.findall(r'"((?:[^"\\]|\\.)*)"',
+                                           re.sub(r'"\s*\+\s*"', "", handler))
+                     if " " in s and not s.startswith("#"))   # sentences, not selectors
+    assert "Your first report lands once Monday night's game is scored" in words
+    assert "usually by Tuesday morning" in words
+    assert "within the hour" not in words and "today" not in words.lower()
+    assert 'getElementById("first-note").replaceChildren' in handler
+    # The static first screen keeps its pinned words for every other hour.
+    assert "usually lands within the hour" in prose(THANKS)
+
+
 def test_the_season_closes_when_no_weekly_report_is_left() -> None:
     """D9: "over", the last week from its first kickoff, and past the last
     week's lands_on (ET) all close; preseason is open for checkout and closed
