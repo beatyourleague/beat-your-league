@@ -537,6 +537,14 @@ def check_funnel_config() -> list[Gate]:
                        f"thanks.html PASS_HELD={thanks.get('PASS_HELD')} while the League Pass "
                        f"is {'held' if pass_held else 'on sale'} (join STRIPE_LINK_PASS, "
                        f"league-pass SEATS_OPEN)"))
+    # Sweep SELL-3: the landing's League Pass strip says "Opens soon" while the
+    # pass is held, so its flag follows the same two switches, the other way up.
+    lp_on_sale = bool(links["STRIPE_LINK_PASS"]) and lp.get("SEATS_OPEN") == "true"
+    gates.append(_gate("Funnel", "The landing states League Pass terms only while it sells",
+                       (landing.get("LEAGUE_PASS_OPEN") == "true") == lp_on_sale,
+                       f"index.html LEAGUE_PASS_OPEN={landing.get('LEAGUE_PASS_OPEN')} while the "
+                       f"League Pass is {'on sale' if lp_on_sale else 'held'} (join "
+                       f"STRIPE_LINK_PASS, league-pass SEATS_OPEN)"))
     gates.append(_gate("Funnel", "Every page posts to the same form Worker",
                        len(set(endpoints.values())) <= 1,
                        "; ".join(f"{k}={v}" for k, v in endpoints.items()),

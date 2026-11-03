@@ -1001,6 +1001,16 @@ def test_a_thank_you_page_selling_a_held_league_pass_fails(site) -> None:
     assert _status(lc.check_funnel_config(), "thank-you page offers the League Pass") == "FAIL"
 
 
+def test_a_landing_stating_terms_for_a_held_league_pass_fails(site) -> None:
+    """Sweep SELL-3: the strip under the landing's price card stated the
+    League Pass's price, stop and refund while the pass was held. Its
+    LEAGUE_PASS_OPEN must follow join's pass link and SEATS_OPEN."""
+    gate = "landing states League Pass terms"
+    assert _status(lc.check_funnel_config(), gate) == "PASS"
+    _flag(site / "index.html", "LEAGUE_PASS_OPEN", "true")
+    assert _status(lc.check_funnel_config(), gate) == "FAIL"
+
+
 def test_the_planner_and_league_app_pages_are_held_to_the_selling_rules() -> None:
     """Both sell (the planner hands a roster to join/, the app pages link
     it), so the copy, accessibility and speed gates read them; the planner

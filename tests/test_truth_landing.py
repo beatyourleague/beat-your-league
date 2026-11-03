@@ -296,15 +296,16 @@ def test_the_landing_stays_inside_its_word_budget() -> None:
     # Lowered Oct 30 2026 from 1,250: the mid-season narrative pass took it to
     # 1,241 while adding the value line, and the page may only get shorter:
     # 1229 once the founding line came off (Oct 31 2026), 1187 after the
-    # owner's sell review the same day, 1186 after the move to Wednesday and the plain-words pass.
-    assert words <= 1186, f"the landing is {words} words"
+    # owner's sell review the same day, 1186 after the move to Wednesday and the plain-words pass,
+    # 1184 after the Nov 3 2026 sell sweep.
+    assert words <= 1184, f"the landing is {words} words"
     # The words somebody wrote by hand, without the generated report text
     # and without comments: 952 before the rebuild, 781 after it. 859 before
     # the owner's Oct 30 2026 League Pass strip and nav link, which added 33
     # words because a price carries its terms; the total cap did not move.
     hand = re.sub(r"<!-- (phone|shot):start -->.*?<!-- \1:end -->", "", LANDING, flags=re.S)
     hand = count(re.sub(r"<!--.*?-->", "", hand, flags=re.S))
-    assert hand <= 829, f"the landing's own copy is {hand} words"
+    assert hand <= 827, f"the landing's own copy is {hand} words"
 
 
 # --------------------------------------------------------------------- #
