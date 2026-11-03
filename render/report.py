@@ -464,8 +464,46 @@ def cancel_html(seat: bool = False, link_style: str = "", sample: bool = False) 
     if not href and sample:
         href, label = SAMPLE_CANCEL_HREF, CANCEL_STEPS_LABEL
     style = f' style="{link_style}"' if link_style else ""
+    # "…we'll cancel the older one for you. your billing page." read as a
+    # stray fragment (launch review EM-5); the welcome already leads it in.
     return (f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
-            + (f' <a href="{esc(href)}"{style}>{esc(label)}</a>.' if href else ""))
+            + (f' Where to cancel: <a href="{esc(href)}"{style}>{esc(label)}</a>.'
+               if href else ""))
+
+
+# The season's last report on a plan that has stopped billing on its own
+# (monthly, a League Pass payer's): its season-end line says "there's nothing
+# to cancel", and the full "Done with this? Cancel it yourself… no further
+# charges" block under it said the opposite (launch review EM-7). It keeps the
+# billing page, for a charge to check, and the word the launch check's way-out
+# gate looks for (run/launch_check.WAY_OUT).
+STOPPED_HEAD = "Need to cancel or check a charge?"
+
+
+def billing_stopped(meta: Mapping[str, Any]) -> bool:
+    """The season's last report, on a plan whose billing has already stopped."""
+    return (_last_report(meta) and meta.get("plan") in ("monthly", PASS_PLAN)
+            and stop_route(meta) is False)
+
+
+def way_out_html(meta: Mapping[str, Any], link_style: str = "",
+                 sample: bool = False) -> str:
+    """The report footer's way out: ``cancel_html`` for this report's route,
+    or on the last report of a plan that has stopped billing, one line."""
+    href, label = cancel_destination()
+    if billing_stopped(meta) and href:
+        style = f' style="{link_style}"' if link_style else ""
+        return (f'<b>{esc(STOPPED_HEAD)}</b> Where to go: '
+                f'<a href="{esc(href)}"{style}>{esc(label)}</a>.')
+    return cancel_html(stop_route(meta), link_style, sample=sample)
+
+
+def way_out_lines(meta: Mapping[str, Any]) -> list[str]:
+    """The plain-text twin."""
+    href, label = cancel_destination()
+    if billing_stopped(meta) and href:
+        return [f"{STOPPED_HEAD.upper()} Where to go: {label} — {href}"]
+    return cancel_lines(stop_route(meta))
 
 
 def cancel_lines(seat: bool = False) -> list[str]:
@@ -2154,38 +2192,80 @@ def _forward_text(meta: Mapping[str, Any]) -> str:
     if not site:
         return ""
     return (f"Got this from a leaguemate? Every manager gets their own report, "
-            f"built from their own roster — {site}/join.")
+            f"built from their own roster: {forward_url()}")
 
 
-def _linked(words: str, link: str | None = None) -> str:
+# A forwarded report is the one organic touch, so its sales are counted like
+# the free report's (?via=trial). It pointed at /join, which 301s to /join/,
+# with no tag at all (launch review PROD-8/EM-8).
+FORWARD_VIA = "forward"
+
+
+def forward_url() -> str:
+    return f"{_site()}/join/?via={FORWARD_VIA}"
+
+
+def _linked(words: str, link: str | None = None, link_style: str = "",
+            label: str | None = None) -> str:
     """``words`` escaped, with ``link`` (when it appears) made tappable: a
     seat link a leaguemate has to copy out of running text is one fewer seat
-    claimed. Every href here is https (tests/test_email_safety.py)."""
+    claimed. Every href here is https (tests/test_email_safety.py).
+
+    ``link_style``: the email's inline colour, since a client draws a bare
+    anchor in its default blue (launch review PROD-7). ``label``: anchor text
+    in place of the raw URL, which the text half still prints."""
     text = esc(words)
     if link and link.startswith("https://") and esc(link) in text:
-        text = text.replace(esc(link), f'<a href="{esc(link)}">{esc(link)}</a>', 1)
+        style = f' style="{link_style}"' if link_style else ""
+        shown = esc(label) if label else esc(link)
+        text = text.replace(esc(link), f'<a href="{esc(link)}"{style}>{shown}</a>', 1)
     return text
 
 
-def _forward_line(meta: Mapping[str, Any] | None = None) -> str:
+def _anchor(url: str, label: str, link_style: str = "") -> str:
+    """One footer link: a short label over the full href (launch review
+    PROD-7/EM-5 — four raw query-string URLs wrapped mid-URL in 12px slate,
+    in the client's default blue). The text half keeps the URL itself."""
+    style = f' style="{link_style}"' if link_style else ""
+    return f'<a href="{esc(url)}"{style}>{esc(label)}</a>'
+
+
+# The footer links' words, HTML only.
+READ_LINK_TEXT = "What each part means"
+UPDATE_LINK_TEXT = "Update your roster"
+TEAM_LINK_TEXT = "Add a team"
+TRADE_LINK_TEXT = "Check a trade"
+
+
+def _forward_line(meta: Mapping[str, Any] | None = None, link_style: str = "") -> str:
     """The standing acquisition line, above the cancellation block.
 
     A forwarded report is the one organic touch with the eleven best prospects
     a subscriber knows. Gated on SITE_URL (set at launch, with the domain):
     a call to action with nowhere to go is worse than none. A pass payer whose
     report carries the seat count already shows the seat link there.
+
+    Not on the season's last report (launch review EM-7): checkout is open
+    until that week's first kickoff, so it invited a leaguemate to buy a plan
+    with one report left in it.
     """
     meta = meta or {}
-    if seats_text(meta) or meta.get("historical_demo") or meta.get("live_demo"):
-        # A published sample is not forwarded by anybody: its own ask is the
-        # closing card (demo_band).
+    if not forwards(meta):
         return ""
     words = _forward_text(meta)
     if not words:
         return ""
     seat = league_seat_link(meta) if in_pass_league(meta) else None
-    link = seat or f"{_site()}/join"
-    return f"{_linked(words, link)}<br>"
+    # A seat link stays printed in full: it is the one a payer copies into
+    # the group chat. The join link reads as the site's address.
+    label = None if seat else f"{_site().split('://', 1)[-1]}/join"
+    return f"{_linked(words, seat or forward_url(), link_style, label)}<br>"
+
+
+def forwards(meta: Mapping[str, Any]) -> bool:
+    """Does this report carry the forward line? Both halves ask."""
+    return not (seats_text(meta) or meta.get("historical_demo")
+                or meta.get("live_demo") or _last_report(meta))
 
 
 def seats_text(meta: Mapping[str, Any]) -> str:
@@ -2228,7 +2308,7 @@ SEAT_RESET_LINE = (" Seats you don't recognize? Reply \"reset seats\" and we'll 
                    "claims again with the new one.")
 
 
-def seats_line(meta: Mapping[str, Any]) -> str:
+def seats_line(meta: Mapping[str, Any], link_style: str = "") -> str:
     """The HTML twin of seats_text, for the footer."""
     words = seats_text(meta)
     if not words:
@@ -2236,10 +2316,10 @@ def seats_line(meta: Mapping[str, Any]) -> str:
     seat = league_seat_link(meta)
     label, _, rest = words.partition(": ")
     return (f"<b>{esc(label)}:</b> "
-            f"{_linked(rest, seat)}<br>")
+            f"{_linked(rest, seat, link_style)}<br>")
 
 
-def read_line(meta: Mapping[str, Any]) -> str:
+def read_line(meta: Mapping[str, Any], link_style: str = "") -> str:
     """A subscriber's first report can be a lot of new words at once ("proj",
     "touches", "if/then"). The glossary lives on the How it works page; this
     puts it one tap from the report, for subscribers only — never the samples,
@@ -2250,9 +2330,8 @@ def read_line(meta: Mapping[str, Any]) -> str:
     if not site or not meta.get("solo") or meta.get("historical_demo") \
             or meta.get("live_demo") or meta.get("trial"):
         return ""
-    return (f'<b>New to this report?</b> What each part means: '
-            f'<a href="{esc(site)}/how-it-works.html#read">'
-            f'{esc(site)}/how-it-works.html#read</a><br>')
+    return (f'<b>New to this report?</b> '
+            f'{_anchor(f"{site}/how-it-works.html#read", READ_LINK_TEXT, link_style)}.<br>')
 
 
 def read_lines(meta: Mapping[str, Any]) -> list[str]:
@@ -2454,7 +2533,7 @@ def roster_as_of(meta: Mapping[str, Any]) -> str:
 # asked subscribers to forward a credential to the league it was framed
 # against (removed Aug 27 2026). This one may be forwarded: a leaguemate who
 # uses it only sends the real subscriber a confirmation they can ignore.
-def update_line(meta: Mapping[str, Any]) -> str:
+def update_line(meta: Mapping[str, Any], link_style: str = "") -> str:
     """Shared by both HTML renderers. The link renders only when the whole
     flow can work (site, backend, secret — run/updates.public_update_url);
     until then, the reply route the FAQ already promises."""
@@ -2470,7 +2549,7 @@ def update_line(meta: Mapping[str, Any]) -> str:
         return f'<b>{esc(UPDATE_HEAD)}</b>{dated} {esc(UPDATE_REPLY)}<br>'
     body = update_body(meta)
     return (f'<b>{esc(UPDATE_HEAD)}</b>{dated} {esc(body)} '
-            f'<a href="{esc(url)}">{esc(url)}</a><br>')
+            f'{_anchor(url, UPDATE_LINK_TEXT, link_style)}<br>')
 
 
 def update_lines(meta: Mapping[str, Any]) -> list[str]:
@@ -2517,16 +2596,16 @@ def _teams_words(meta: Mapping[str, Any]) -> tuple[str, str] | None:
             f"Add another here:", url)
 
 
-def team_line(meta: Mapping[str, Any]) -> str:
+def team_line(meta: Mapping[str, Any], link_style: str = "") -> str:
     """Shared by both HTML renderers, under the roster change line."""
     trade = _trade_url(meta)
     trade_html = (f'<b>Weighing a trade?</b> {esc(TRADE_BODY)} '
-                  f'<a href="{esc(trade)}">{esc(trade)}</a><br>' if trade else "")
+                  f'{_anchor(trade, TRADE_LINK_TEXT, link_style)}<br>' if trade else "")
     words = _teams_words(meta)
     if not words:
         return trade_html
     body, url = words
-    link = f' <a href="{esc(url)}">{esc(url)}</a>' if url else ""
+    link = f" {_anchor(url, TEAM_LINK_TEXT, link_style)}" if url else ""
     return f"<b>Another team?</b> {esc(body)}{link}<br>{trade_html}"
 
 
@@ -2567,7 +2646,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         # unsubscribe-vs-cancel distinction stays: stopping emails while
         # billing continues is how you earn a chargeback and deserve it. A
         # seat has nothing to cancel, so it gets its stop route instead.
-        f'{cancel_html(stop_route(meta), sample=bool(meta.get("anonymized_demo")))}'
+        f'{way_out_html(meta, sample=bool(meta.get("anonymized_demo")))}'
         '</footer>'
     )
 

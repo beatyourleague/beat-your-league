@@ -27,7 +27,8 @@ import re
 from typing import Any, Mapping
 
 from render.sender import sender_line
-from render.report import cancel_html, cancel_lines, is_seat, stop_route
+from render.report import (cancel_html, cancel_lines, forwards, is_seat, stop_route,
+                           way_out_html, way_out_lines)
 from render.report import SATURDAY_LINE, SATURDAY_LINE_HEAD, saturday_line
 from render.report import (NOT_CALLING_IT, ODDS_DEFINITION, RISING_HEAD,
                            bar_from_even, rising_intro)
@@ -95,6 +96,9 @@ from render.anatomy import short_usage  # noqa: F401  (its long-standing home)
 # for labels only; gold is a FILL, never text on paper; brick flags and unmet
 # deadlines; turf met ones.
 NAVY = "#101E33"
+# Every footer link's inline colour: a client draws a bare anchor in its
+# default blue (launch review PROD-7).
+LINK = f"color:{NAVY};"
 PAPER = "#F6F4EE"
 CARD = "#FFFFFF"
 LINE = "#E2DDD0"          # a card's border
@@ -952,6 +956,8 @@ def _forward_lines(meta: Mapping[str, Any] | None = None) -> list[str]:
     if seats:
         label, _, rest = seats.partition(": ")
         return ["", f"{label.upper()}: {rest}"]
+    if not forwards(meta):
+        return []
     words = _forward_text(meta)
     if not words:
         return []
@@ -1121,7 +1127,7 @@ def _solo_text(report: Mapping[str, Any]) -> str:
               *update_lines(meta), *team_lines(meta),
               *_forward_lines(meta),
               "",
-              *cancel_lines(stop_route(meta)),
+              *way_out_lines(meta),
               *([sender_line()] if sender_line() else [])]
     return "\n".join(lines) + "\n"
 
@@ -1467,14 +1473,14 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'<p style="{SMALL}margin:0;overflow-wrap:anywhere;word-break:break-word;">'
         f'<b>Beat Your League</b> — '
         f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
-        f'{read_line(meta)}'
-        f'{update_line(meta)}{team_line(meta)}'
-        f'{seats_line(meta)}'
-        f'{_forward_line(meta)}'
+        f'{read_line(meta, LINK)}'
+        f'{update_line(meta, LINK)}{team_line(meta, LINK)}'
+        f'{seats_line(meta, LINK)}'
+        f'{_forward_line(meta, LINK)}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         f'{sender_html()}'
-        f'{cancel_html(stop_route(meta), f"color:{NAVY};")}'
+        f'{way_out_html(meta, LINK)}'
         '</p></td></tr>'
     )
 

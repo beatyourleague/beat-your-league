@@ -752,3 +752,89 @@ def test_every_email_fits_a_390px_phone_in_a_real_browser(tmp_path, monkeypatch)
         assert result["scrollWidth"] <= 390, \
             f"{result['path']} is {result['scrollWidth']}px wide on a 390px phone"
         assert result["smallTextCount"] == 0, (result["path"], result["smallText"])
+
+
+# --------------------------------------------------------------------- #
+# launch review, Nov 2026 — the paid footer
+# --------------------------------------------------------------------- #
+
+def test_the_forward_line_is_tagged_and_skips_the_redirect(monkeypatch) -> None:
+    """Reproduction (PROD-8/EM-8): every paid report's forward line linked
+    https://…/join, which 301s to /join/, with no ?via= tag, so `make stats`
+    could not see a sale that came from a forwarded report while the free
+    report's ?via=trial was counted. The text half also ended the URL on a
+    period."""
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    report = _subscriber(plan="monthly")
+    for name, doc in _surfaces(report).items():
+        assert "built from their own roster:" in doc, name
+    assert "https://example.com/join/?via=forward\n" in text_summary(report)
+    assert 'href="https://example.com/join/?via=forward"' in render_email(report)
+    assert 'href="https://example.com/join/?via=forward"' in rr.render(report, TEMPLATE)
+    assert "example.com/join." not in text_summary(report)
+
+
+def test_every_paid_footer_link_is_styled_and_named(monkeypatch) -> None:
+    """Reproduction (PROD-7/EM-5): the paid email's footer carried five
+    bright-blue raw query-string URLs (how it works, update, add a team,
+    trade, forward) wrapping mid-URL in 12px slate beside one navy link, and
+    the cancel paragraph ended "…we'll cancel the older one for you. your
+    billing page." The HTML names each link; the text half keeps the URLs."""
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.example/p")
+    update = "https://example.com/join/?update=1&s=ppr&n=12&t=std&o=27de6b914d81"
+    add = "https://example.com/join/?add=1&o=27de6b914d81"
+    trade = "https://example.com/join/?trade=1&o=27de6b914d81"
+    report = _subscriber(plan="monthly", update_url=update, trade_url=trade,
+                         teams={"held": 1, "cap": 3, "add_url": add})
+    page = render_email(report)
+    footer = page.rsplit("Beat Your League</b>", 1)[1]
+    anchors = re.findall(r"<a ([^>]*)>([^<]*)</a>", footer)
+    assert len(anchors) >= 6, anchors
+    for attrs, words in anchors:
+        assert 'style="color:#101E33;"' in attrs, (attrs, words)
+        assert not words.startswith("http"), f"a raw URL as link text: {words}"
+    shown = {words for _, words in anchors}
+    for label in ("What each part means", "Update your roster", "Add a team",
+                  "Check a trade", "example.com/join", "your billing page"):
+        assert label in shown, label
+    assert ". your billing page." not in _visible(page)
+    assert "Where to cancel: your billing page" in _visible(page)
+    text = text_summary(report)
+    for url in (update, add, trade, "https://example.com/how-it-works.html#read"):
+        assert url in text, url
+
+
+def test_the_last_report_of_a_stopped_plan_neither_sells_nor_says_cancel(
+        monkeypatch) -> None:
+    """Reproduction (EM-7): a monthly subscriber's Week 18 report opened "Your
+    monthly plan has stopped billing on its own, so there's nothing to
+    cancel." and closed with the full "Done with this? Cancel it yourself…
+    no further charges" block, plus "Got this from a leaguemate?…", an
+    invitation to buy a plan with one report left in it. The billing page
+    stays, for a charge to check, under words that still say "cancel" (the
+    launch check's way-out gate). A season pass renews, so it keeps the
+    cancel block; every plan's last report drops the forward line."""
+    from run.launch_check import WAY_OUT
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.example/p")
+    for plan in ("monthly", "pass"):
+        last = _subscriber(plan=plan, week=18, last_week=18)
+        for name, doc in _surfaces(last).items():
+            assert "nothing to cancel" in doc, (plan, name)
+            assert "Cancel it yourself" not in doc and "CANCEL IT YOURSELF" not in doc, (plan, name)
+            assert "Need to cancel or check a charge?" in doc or \
+                "NEED TO CANCEL OR CHECK A CHARGE?" in doc, (plan, name)
+            assert "https://billing.example/p" in doc or name != "email text", (plan, name)
+            assert WAY_OUT.search(doc), (plan, name)
+            assert "Got this from a leaguemate" not in doc, (plan, name)
+            assert "GOT THIS FROM A LEAGUEMATE" not in doc, (plan, name)
+        assert 'href="https://billing.example/p"' in render_email(last)
+    season = _subscriber(plan="season", week=18, last_week=18)
+    for name, doc in _surfaces(season).items():
+        assert "Cancel it yourself" in doc or "CANCEL IT YOURSELF" in doc, name
+        assert "GOT THIS FROM A LEAGUEMATE" not in doc.upper(), name
+    # Week 17 is not the last: everything as before.
+    for name, doc in _surfaces(_subscriber(plan="monthly", week=17, last_week=18)).items():
+        assert "GOT THIS FROM A LEAGUEMATE" in doc.upper(), name
+        assert "CANCEL IT YOURSELF" in doc.upper(), name
