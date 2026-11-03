@@ -466,7 +466,16 @@ def receipts(report: Mapping[str, Any]) -> dict[str, Any] | None:
     """Card 07, today's data passed through — or None on a free report."""
     if (report.get("meta") or {}).get("trial"):
         return None
-    return {"title": TITLES["receipts"], "data": dict(report.get("receipts") or {})}
+    return {"title": TITLES["receipts"], "data": receipts_data(report)}
+
+
+def receipts_data(report: Mapping[str, Any]) -> dict[str, Any]:
+    """The section's data, every surface: an early look's own calls are never
+    graded, so it says which report's are (engine.own_record.EARLY_NOTE)."""
+    if (report.get("meta") or {}).get("early_look"):
+        from engine.own_record import early_look_section
+        return early_look_section()
+    return dict(report.get("receipts") or {})
 
 
 MODELS = {"lineup": lineup, "closest": closest, "plan": plan, "ifthen": ifthen,

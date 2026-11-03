@@ -1156,12 +1156,13 @@ def _solo_text(report: Mapping[str, Any]) -> str:
                   *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
     # 07 — the receipts.
-    lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
-    if report["receipts"].get("last_week_calls"):
+    receipts = anatomy.receipts_data(report)
+    lines += ["", f"RECEIPTS: {receipts.get('note', '')}"]
+    if receipts.get("last_week_calls"):
         from engine.own_record import call_line
-        lines += [f"  - {call_line(c)}" for c in report["receipts"]["last_week_calls"]]
-    if report["receipts"].get("ask"):
-        lines.append(report["receipts"]["ask"])
+        lines += [f"  - {call_line(c)}" for c in receipts["last_week_calls"]]
+    if receipts.get("ask"):
+        lines.append(receipts["ask"])
     lines += ["", NO_BETTING_LINE,
               source_line(meta),
               availability_basis(meta),
@@ -1365,12 +1366,13 @@ def _league_text(report: Mapping[str, Any]) -> str:
                   availability_basis(meta),
                   *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
-    lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
-    if report["receipts"].get("last_week_calls"):
+    receipts = anatomy.receipts_data(report)
+    lines += ["", f"RECEIPTS: {receipts.get('note', '')}"]
+    if receipts.get("last_week_calls"):
         from engine.own_record import call_line
-        lines += [f"  - {call_line(c)}" for c in report["receipts"]["last_week_calls"]]
-    if report["receipts"].get("ask"):
-        lines.append(report["receipts"]["ask"])
+        lines += [f"  - {call_line(c)}" for c in receipts["last_week_calls"]]
+    if receipts.get("ask"):
+        lines.append(receipts["ask"])
     # The gap list is operator bookkeeping (field names, internal reasons) and
     # never goes in a subscriber's email — the report already says, in place and
     # in plain words, wherever it declined to call something.

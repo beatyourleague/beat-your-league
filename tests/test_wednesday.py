@@ -280,6 +280,21 @@ def test_a_buyer_before_wednesdays_run_gets_an_early_look_at_once(tmp_path, monk
     assert saturday.load_plan(first, season, week, signup.slug) is None
 
 
+def test_an_early_look_says_which_report_is_graded(tmp_path, monkeypatch) -> None:
+    """Launch review PUR-4, reproduced: an early look ended "RECEIPTS: Your
+    results start here: once this week's games are final, every call above
+    with odds shows up in your next report with how it played out." It
+    records nothing and stores no plan; the next report is Wednesday's, and
+    only Wednesday's calls are graded."""
+    from engine.own_record import EARLY_NOTE, EMPTY_NOTE
+    intake, data, season, week, sink = _env(tmp_path, monkeypatch)
+    intake._send_first_files([_signup()], data, season, processed_dir=tmp_path / "p",
+                             first_plans=tmp_path / "first", out_dir=tmp_path / "out")
+    [message] = sink.sent
+    for words in (message.text, message.html.replace("&#x27;", "'")):
+        assert EARLY_NOTE in words and EMPTY_NOTE not in words
+
+
 def test_an_early_look_goes_once_and_wednesdays_report_still_goes(tmp_path, monkeypatch) -> None:
     intake, data, season, week, sink = _env(tmp_path, monkeypatch)
     from run.tuesday import report_key

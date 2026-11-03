@@ -33,6 +33,13 @@ EMPTY_NOTE = ("Your results start here: once this week's games are final, every 
               "call above with odds shows up in your next report with how it "
               "played out.")
 NO_ODDS_NOTE = "No odds this week, so nothing to grade."
+# An early look records nothing and stores no plan (run.tuesday.run_subscriber
+# early_look): Wednesday's report is the report of record, and only its calls
+# are graded. EMPTY_NOTE told an early-look buyer "every call above with odds
+# shows up in your next report", which is Wednesday's, and its calls can
+# differ from these (launch review PUR-4).
+EARLY_NOTE = ("Wednesday's report is the one we grade: its calls with odds show "
+              "up in the report after it, with how they played out.")
 LAST_NOTE = ("This is the season's last report, so this week's calls aren't "
              "graded here.")
 SAMPLE_NOTE = ("In a subscriber's report, this section lists the calls from "
@@ -62,6 +69,11 @@ def empty_section(calls_now: int | None, last_report: bool = False
     if last_report:
         return {"record": None, "note": LAST_NOTE, "stamp": None}
     return {"record": None, "note": EMPTY_NOTE, "stamp": NEXT_STAMP}
+
+
+def early_look_section() -> dict[str, Any]:
+    """The section an early look prints in place of its own (EARLY_NOTE)."""
+    return {"record": None, "note": EARLY_NOTE, "stamp": None}
 
 
 def graded_calls(plans: Sequence[Mapping[str, Any]],
