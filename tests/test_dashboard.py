@@ -201,8 +201,6 @@ def rich_sources(now: datetime = NOW, root: Path = dash.REPO_ROOT) -> dict[str, 
              {"area": "Email", "name": "Payouts in USD keep the currency-conversion fee", "status": "WARN",
               "detail": "a USD bank account saves about 2%"},
              {"area": "Site", "name": "Every internal link and asset resolves", "status": "PASS", "detail": ""}]
-    plan_text = (root / "PLAN.md").read_text(encoding="utf-8").replace(
-        "D = ____", "D = 2026-10-26")
     S = {
         "traffic": traffic_source(now),
         "forms": dash._source("forms", data={"rows": forms_rows, "summary": summary,
@@ -228,10 +226,22 @@ def rich_sources(now: datetime = NOW, root: Path = dash.REPO_ROOT) -> dict[str, 
                                                     "built_at": (now - timedelta(hours=22)).isoformat()},
                                            "players_at": (now - timedelta(hours=22)).isoformat()},
                              read_at=now),
-        "plan": dash._source("plan", data=dash.parse_plan_gates(plan_text), read_at=now),
+        "plan": dash._source("plan", data=dash.parse_plan_gates(plan_text(root, "2026-10-26")),
+                             read_at=now),
         "books": dash._source("books", data=books_fixture(now), read_at=now),
     }
     return S
+
+
+def plan_text(root: Path = dash.REPO_ROOT, d: str | None = None) -> str:
+    """PLAN.md with its D line set to ``d`` (unwritten when None), whatever
+    PLAN.md itself says today: D gets written there the day the owner adopts
+    the gates (LAUNCH.md section 10), and a test that leaned on "D = ____"
+    would break that day."""
+    text = (root / "PLAN.md").read_text(encoding="utf-8")
+    line = "(write the date here when it happens: D = "
+    assert line in text, "PLAN §6's D line moved; parse_plan_gates reads it"
+    return re.sub(rf"{re.escape(line)}[^)]*\)", f"{line}{d or '____'})", text, count=1)
 
 
 def books_fixture(now: datetime = NOW):
@@ -572,8 +582,7 @@ def test_refund_rate_over_plans_red_line_is_an_issue() -> None:
     is over the 25% line. (With D written the rate counts from D; see
     test_a_refund_before_d_never_moves_the_refund_rate.)"""
     S = rich_sources()
-    S["plan"] = dash._source("plan", data=dash.parse_plan_gates(
-        (dash.REPO_ROOT / "PLAN.md").read_text(encoding="utf-8")), read_at=NOW)
+    S["plan"] = dash._source("plan", data=dash.parse_plan_gates(plan_text()), read_at=NOW)
     assert not S["plan"].data["d_written"]
     for s in S["stripe"].data["sessions"][:6]:
         s.update(full_refund=True, refunded=s.get("amount") or 0)
@@ -992,10 +1001,7 @@ def test_the_page_says_where_launch_stands_and_the_step_next() -> None:
 
 
 def _with_d(S: dict, d: str | None) -> None:
-    text = (dash.REPO_ROOT / "PLAN.md").read_text(encoding="utf-8")
-    if d:
-        text = text.replace("D = ____", f"D = {d}")
-    S["plan"] = dash._source("plan", data=dash.parse_plan_gates(text), read_at=NOW)
+    S["plan"] = dash._source("plan", data=dash.parse_plan_gates(plan_text(d=d)), read_at=NOW)
 
 
 def test_a_refund_before_d_never_moves_the_refund_rate() -> None:
