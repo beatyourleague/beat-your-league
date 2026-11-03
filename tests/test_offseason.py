@@ -16,7 +16,7 @@ from engine import rookies
 from engine.scoring import preset
 from engine.season_review import review_team, rookies_on_team
 from render import rookies as render_rookies
-from render.rookies import (ROOKIE_SAMPLE, _base_rate, _beside, _bio, _season, _where, class_year,
+from render.rookies import (ROOKIE_SAMPLE, _base_rate, _beside, _bio, _room, _season, _where, class_year,
                             rookie_email, rookie_page)
 from render.season_review import REVIEW_SAMPLE, review_message
 from run import plans, season_review
@@ -205,6 +205,17 @@ def test_the_room_names_a_veteran_who_arrived() -> None:
     weekly = _rows(("9", "QB", "LV", 40), ("8", "QB", "LV", 500), ("7", "QB", "ATL", 300))
     room = rookies.team_rooms(people, weekly)[("LV", "QB")]
     assert room["arrived"] == ["Cousins"] and room["lead"] == "Stayed"
+
+
+def test_a_name_that_ends_in_a_period_gets_one_stop() -> None:
+    """FUN-12: the public rookie report read "Still there: Harold Fannin Jr..",
+    because the line added a period after a name that already ends in one.
+    "Arrived:" had the same shape."""
+    rookie = {"position": "TE", "room": {"left_share": 40, "lead": "Harold Fannin Jr.",
+                                         "arrived": ["Kirk Cousins", "Marvin Harrison Jr."]}}
+    line = _room(rookie, 2026)
+    assert ".." not in line
+    assert line.endswith("Arrived: Kirk Cousins, Marvin Harrison Jr. Still there: Harold Fannin Jr.")
 
 
 def test_a_player_who_was_already_there_did_not_arrive() -> None:
