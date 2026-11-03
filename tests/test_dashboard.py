@@ -1178,3 +1178,12 @@ def test_on_a_phone_the_issues_tab_comes_second() -> None:
     assert '.tabs a[data-nav="overview"]{order:-2}' in phone
     assert '.tabs a[data-nav="issues"]{order:-1}' in phone
     assert [k for k, _v in dash.NAV][:2] == ["overview", "traffic"]
+
+
+def test_the_forms_card_points_at_make_signups_and_shows_no_address() -> None:
+    """The owner asked where the waitlist's addresses are. The page stays
+    counts-only and says where to look instead: make signups, in the terminal."""
+    page = dash.render_page(rich_sources(), NOW, fonts=False)
+    card = page.split("<h3>Form Worker rows</h3>", 1)[1].split('<div class="card">', 1)[0]
+    assert "make signups" in card and "never shows them" in card
+    assert "@" not in card

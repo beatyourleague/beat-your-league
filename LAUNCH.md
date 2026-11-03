@@ -816,6 +816,21 @@ it in public. A source you haven't connected shows its LAUNCH step instead of nu
 `make dashboard-registry` adds subscribers and seats the way `make stats-registry` does. It
 never runs in CI.
 
+**See who signed up.** Yes: a waitlist row is someone who typed their email into the site and
+asked to be told when it opens. `make signups` prints every address the form Worker holds, in
+your terminal only, grouped by what each person asked for: the waitlist, a free report, the
+rookie report, an extra team, a roster update, a League Pass seat or a Trade Check. Each line
+shows the day it first arrived (Eastern), how many times, the channel tag and, on the
+waitlist, whether a roster was saved with it. One mailbox is one line however it was spelled.
+`make signups-registry` marks who subscribes, the way `make stats-registry` does. Narrow it
+with `ARGS="--kind waitlist --since 7"`; `ARGS="--csv data/signups.csv"` also writes a copy,
+only to a gitignored path outside `site/`. Use each address only for what it was given for:
+the waitlist gets the one launch email (`make waitlist-send`) and nothing else (privacy
+section 1). Anyone on the stop list is marked and left out of the CSV; that check needs
+`LOG_SECRET` in the shell or `.env` once the list has entries. It reads `FORM_ENDPOINT` and
+`FORM_API_KEY` like `make stats`, changes nothing, and never runs in CI. Don't paste its
+output anywhere public, and delete a CSV when you're done with it.
+
 The launch gates on the page read the same shell and `.env`. With `STRIPE_PAYMENT_LINKS` in
 `.env` it checks each sale against its plan; without it, it says plans can't be checked here
 rather than calling a served sale unattributable. Once the USD payout account exists (step
