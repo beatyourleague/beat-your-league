@@ -1323,3 +1323,15 @@ def test_every_request_to_the_worker_names_a_user_agent(module) -> None:
         if "api.github.com" in call or "api.stripe.com" in call:
             continue
         assert "User-Agent" in call, f"{module}: {call}"
+
+
+def test_a_purchase_and_a_seat_are_dated_in_eastern_time() -> None:
+    """Launch review PUR-8: "your roster as of" took Stripe's UTC day, so a
+    9 PM ET buyer's report was dated the next day while run.updates dated a
+    change the same evening in Eastern time."""
+    from datetime import datetime, timezone
+    import run.intake as intake
+    nine_pm_et = int(datetime(2026, 11, 3, 2, 0, tzinfo=timezone.utc).timestamp())
+    assert intake._purchase_day(str(nine_pm_et)) == "2026-11-02"
+    assert intake._purchase_day("") is None
+    assert intake._eastern_day(datetime(2026, 11, 3, 2, 0, tzinfo=timezone.utc)) == "2026-11-02"

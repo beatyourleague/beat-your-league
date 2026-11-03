@@ -1714,6 +1714,11 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
         # a row-level flag, so the section says so once.
         report["meta"]["seeded"] = True
     report["meta"]["last_week"] = data.last_week
+    if _next_report_morning(cache_dir, data):
+        # Launch review EM-1/PROD-M1: next week's report goes Wednesday
+        # MORNING (a Wednesday game, 2026's Week 12), so this report's update
+        # line may not promise "that evening's report" (render.report.update_body).
+        report["meta"]["next_report_morning"] = True
     if getattr(data, "is_live_week", False):
         # Principle 3 on the surface: the injury line already dates its data;
         # the box scores the projections stand on are dated beside it (F2).
@@ -1733,6 +1738,25 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     # its reason. Last, so it sees every number the report carries.
     from engine.subscriber import withhold_ungraded_odds
     return withhold_ungraded_odds(report, spec.slots)
+
+
+def _next_report_morning(cache_dir: Path, data: WeekData) -> bool:
+    """Does the NEXT weekly report go Wednesday morning? Only when next week
+    has a regular-season game on the day that report is sent, which is the
+    rule weekly.yml's morning slot runs on (run/report_slot). False when the
+    schedule can't say: the evening wording is the usual case."""
+    if not data.last_week or data.week >= data.last_week:
+        return False
+    try:
+        day = next_report_day(Path(cache_dir), data.season, data.week, live=False)
+        rows = _schedule(Path(cache_dir), live=False)
+    except (NflverseError, SoloError, OSError):
+        return False
+    return bool(day) and any(
+        str(row.get("season") or "") == str(data.season)
+        and _int(row.get("week")) == data.week + 1
+        and (row.get("gameday") or "").strip() == day
+        for row in rows)
 
 
 def _row_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:

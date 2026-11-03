@@ -391,14 +391,16 @@ def masthead_html(label: str, big: str, meta_html: str, stamp: str | None = None
 
 
 def note_html(subject: str, preheader: str, body_html: str,
-              footer_html: str = "") -> str:
+              footer_html: str = "", heading: str | None = None) -> str:
     """A short note's whole document (a confirmation, a notice, the Trade
     Check): the report's own masthead over one white card, then
     ``footer_html`` (escaped by the caller) on the paper.
 
     The notes drew their own square header, a gold rule and a letter-spaced
     wordmark, while the report, the welcome and the Saturday check open on
-    this lockup, so the product read as two (launch review EM-10)."""
+    this lockup, so the product read as two (launch review EM-10).
+
+    ``heading``: the masthead's words when they aren't the subject's."""
     foot = (f'<tr><td style="background:{PAPER};padding:16px 4px 8px 4px;">'
             f'<p style="{SMALL}margin:0;">{footer_html}</p></td></tr>'
             if footer_html else "")
@@ -413,7 +415,7 @@ def note_html(subject: str, preheader: str, body_html: str,
         f'style="padding:18px 8px;"><table role="presentation" width="560" '
         f'cellpadding="0" cellspacing="0" border="0" '
         f'style="max-width:560px;width:100%;background:{PAPER};">'
-        + masthead_html("", subject, "", big_size=24)
+        + masthead_html("", heading or subject, "", big_size=24)
         + f'<tr><td style="padding:10px 0 0 0;">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{CARD};border:1px solid {LINE};border-radius:12px;">'

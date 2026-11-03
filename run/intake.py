@@ -1235,7 +1235,7 @@ def _seat_row(email: str, owner: PassInfo, held: list[SeatEntry], roster) -> dic
         "origin": seat_origin(held[0]), "pass_id": owner.pass_id,
         **({"pass_customer": owner.customer}
            if owner.customer and _CUSTOMER.match(owner.customer) else {}),
-        **({"roster_as_of": latest.at.date().isoformat()} if latest.at else {}),
+        **({"roster_as_of": _eastern_day(latest.at)} if latest.at else {}),
     }
 
 
@@ -2009,10 +2009,23 @@ def registry_plan(purchase: str) -> tuple[str, str | None]:
 
 
 def _purchase_day(seen_at: str) -> str | None:
-    """Stripe's `created` (epoch seconds, as a string) -> YYYY-MM-DD in UTC."""
+    """Stripe's `created` (epoch seconds, as a string) -> YYYY-MM-DD, Eastern.
+
+    Eastern like every other date a report prints, and like
+    run.updates.roster_day (launch review PUR-8): a buyer at 9 PM ET read
+    "your roster as of" the next day."""
+    from zoneinfo import ZoneInfo
     if not str(seen_at).isdigit():
         return None
-    return datetime.fromtimestamp(int(seen_at), tz=timezone.utc).date().isoformat()
+    return datetime.fromtimestamp(int(seen_at), tz=ZoneInfo("America/New_York")).date().isoformat()
+
+
+def _eastern_day(when: datetime) -> str:
+    """A confirmation time -> its Eastern calendar day (PUR-8, as above)."""
+    from zoneinfo import ZoneInfo
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return when.astimezone(ZoneInfo("America/New_York")).date().isoformat()
 
 
 def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
@@ -2583,9 +2596,17 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
             # `seat`); only a seat passes the keyword.
             extra = ({"seat": True} if signup.plan == "seat" else
                      {"one_time": (signup.subscription_id or "").startswith("pi_")})
+            # The same self-serve link every weekly report carries (launch
+            # review EM-3): a buyer between a week's first kickoff and
+            # Wednesday gets this report first, and its roster is what they
+            # most often need to change.
+            from run.updates import public_update_url
+            update_url = public_update_url(
+                os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
+                os.environ.get("FORM_ENDPOINT", ""), roster=subscriber_for(signup)) or ""
             messages.append(preseason_message(
                 signup.email, signup.slug, report,
-                purchased_at=str(signup.seen_at or ""), **extra))
+                purchased_at=str(signup.seen_at or ""), update_url=update_url, **extra))
         except Exception as exc:  # noqa: BLE001 — batch contract
             # Counted only when something is really being delivered: a dry
             # preview builds nothing anybody receives (and the registry, not

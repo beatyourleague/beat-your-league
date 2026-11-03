@@ -518,12 +518,25 @@ def check_funnel_config() -> list[Gate]:
     # report" link when checkout can complete and a free-report link when
     # free reports are open: flags left behind on launch morning would send a
     # visitor to a closed checkout, or hide the open one.
+    # CHECKOUT_OPEN too (launch review FUN-1): the planner's interim state
+    # ("Get my lineups" while the landing sells) reads it.
     gates.append(_gate("Funnel", "The planner's checkout and free-report flags match the landing's",
-                       planner.get("CHECKOUT_CAN_COMPLETE") == landing.get("CHECKOUT_CAN_COMPLETE")
+                       planner.get("CHECKOUT_OPEN") == landing.get("CHECKOUT_OPEN")
+                       and planner.get("CHECKOUT_CAN_COMPLETE") == landing.get("CHECKOUT_CAN_COMPLETE")
                        and planner.get("TRIAL_OPEN") == landing.get("TRIAL_OPEN"),
-                       f"byes/ CHECKOUT_CAN_COMPLETE={planner.get('CHECKOUT_CAN_COMPLETE')}, "
+                       f"byes/ CHECKOUT_OPEN={planner.get('CHECKOUT_OPEN')}, "
+                       f"CHECKOUT_CAN_COMPLETE={planner.get('CHECKOUT_CAN_COMPLETE')}, "
                        f"TRIAL_OPEN={planner.get('TRIAL_OPEN')}; landing "
-                       f"{landing.get('CHECKOUT_CAN_COMPLETE')}/{landing.get('TRIAL_OPEN')}"))
+                       f"{landing.get('CHECKOUT_OPEN')}/{landing.get('CHECKOUT_CAN_COMPLETE')}/"
+                       f"{landing.get('TRIAL_OPEN')}"))
+    # Launch review LEG-5/DES-2: the thank-you page's League Pass card sells a
+    # plan only while the pass is on sale.
+    thanks = js_constants((SITE / "thanks.html").read_text(encoding="utf-8"))
+    gates.append(_gate("Funnel", "The thank-you page offers the League Pass only while it sells",
+                       (thanks.get("PASS_HELD") == "true") == pass_held,
+                       f"thanks.html PASS_HELD={thanks.get('PASS_HELD')} while the League Pass "
+                       f"is {'held' if pass_held else 'on sale'} (join STRIPE_LINK_PASS, "
+                       f"league-pass SEATS_OPEN)"))
     gates.append(_gate("Funnel", "Every page posts to the same form Worker",
                        len(set(endpoints.values())) <= 1,
                        "; ".join(f"{k}={v}" for k, v in endpoints.items()),

@@ -512,3 +512,26 @@ def test_a_stuck_call_is_reported_even_when_nothing_new_is_recorded() -> None:
     assert _weeks_old(stranded, calls, now_week=16, now_season="2024") == 6
     # A different season falls back rather than subtracting across seasons.
     assert _weeks_old(stranded, calls, now_week=3, now_season="2025") == 0
+
+
+def test_the_record_page_is_left_alone_when_only_its_stamp_would_move(tmp_path) -> None:
+    """Launch review OPS-10: the Monday run rewrote site/ledger every week
+    with nothing settled, so the record committed and Pages redeployed a page
+    whose only change was "Page generated". It also carries the data credit
+    now (LEG-3, RULE N1)."""
+    import render.ledger_site as ls
+    entries = [{"season": "2026", "week": 7, "slot": "WR", "pick": "A", "over": "B",
+                "confidence": 0.8, "status": "graded", "outcome": "hit", "margin": 3.0,
+                "scoring": "ppr", "league_size": 12}]
+    summary = {"hits": 1, "misses": 0, "voids": 0, "hit_rate": 1.0, "buckets": []}
+    page = ls.write_ledger_site(entries, summary, out_dir=tmp_path)
+    first = page.read_text(encoding="utf-8")
+    assert ls.DATA_CREDIT in first and "CC-BY-4.0" in ls.DATA_CREDIT
+    import re
+    stale = re.sub(r"Page generated [^·<]*", "Page generated 1999-01-01 00:00 UTC ", first, count=1)
+    assert stale != first
+    page.write_text(stale, encoding="utf-8")
+    ls.write_ledger_site(entries, summary, out_dir=tmp_path)
+    assert page.read_text(encoding="utf-8") == stale, "rewritten for a new stamp alone"
+    ls.write_ledger_site(entries + [{**entries[0], "week": 8}], summary, out_dir=tmp_path)
+    assert page.read_text(encoding="utf-8") != stale, "a real change must still publish"

@@ -245,7 +245,7 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status (Oct 24 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (2,494 tests passing after the one-design pass, below). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29 and checkout stays closed until the GitHub secrets are set. Any payment from that window is swept by the first intake run once the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
+**Status (Nov 3 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (3,311 tests passing after the launch review, Nov 3 2026). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29. The GitHub secrets went in on Nov 2–3 2026 (the manual daily intake ran green) and the Monthly link is back on the join page; checkout opens in its interim state until the owner's own purchase (LAUNCH step 4). Any payment from the Aug–Sep window is swept by the intake now that the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
 Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
 probability at report time, grades only after both players' games are final, RULES L1-L4:
 never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
@@ -1476,6 +1476,32 @@ or records anything, and both state only what happened.
   one class only (`asked_for`). Selling it is a decision not yet taken:
   it needs a price and a terms change. February to April and June to August are still empty, so
   `bills_all_year()` stays False.
+
+**The launch review (Nov 3 2026) — 16 reviewers, then four builders, each re-attacked.** Checkout
+opened in its interim state (CHECKOUT_OPEN on, CHECKOUT_CAN_COMPLETE and TRIAL_OPEN off until the
+owner's own purchase, LAUNCH step 4); the League Pass is held for the lawyer (empty
+`STRIPE_LINK_PASS`, `SEATS_OPEN` off, thanks.html `PASS_HELD`, all gated); the owner launches
+without `SENDER_POSTAL_ADDRESS`. Rules it left:
+- **A send held for want of setup is red once, then green with a warning** (`run.watchdog.held_once`,
+  marker `run-held-<what>-<period>`): the season review, the rookie report, the launch email and the
+  change notice all refuse without a postal address, and failing every run buried real alarms.
+- **Refunded is not broken.** `paid_subscribers` returns `[]` (not None) when Stripe's own answer
+  (refunded, or `PaidList.ended`) explains every dropped row, so the owner's refunded test purchase
+  makes a quiet week, not a red one. A quiet all-ended run marks a derived Week 1 only once
+  `week_one_due` says so (no May marker answers for September). First emails skip a purchase
+  refunded before it was served.
+- **Only a week whose box scores are still coming in softens the launch check**
+  (`run.solo.WeekIncomplete`, raised by `assert_week_is_complete`); every other SoloError fails.
+- **The report before a Wednesday-morning week says so** (`meta.next_report_morning`, set by
+  `run.solo._next_report_morning` from next week's schedule; 2026: Week 11 only).
+- **Monday night to Tuesday morning, nothing says "today" or "within the hour"** about the first
+  report: join, thanks and the welcome wait for Monday's box score (`NEXT_TODAY_WEEK_AFTER_MNF`).
+- **Every surface that prints nflverse numbers credits it**, the public record included
+  (`render.ledger_site.DATA_CREDIT`), and that page is rewritten only when more than its stamp moves.
+- **The live sample's showcase hides when card 01 has no total** (`week.json "total": false`).
+- **Dates a buyer reads are Eastern**, purchase and seat confirmation included (PUR-8).
+- **The dashboard reads the link map from `.env`**, counts its gates from D, and names a missing
+  shell secret "check by hand", never "not done".
 
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
 30. You lost by four." and its answer is "Stop making that call five minutes before kickoff. Every

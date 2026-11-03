@@ -455,7 +455,7 @@ def test_a_generated_page_declares_its_colour_scheme_and_bar_colour() -> None:
     dark-mode phone drew dark native controls on a cream page."""
     page = rr.render(_subscriber(plan="season"), TEMPLATE)
     head = page.split("</head>")[0]
-    assert '<meta name="color-scheme" content="light">' in head
+    assert '<meta name="color-scheme" content="only light">' in head
     assert '<meta name="theme-color" content="#101E33">' in head
     # Emails keep their own, stricter declaration.
     assert 'name="theme-color"' not in render_email(_subscriber(plan="season"))

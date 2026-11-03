@@ -168,8 +168,8 @@ def main(argv: list[str] | None = None) -> int:
                   f"{len(messages)} waiting; they go out on the first run after "
                   f"it is set, until the end of August.")
         print(reason, file=sys.stderr)
-        held = held_once("rookies", str(year), reason)
-        return 1 if read_failed else held
+        code = held_once("rookies", str(year), reason)
+        return 1 if read_failed else code
     sends = send_all(messages, provider=provider)
     failures = [r for r in sends if not r.ok]
     print(f"Rookie report via {provider.name}: "

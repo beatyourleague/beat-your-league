@@ -49,7 +49,7 @@ EMAIL_META = (
 # design and said nothing, so a phone in dark mode drew dark native scrollbars
 # and controls over a cream page and Safari left its bar untinted (launch
 # review I12, Oct 2026). Light only, and the masthead's navy for the bar.
-PAGE_META = ('<meta name="color-scheme" content="light">\n'
+PAGE_META = ('<meta name="color-scheme" content="only light">\n'
              '<meta name="theme-color" content="#101E33">\n')
 
 # The faces above the fold on every report page: the masthead's condensed

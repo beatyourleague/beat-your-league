@@ -392,8 +392,8 @@ def _html(body: str, url: str, *, saved: bool, sender: str,
     message out. The URL is now only the button's href; the plain-text half
     (``body``) keeps it printed, where a text client needs it. The words are
     BODY's own paragraphs, so the two halves cannot say different things."""
-    from render.email import BASE, CARD, DISPLAY, FLAG, FONT, NAVY, PAPER, SMALL
-    from render.report import EMAIL_META, esc, preheader_html
+    from render.email import BASE, FLAG, FONT, NAVY, SMALL
+    from render.report import esc
     label = "Pick up where you left off" if saved else "Set up my team"
     para = f'<p style="{BASE}font-size:15px;margin:0 0 14px 0;">'
     parts = [" ".join(line.strip() for line in part.splitlines())
@@ -432,27 +432,12 @@ def _html(body: str, url: str, *, saved: bool, sender: str,
         f'border-radius:4px;"><a href="{esc(url)}" style="display:inline-block;'
         f'padding:13px 24px;font-family:{FONT};font-size:16px;font-weight:bold;'
         f'color:{NAVY};text-decoration:none;">{esc(label)}</a></td></tr></table>')
-    return (
-        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
-        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        f'{EMAIL_META}<title>{esc(subject)}</title></head>'
-        f'<body style="margin:0;padding:0;background:{PAPER};">'
-        f'{preheader_html(preview)}'
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'border="0" style="background:{PAPER};"><tr><td align="center" '
-        f'style="padding:18px 8px;"><table role="presentation" width="560" '
-        f'cellpadding="0" cellspacing="0" border="0" '
-        f'style="max-width:560px;width:100%;background:{CARD};">'
-        f'<tr><td style="background:{NAVY};padding:22px 26px;border-left:4px solid {FLAG};">'
-        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
-        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">Beat Your League</div>'
-        f'<div style="font-family:{DISPLAY};font-size:28px;font-weight:bold;'
-        f'text-transform:uppercase;color:{CARD};padding-top:6px;">Signups are open</div>'
-        f'</td></tr><tr><td style="padding:22px 26px 8px 26px;">{body_html}{button}'
-        f'{saved_html}{tail_html}</td></tr>'
-        f'<tr><td style="background:{PAPER};padding:16px 26px 22px 26px;">'
-        f'<p style="{SMALL}margin:0;">{esc(sender)}</p></td></tr>'
-        f'</table></td></tr></table></body></html>\n')
+    # The report's own masthead over one white card, like every other note
+    # (render.email.note_html, launch review EM-10): this email drew the old
+    # square header, a gold rule and a letter-spaced wordmark.
+    from render.email import note_html
+    return note_html(subject, preview, f"{body_html}{button}{saved_html}{tail_html}",
+                     esc(sender), heading="Signups are open")
 
 
 def main(argv: list[str] | None = None) -> int:

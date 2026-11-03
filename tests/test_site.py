@@ -301,6 +301,11 @@ def test_the_welcome_names_the_first_report_it_is_sending(tmp_path, monkeypatch)
     assert after == f"{welcome.NEXT_TODAY_ROSTER} Wednesday, Sep 25: your Week 3 report."
     # The last week has no next report to name.
     assert welcome.today_text("2030", at("2030-09-27T12:00")) == welcome.NEXT_TODAY_ROSTER
+    # Monday night: the early look waits for that game's box score (PUR-2).
+    # Week 2's last kickoff is 2030-09-24 00:15 UTC, so it's "once Monday
+    # night's game is scored" until BOX_SCORE_LAG after it.
+    assert welcome.today_text("2030", at("2030-09-24T03:00")) == welcome.NEXT_TODAY_WEEK_AFTER_MNF
+    assert welcome.today_text("2030", at("2030-09-24T09:00")) == welcome.NEXT_TODAY_WEEK
     monkeypatch.setattr(solo, "CACHE_DIR", tmp_path / "none")
     assert welcome.today_text("2030", at("2030-09-17T12:00")) == welcome.NEXT_TODAY
     # The email carries the branch and where its reports come from.

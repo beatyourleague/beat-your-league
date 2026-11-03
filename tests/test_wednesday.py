@@ -375,3 +375,38 @@ def test_a_buyer_after_kickoff_still_gets_the_roster_report(tmp_path, monkeypatc
                              first_plans=tmp_path / "first", out_dir=tmp_path / "out")
     [message] = sink.sent
     assert message.key.startswith("preseason-")
+
+
+def test_the_run_flags_the_report_before_a_morning_week(tmp_path, monkeypatch) -> None:
+    """The other half of EM-1/PROD-M1: render.report.update_body reads
+    ``next_report_morning``, and nothing set it, so the Week 11 report (Nov
+    18) still said "that evening's report" about a report going out Wednesday
+    morning. run.solo sets it from next week's own schedule: a game on the day
+    the next report goes. A postponed game in the week just played is not one
+    (BAL@PIT moved to Wednesday Dec 2, 2020, was Week 12's own game)."""
+    from types import SimpleNamespace
+    from run import solo
+    rows = ["season,game_type,week,gameday",
+            "2026,REG,11,2026-11-19", "2026,REG,11,2026-11-22", "2026,REG,11,2026-11-23",
+            "2026,REG,12,2026-11-25", "2026,REG,12,2026-11-26", "2026,REG,12,2026-11-29",
+            "2026,REG,13,2026-12-06", "2026,REG,13,2026-12-07",
+            "2026,REG,14,2026-12-13", "2026,REG,14,2026-12-16"]
+    (tmp_path / "games.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    flagged = [w for w in (11, 12, 13) if solo._next_report_morning(
+        tmp_path, SimpleNamespace(season="2026", week=w, last_week=14))]
+    assert flagged == [11]
+    assert not solo._next_report_morning(
+        tmp_path, SimpleNamespace(season="2026", week=14, last_week=14)), "no report follows the last"
+    def offline(*a, **k):
+        raise solo.NflverseError("down")
+    monkeypatch.setattr(solo, "_schedule", offline)
+    assert not solo._next_report_morning(
+        tmp_path, SimpleNamespace(season="2026", week=11, last_week=14)), "unknown is the usual evening"
+
+
+@needs_schedule
+def test_on_the_real_2026_schedule_only_week_11_is_flagged() -> None:
+    from types import SimpleNamespace
+    from run import solo
+    assert [w for w in range(1, 19) if solo._next_report_morning(
+        solo.CACHE_DIR, SimpleNamespace(season="2026", week=w, last_week=18))] == [11]

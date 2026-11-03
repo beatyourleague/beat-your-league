@@ -14,15 +14,22 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ingest.nflverse import ATTRIBUTION
 from render.report import (FAVICON_LINK, NOINDEX_TAG, SOCIAL_IMAGE_TAGS, mark_svg,
                            with_counter)
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT_DIR = REPO_ROOT / "site" / "ledger"
+# RULE N1: the record publishes nflverse-derived numbers, so it carries the
+# credit (launch review LEG-3). The first sentence of ingest.nflverse.ATTRIBUTION;
+# the rest of it speaks to one subscriber's scoring, which this page doesn't.
+DATA_CREDIT = ATTRIBUTION.split(". ", 1)[0] + "."
+_STAMP_RE = re.compile(r"Page generated [^·<]*")
 
 
 def esc(value: Any) -> str:
@@ -201,6 +208,7 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
       letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;">Set up my team</a>
   </div>
   <footer><b style="color:var(--navy)">Beat Your League</b> — analysis, not betting picks.
+  {esc(DATA_CREDIT)}
   Page generated {esc(stamp)} · league identities of subscribers
   are never shown here.</footer>
 </div>
@@ -209,12 +217,25 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
 ''')
 
 
+def _without_stamp(page: str) -> str:
+    return _STAMP_RE.sub("Page generated", page)
+
+
+def _write_if_changed(path: Path, text: str, same: Callable[[str], str] = str) -> None:
+    """Leave a file alone when only its build stamp would move (launch review
+    OPS-10): the Monday run rewrote the page every week with nothing settled,
+    so the record committed a new version, and Pages redeployed it, about
+    nothing."""
+    if path.is_file() and same(path.read_text(encoding="utf-8")) == same(text):
+        return
+    path.write_text(text, encoding="utf-8")
+
+
 def write_ledger_site(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
                       out_dir: Path | None = None) -> Path:
     out_dir = out_dir if out_dir is not None else DEFAULT_OUT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     page = out_dir / "index.html"
-    page.write_text(render_ledger(entries, summary), encoding="utf-8")
-    (out_dir / "data.json").write_text(
-        json.dumps(entries, indent=1), encoding="utf-8")
+    _write_if_changed(page, render_ledger(entries, summary), _without_stamp)
+    _write_if_changed(out_dir / "data.json", json.dumps(entries, indent=1))
     return page

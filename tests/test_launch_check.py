@@ -987,6 +987,18 @@ def test_a_planner_left_behind_on_launch_morning_fails(site) -> None:
                               'const NOTIFY_LIST_ENDPOINT = "https://elsewhere.example/rows";',
                               text, flags=re.M))
     assert _status(lc.check_funnel_config(), "same form Worker") == "FAIL"
+    # Launch review FUN-1: the interim state reads CHECKOUT_OPEN too.
+    _flag(planner, "CHECKOUT_OPEN", "false")
+    _flag(site / "index.html", "CHECKOUT_OPEN", "true")
+    assert _status(lc.check_funnel_config(), "planner's checkout and free-report flags") == "FAIL"
+
+
+def test_a_thank_you_page_selling_a_held_league_pass_fails(site) -> None:
+    """Launch review LEG-5/DES-2: thanks.html's League Pass card offered a
+    plan the join page couldn't sell. Its PASS_HELD must follow the hold."""
+    assert _status(lc.check_funnel_config(), "thank-you page offers the League Pass") == "PASS"
+    _flag(site / "thanks.html", "PASS_HELD", "false")
+    assert _status(lc.check_funnel_config(), "thank-you page offers the League Pass") == "FAIL"
 
 
 def test_the_planner_and_league_app_pages_are_held_to_the_selling_rules() -> None:

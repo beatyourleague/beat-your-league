@@ -429,6 +429,8 @@ NEXT_TODAY = ("Your first report. This week's lineup if it's Week 2 or later "
 # cached schedule; NEXT_TODAY stays the fallback when it cannot be read, since
 # it is true whichever report goes out.
 NEXT_TODAY_WEEK = "Your first report: this week's lineup, decided."
+NEXT_TODAY_WEEK_AFTER_MNF = ("Your first report, once Monday night's game is scored "
+                             "(usually by Tuesday morning): this week's lineup, decided.")
 NEXT_TODAY_ROSTER = ("Your first report: the byes ahead on your roster and last "
                      "season under your scoring.")
 NEXT_TODAY_THEN = "{day}: your Week {week} report."
@@ -472,9 +474,10 @@ SEAT_SEASON_OVER_SUBJECT = ("Your seat is in. Your first report comes when next 
                             "season's schedule is out")
 
 
-def _schedule_kickoff(season: str, week: int) -> datetime | None:
+def _schedule_kickoff(season: str, week: int, last: bool = False) -> datetime | None:
     """The week's first kickoff (UTC) from the CACHED schedule only — a
-    welcome makes no network call (week_at's rule) — or None."""
+    welcome makes no network call (week_at's rule) — or None. ``last``: its
+    last kickoff instead."""
     from zoneinfo import ZoneInfo
 
     from run.solo import CACHE_DIR, _schedule
@@ -492,7 +495,8 @@ def _schedule_kickoff(season: str, week: int) -> datetime | None:
         except ValueError:
             continue
         start = local.replace(tzinfo=eastern).astimezone(timezone.utc)
-        first = start if first is None or start < first else first
+        if first is None or (start > first if last else start < first):
+            first = start
     return first
 
 
@@ -511,6 +515,14 @@ def today_text(season: str, now: datetime | None = None) -> str:
         if kickoff is None:
             return NEXT_TODAY
         if week > 1 and now < kickoff:
+            # Monday night to Tuesday morning the early look waits for the
+            # last game's box score (run.solo.assert_week_is_complete), so
+            # "Today" would be wrong by a night (launch review PUR-2; join and
+            # thanks say the same).
+            from run.solo import BOX_SCORE_LAG
+            previous = _schedule_kickoff(str(season), week - 1, last=True)
+            if previous is not None and now < previous + BOX_SCORE_LAG:
+                return NEXT_TODAY_WEEK_AFTER_MNF
             return NEXT_TODAY_WEEK
         if week == 1:
             # The Week 1 report goes out on the Tuesday run before its games

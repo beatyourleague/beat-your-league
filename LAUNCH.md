@@ -275,8 +275,9 @@ still open one. Make three new links and switch the old ones off.
 8. **Payouts in US dollars (5 min; decided Oct 24).** Stripe → **Settings → Payouts** → add a
    **USD bank account** (a US-dollar account at your Canadian bank works; check its fees) and
    make it the payout account for USD. Every sale is in USD, so this keeps the 2% conversion
-   ($0.30 of each $14.99 charge, kept by Stripe even on a refund). Then run the launch check with
-   `STRIPE_PAYOUT_CURRENCY=usd` in your shell so it stops asking.
+   ($0.30 of each $14.99 charge, kept by Stripe even on a refund). Then put
+   `STRIPE_PAYOUT_CURRENCY=usd` in `.env` (`make dashboard` reads it there), and export it in
+   your shell when you run `make launch-check`, so neither keeps asking.
 
 **Tell me** what Terminal printed (it never shows the key).
 
@@ -389,7 +390,7 @@ Nobody else's money moves until you've watched your own go all the way through.
      refunds until your first weekly report's week kicks off, and how to cancel (the billing
      page).
    - **Bought after Wednesday's send, before kickoff:** this week's report, too.
-   - **Bought Monday night to Wednesday's send:** an early look at the week's report (nothing recorded), then Wednesday's report with everyone else.
+   - **Bought Monday night to Wednesday's send:** an early look at the week's report (nothing recorded), then Wednesday's report with everyone else. Only the welcome comes on Monday night itself: the early look follows once Monday's box score is published, usually by Tuesday morning.
      **Bought Thursday night to Monday (a Saturday purchase):** the roster report that day,
      and the week's report the next Wednesday evening.
    - Open each in Gmail (phone in dark mode, and web), Apple Mail and Outlook if you have
@@ -401,7 +402,7 @@ Nobody else's money moves until you've watched your own go all the way through.
 5. **Wednesday:** the new week's report by about 5:30pm ET (6:30 before Nov 1), weekly-report
    green in Actions. The one case nothing has rehearsed is a Wednesday-to-Thursday buyer's
    same-day weekly report; if one fails, the hourly run retries it.
-6. **Keep the plan** (section 10, "Keep your own pass"), at least through Wednesday's report
+6. **Keep the plan** (section 10, "Keep your own plan"), at least through Wednesday's report
    and Saturday's check: until a second buyer exists, your row is the only proof the weekly
    path works with a real send. If you refund it instead, it's the refund steps in section 8,
    and Stripe keeps its fee: about $1.18 on a $14.99 charge from a Canadian account, or about
@@ -534,6 +535,7 @@ sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly t
    CF_ACCOUNT_ID=<the 32-character account id>
    CF_ANALYTICS_TOKEN=<the token>
    ```
+   Then run `chmod 600 .env` so only your account can read it.
    Not a GitHub secret: `make stats` never runs in CI (it refuses to), because on a public
    repo the job log — the counts and the sales — is public.
 8. Turn on Do Not Track or Global Privacy Control in your own computer's browsers
@@ -1051,14 +1053,16 @@ them; marketing the record is a decision, not a default.
 *Recommend:* a 30% first-year share paid by hand, counted from their `?via=` tag in
 `make stats`, offered only once someone asks.
 
-**Keep your own pass.** The public record started with Week 7: the Oct 20 Tuesday build
+**Keep your own plan.** The public record started with Week 7: the Oct 20 Tuesday build
 recorded the live sample's first three calls (`data/processed/ledger/typed-ppr-12-2026`,
 committed by that run), and Monday grades them. *Recommend:* keep your step-4 pass — it adds
 a real roster's calls to the record, graded every Monday.
 
 **A sender postal address.** US (CAN-SPAM) and Canadian (CASL) law both want one in
-commercial email; every email now prints it, and the launch announcement refuses to send
-without it. *Recommend:* rent a virtual mailbox or PO box before step 3, never a home address.
+commercial email. Every email prints it once it is set, and four sends refuse without it:
+the launch announcement, a terms or privacy change notice, the season review (due Jan 11 to
+Jan 31, 2027) and the rookie report (from May 2027). Each is red once, then waits with a
+warning, and goes out on the first run after you set it. *Recommend:* rent a virtual mailbox or PO box before step 3, never a home address.
 Whether that mailbox is enough for Ontario's online-sale rules is section 12's first
 question, and it comes before the first League Pass sale, not "before scale".
 
@@ -1068,7 +1072,8 @@ question, and it comes before the first League Pass sale, not "before scale".
 account, with 0 forks and not yet archived by Software Heritage. Its history holds your
 **personal Gmail address** — added to the join page in two August commits, removed later, and
 still reachable from `main` (and from the five Dependabot branches until you delete them) — and one commit message carries a
-local path with your **first name**; the test fixtures use the same name. The playbook is
+local path with your **first name**; the test fixtures used the same name until Nov 3 2026
+(renamed now; the history keeps it). The playbook is
 public too (CLAUDE.md's selling strategy, PLAN's status, this file), as are the Actions logs,
 artifacts and the auto-filed issues, and once sales start the committed send log shows how
 many reports go out each week. And GitHub's Pages terms rule out a site "primarily directed
