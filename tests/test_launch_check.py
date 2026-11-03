@@ -636,6 +636,9 @@ def test_the_roster_report_is_audited_in_the_shape_a_buyer_gets_today(monkeypatc
     assert name == "roster report (pre-season)" and built[-1][1] == {"prior_season": "2025"}
     state["last"] = OSError("no cache")
     assert "could not be built" in lc.roster_report()
+    # A broken feed this week is named, not swapped for last season's shape.
+    state["live"], state["last"] = solo.SoloError("could not load the player directory"), last
+    assert "in-season roster report could not be built" in lc.roster_report()
 
     import json
     report = json.loads((REPO / "tests" / "fixtures" / "sample-report-w10.json")

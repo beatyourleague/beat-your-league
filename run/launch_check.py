@@ -2302,12 +2302,13 @@ def roster_report() -> tuple[str, dict] | str:
     which no mid-season buyer is sent (launch review EM-12). When this week
     cannot be loaded (Monday night, before the last box score; the offseason)
     it falls back to that pre-season shape, and the name says which one the
-    gates measured."""
+    gates measured. Any other failure is named, never papered over with the
+    other shape (OPS-2)."""
     from engine.nflverse_backtest import TEMPLATE_T1
     from engine.preseason import build_preseason_report, bye_by_team
     from engine.subscriber import RosterSpec
     from render.live_sample import LIVE_ROSTER
-    from run.solo import CACHE_DIR, SoloError, current_season, load_week_data
+    from run.solo import CACHE_DIR, SeasonOver, WeekIncomplete, current_season, load_week_data
 
     def spec_for(data):
         known = {p.player_id for p in data.directory.players}
@@ -2322,8 +2323,8 @@ def roster_report() -> tuple[str, dict] | str:
             from_week=data.week, roster_out=data.roster_out)
         return ("roster report (in-season)" if data.week > 1
                 else "roster report (pre-season)"), report
-    except SoloError:
-        pass  # this week isn't loadable: the pre-season shape below
+    except (SeasonOver, WeekIncomplete):
+        pass  # no week to load yet, or none left: the pre-season shape below
     except Exception as exc:  # noqa: BLE001 — the gates name it as not built
         return f"the in-season roster report could not be built: {type(exc).__name__}: {exc}"
     try:
