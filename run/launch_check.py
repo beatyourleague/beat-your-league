@@ -103,6 +103,11 @@ REQUIRED_SECRETS = ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "EMAIL_PROVIDER", 
                     "LOG_SECRET", "RESEND_API_KEY", "SITE_URL", "BILLING_PORTAL_URL",
                     "FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET",
                     "SENDER_POSTAL_ADDRESS", "CACHE_KEY")
+# The sends that refuse without SENDER_POSTAL_ADDRESS (run/waitlist.py,
+# run/notice.py, run/season_review.py, run/rookies.py). Every other email
+# leaves the sender line out and goes.
+SENDER_HELD = ("The waitlist launch email, terms and privacy change notices, the season "
+               "review and the rookie report")
 # What each feature stops doing without which secret, so a missing name says
 # what a buyer loses rather than only that a box is empty. UPDATE_SECRET keys
 # two things since Oct 2026: the roster-update confirmation codes AND each
@@ -110,10 +115,15 @@ REQUIRED_SECRETS = ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "EMAIL_PROVIDER", 
 # that link is built on SITE_URL — without either, a payer's welcome has no
 # seat link to give and no seat can be claimed (contract C3: the generic seat
 # page that took the payer's typed address is closed).
+#
+# SENDER_POSTAL_ADDRESS does not stop "any email": reports, welcomes, roster
+# reports, the Saturday check and every confirmation go out without the line.
+# Four sends refuse without it (launch review EM-S2), and those are what the
+# owner gives up by launching before the mailbox exists.
 FEATURE_SECRETS = {
     "Taking money and knowing who paid": ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS"),
-    "Sending any email": ("EMAIL_PROVIDER", "EMAIL_FROM", "LOG_SECRET", "RESEND_API_KEY",
-                          "SENDER_POSTAL_ADDRESS"),
+    "Sending any email": ("EMAIL_PROVIDER", "EMAIL_FROM", "LOG_SECRET", "RESEND_API_KEY"),
+    SENDER_HELD: ("SENDER_POSTAL_ADDRESS",),
     "A cancel link that opens the billing page": ("BILLING_PORTAL_URL", "SITE_URL"),
     "Self-serve roster updates": ("FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET", "SITE_URL"),
     "A League Pass payer's own seat link": ("FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET",
@@ -1225,6 +1235,14 @@ def check_email_widths() -> list[Gate]:
         emails += [(label, render_email(report)) for label, report in built]
     season = str((sample.get("meta") or {}).get("season") or date.today().year)
     emails += [(name, page) for name, page, _ in other_email_samples(season)]
+    # The roster report as a buyer gets it today (EM-12): it was in the sender
+    # audit only, in a shape no mid-season buyer is sent, and never measured.
+    roster = roster_email()
+    unbuilt = []
+    if isinstance(roster, str):
+        unbuilt.append(Gate("Browser", "Every email was built for the 390px check", "WARN", roster))
+    else:
+        emails.append(roster[:2])
     with tempfile.TemporaryDirectory() as tmp:
         names = {}
         for i, (label, page) in enumerate(emails):
@@ -1239,7 +1257,7 @@ def check_email_widths() -> list[Gate]:
             if x.get("overflow") or "jobError" in x]
     return [_gate("Browser", "Every email fits a 390px phone (this week, every battery setup, "
                              "every other email)",
-                  not wide, "; ".join(wide[:4]), f"{len(results)} emails at 390px")]
+                  not wide, "; ".join(wide[:4]), f"{len(results)} emails at 390px")] + unbuilt
 
 
 # The join page's constants the flows point at local stand-ins.
@@ -2162,11 +2180,13 @@ TRANSACTIONAL = ("roster confirmation", "team confirmation", "team plan full", "
 WAY_OUT = re.compile(r"cancel|reply \"stop\"|only email we.ll send you|unsubscrib", re.I)
 
 
-def email_samples(report: dict | None = None) -> list[tuple[str, str, str | None]]:
+def email_samples(report: dict | None = None,
+                  skipped: list[str] | None = None) -> list[tuple[str, str, str | None]]:
     """(name, html, List-Unsubscribe or None) for every email the product
     sends, built by the same functions the runners call, around THIS week's
     live report where a report is involved (``report``, built when not
-    given)."""
+    given). An email that could not be built is named in ``skipped``: the
+    roster report used to drop out of the audit without a word (EM-12)."""
     import copy
 
     from engine.final_check import Change
@@ -2190,11 +2210,12 @@ def email_samples(report: dict | None = None) -> list[tuple[str, str, str | None
                                [Change("swap", "Start X at RB", "Y is out.")],
                                datetime.now(timezone.utc)), unsubscribe_target(False))]
     out += other_email_samples(str(report["meta"]["season"]))
-    roster = roster_report()
-    if roster is not None:
-        from render.preseason import preseason_message
-        msg = preseason_message("a@example.com", "abcdef0123", roster)
-        out.append(("roster report", msg.html, msg.unsubscribe))
+    roster = roster_email()
+    if isinstance(roster, str):
+        if skipped is not None:
+            skipped.append(roster)
+    else:
+        out.append(roster)
     return out
 
 
@@ -2270,24 +2291,61 @@ def other_email_samples(season: str) -> list[tuple[str, str, str | None]]:
     return out
 
 
-def roster_report() -> dict | None:
-    """The purchase-day roster report for the live sample's roster, built the
-    way render/preseason.py's own entry point builds it. None if it cannot."""
+def roster_report() -> tuple[str, dict] | str:
+    """The purchase-day roster report for the live sample's roster -> (which
+    shape, report), or why none could be built.
+
+    In season it is built the way run/intake.py builds a buyer's today: this
+    week's data, the weeks still ahead, the schedule's byes and today's
+    reserve list. The gates used to read only the pre-season shape off last
+    season's record ("Week 1 is under way, but one week isn't a record…"),
+    which no mid-season buyer is sent (launch review EM-12). When this week
+    cannot be loaded (Monday night, before the last box score; the offseason)
+    it falls back to that pre-season shape, and the name says which one the
+    gates measured."""
+    from engine.nflverse_backtest import TEMPLATE_T1
+    from engine.preseason import build_preseason_report, bye_by_team
+    from engine.subscriber import RosterSpec
+    from render.live_sample import LIVE_ROSTER
+    from run.solo import CACHE_DIR, SoloError, current_season, load_week_data
+
+    def spec_for(data):
+        known = {p.player_id for p in data.directory.players}
+        return RosterSpec(player_ids=tuple(p for p in LIVE_ROSTER if p in known),
+                          slots=TEMPLATE_T1, scoring="ppr", label="Your Team")
     try:
-        from engine.nflverse_backtest import TEMPLATE_T1
-        from engine.preseason import build_preseason_report
-        from engine.subscriber import RosterSpec
-        from render.live_sample import LIVE_ROSTER
-        from run.solo import CACHE_DIR, current_season, load_week_data
+        data = load_week_data(CACHE_DIR)
+        season = str(data.season)
+        report = build_preseason_report(
+            spec_for(data), data.directory, data.prior, season, CACHE_DIR,
+            season_started=data.week > 1, byes=bye_by_team(CACHE_DIR, season),
+            from_week=data.week, roster_out=data.roster_out)
+        return ("roster report (in-season)" if data.week > 1
+                else "roster report (pre-season)"), report
+    except SoloError:
+        pass  # this week isn't loadable: the pre-season shape below
+    except Exception as exc:  # noqa: BLE001 — the gates name it as not built
+        return f"the in-season roster report could not be built: {type(exc).__name__}: {exc}"
+    try:
         season = current_season(CACHE_DIR)
         data = load_week_data(CACHE_DIR, str(int(season) - 1), 10, live=False)
-        known = {p.player_id for p in data.directory.players}
-        spec = RosterSpec(player_ids=tuple(p for p in LIVE_ROSTER if p in known),
-                          slots=TEMPLATE_T1, scoring="ppr", label="Your Team")
-        return build_preseason_report(spec, data.directory, data.prior, str(season),
-                                      CACHE_DIR, prior_season=str(int(season) - 1))
-    except Exception:  # noqa: BLE001 — the gate names it as not built
-        return None
+        return "roster report (pre-season)", build_preseason_report(
+            spec_for(data), data.directory, data.prior, str(season), CACHE_DIR,
+            prior_season=str(int(season) - 1))
+    except Exception as exc:  # noqa: BLE001
+        return f"the roster report could not be built: {type(exc).__name__}: {exc}"
+
+
+def roster_email() -> tuple[str, str, str | None] | str:
+    """The roster report as the email a buyer gets -> (name, html,
+    List-Unsubscribe), or why it could not be built."""
+    built = roster_report()
+    if isinstance(built, str):
+        return built
+    from render.preseason import preseason_message
+    name, report = built
+    msg = preseason_message("a@example.com", "abcdef0123", report)
+    return name, msg.html, msg.unsubscribe
 
 
 def audit_senders(samples: list[tuple[str, str, str | None]], line: str) -> dict[str, list[str]]:
@@ -2309,6 +2367,31 @@ def audit_senders(samples: list[tuple[str, str, str | None]], line: str) -> dict
 PROBE_ADDRESS = "PO Box 0, Launch Check ON A1A 1A1"
 
 
+def sender_held_detail(today: date | None = None) -> str:
+    """What launching without SENDER_POSTAL_ADDRESS gives up, with the dates
+    read off the schedule (launch review OPS-3/EM-S2). Reports, welcomes and
+    confirmations go without the line; four sends refuse. The season review
+    and the rookie report are each red once when they first hold, then wait
+    green (run.watchdog.held_once), so this line is where the owner sees
+    them coming."""
+    from run.season_review import WINDOW_DAYS
+    from run.solo import CACHE_DIR, current_season, season_ends
+    review, rookies = "the season review", "the rookie report"
+    try:
+        season = current_season(CACHE_DIR, today=today)
+        end = season_ends(CACHE_DIR).get(str(season))
+    except Exception:  # noqa: BLE001 — the dates are a courtesy, never the gate
+        end = None
+    if end:
+        last = date.fromisoformat(end)
+        first, close = last + timedelta(days=1), last + timedelta(days=WINDOW_DAYS)
+        review += f" (due {first:%b} {first.day} to {close:%b} {close.day}, {close.year})"
+        rookies += f" (May to August {close.year})"
+    return ("Until then reports, welcomes and confirmations go out without it, and four "
+            "sends refuse: the waitlist launch email, terms and privacy change notices, "
+            f"{review} and {rookies}.")
+
+
 @_simulation_log_secret()
 def check_email_senders() -> list[Gate]:
     """GATE-9: every email type, rendered, carries who sent it (CAN-SPAM,
@@ -2320,9 +2403,10 @@ def check_email_senders() -> list[Gate]:
     from render.sender import postal_address, sender_line
     from run.solo import SeasonOver, WeekIncomplete
     real = postal_address()
+    skipped: list[str] = []
     try:
         with _env("SENDER_POSTAL_ADDRESS", real or PROBE_ADDRESS):
-            samples = email_samples()
+            samples = email_samples(skipped=skipped)
             line = sender_line() or ""
     except SeasonOver as exc:
         return [Gate("Email", "Every email names its sender and a way out", "SKIP",
@@ -2345,13 +2429,16 @@ def check_email_senders() -> list[Gate]:
         gates.append(Gate("Email", "Every email carries the sender block (name, postal address, "
                                    "contact)", "OWNER",
                           f"all {len(names)} email types print it once SENDER_POSTAL_ADDRESS is "
-                          f"set — a rented mailbox, never a home (LAUNCH.md step 2.6)"))
+                          f"set (a rented mailbox, never a home; LAUNCH.md step 2.6). "
+                          + sender_held_detail()))
     else:
         gates.append(Gate("Email", "Every email carries the sender block (name, postal address, "
                                    "contact)", "PASS", f"{len(names)} email types"))
     gates.append(_gate("Email", "Every email gives a way out (List-Unsubscribe or a cancel/stop "
                                 "route)", not found["no_way_out"],
                        f"none in: {', '.join(found['no_way_out'])}", ", ".join(names)))
+    for reason in skipped:
+        gates.append(Gate("Email", "Every email was built for the sender audit", "WARN", reason))
     return gates
 
 
