@@ -329,7 +329,7 @@ def test_last_week_of_season() -> None:
 
 def test_team_table_joins_and_falls_back() -> None:
     users = [
-        {"user_id": "u1", "display_name": "kevin", "metadata": {"team_name": "The Regret Index"}},
+        {"user_id": "u1", "display_name": "manager_a", "metadata": {"team_name": "The Regret Index"}},
         {"user_id": "u2", "display_name": "mike", "metadata": {}},
         {"user_id": "u3", "display_name": "dana", "metadata": None},
     ]
@@ -340,7 +340,7 @@ def test_team_table_joins_and_falls_back() -> None:
         {"roster_id": 4, "owner_id": None},
     ]
     assert team_table(users, rosters) == [
-        (1, "The Regret Index", "kevin"),
+        (1, "The Regret Index", "manager_a"),
         (2, "mike", "mike"),
         (3, "dana", "dana"),
         (4, "(no owner)", "(no owner)"),

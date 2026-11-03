@@ -87,7 +87,7 @@ def _season(weeks: int = REPORT_WEEK) -> Season:
     )
     from engine.history import Team
     season.teams = {
-        1: Team(1, "My Team", "kevin", "u1"),
+        1: Team(1, "My Team", "manager_a", "u1"),
         2: Team(2, "Rival Team", "mike", "u2"),
     }
     my_starters = ["qb1", "rb1", "wr1", "wr2"]
@@ -323,7 +323,7 @@ def test_rule3_swap_seats_the_probability_winner() -> None:
         status="in_season", roster_positions=("WR", "BN", "BN"),
         playoff_week_start=None, scoring_settings={"rec": 1.0}, waiver_budget=100,
     )
-    season.teams = {1: Team(1, "Me", "kevin", "u1")}
+    season.teams = {1: Team(1, "Me", "manager_a", "u1")}
     for week in range(1, 18):
         points = {"boom": boom[week - 1], "steady": steady[week - 1]}
         season.weeks[week] = {1: TeamWeek(
@@ -519,7 +519,7 @@ def _write_cache(tmp_path: Path, season: Season) -> Path:
         "scoring_settings": {"rec": 1.0},
     }), encoding="utf-8")
     league_dir.joinpath("users.json").write_text(json.dumps([
-        {"user_id": "u1", "display_name": "kevin",
+        {"user_id": "u1", "display_name": "manager_a",
          "metadata": {"team_name": "My Team"}},
         {"user_id": "u2", "display_name": "mike",
          "metadata": {"team_name": "<script>alert(1)</script>"}},
