@@ -156,6 +156,50 @@ def test_the_secrets_gate_asks_for_every_secret_the_mail_needs() -> None:
         assert name in lc.REQUIRED_SECRETS, name
 
 
+def test_only_a_week_still_coming_in_softens_the_report_gates(monkeypatch) -> None:
+    """Reproduction (launch review OPS-2): the launch step widened four catches
+    from SeasonOver to every SoloError, so a broken player directory or a
+    failed stat download read "WARN not yet" on the report gate and SKIP on
+    the battery, the 390px and the sender gates, and the check stayed green.
+    Only last week's box scores not being in yet (WeekIncomplete, Monday
+    night) is "not yet"; any other SoloError is still a FAIL."""
+    import render.live_sample as live
+    from run.solo import SoloError, WeekIncomplete
+
+    def raising(exc):
+        def build(*a, **k):
+            raise exc
+        return build
+    monkeypatch.setattr(live, "build", raising(SoloError("could not load the player directory: x")))
+    [gate] = lc.check_product()
+    assert gate.status == "FAIL" and "player directory" in gate.detail, gate
+    with pytest.raises(SoloError):           # run_all turns this into a FAIL
+        lc.check_email_senders()
+    with pytest.raises(SoloError):
+        lc.check_email_widths()
+
+    monkeypatch.setattr(live, "build", raising(WeekIncomplete("week 8's box scores are not all in")))
+    assert [g.status for g in lc.check_product()] == ["WARN"]
+    assert [g.status for g in lc.check_email_senders()] == ["SKIP"]
+    assert [g.status for g in lc.check_email_widths()] == ["SKIP"]
+
+
+def test_the_box_score_guard_raises_the_week_incomplete_kind(tmp_path) -> None:
+    """The one refusal the launch check reads as "not yet" is the one the
+    completeness guard raises: Monday night's game still being played. Every
+    runner still catches it as the SoloError it also is."""
+    from datetime import datetime, timezone
+
+    from run import solo
+    from test_prelaunch_report import WEEK7, _games, _rows
+    in_progress = WEEK7[:2] + [(7, "2026-10-26", "20:15", "DAL", "PHI", False)]
+    during = datetime(2026, 10, 27, 0, 47, tzinfo=timezone.utc)
+    with pytest.raises(solo.WeekIncomplete):
+        solo.assert_week_is_complete(_games(tmp_path, in_progress), "2026", 8,
+                                     {7: _rows("NE", "CHI", "SF", "ATL")}, now=during)
+    assert issubclass(solo.WeekIncomplete, solo.SoloError)
+
+
 def test_the_report_reads_and_the_verdict_follows_the_gates() -> None:
     gates = [lc.Gate("Site", "a", "PASS"), lc.Gate("Owner", "b", "OWNER", "do it")]
     assert "waiting on owner setup" in lc.render(gates)

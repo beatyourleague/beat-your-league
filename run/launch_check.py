@@ -706,12 +706,14 @@ def check_product() -> list[Gate]:
         from render.live_sample import build
         report = build()
     except Exception as exc:  # noqa: BLE001
-        from run.solo import SeasonOver, SoloError
+        from run.solo import SeasonOver, WeekIncomplete
         if isinstance(exc, SeasonOver):
             return [Gate("Product", "This week's report builds", "SKIP", f"offseason: {exc}")]
-        if isinstance(exc, SoloError):
+        if isinstance(exc, WeekIncomplete):
             # The last week's box scores aren't all in (Monday night, usually):
-            # the Wednesday run refuses the same way, then succeeds.
+            # the Wednesday run refuses the same way, then succeeds. Only this:
+            # any other SoloError is a feed, a directory or a roster that is
+            # broken, and stays a FAIL (launch review OPS-2).
             return [Gate("Product", "This week's report builds", "WARN",
                          f"not yet: {exc}")]
         return [Gate("Product", "This week's report builds", "FAIL", f"{type(exc).__name__}: {exc}")]
@@ -920,10 +922,10 @@ def battery_reports() -> tuple[tuple[str, dict], ...] | str:
     per run: the battery's gates and the email-width gate read the same
     reports. A string is the reason there are none (the offseason)."""
     from engine.subscriber import RosterSpec
-    from run.solo import CACHE_DIR, SoloError, load_week_data, report_for
+    from run.solo import CACHE_DIR, SeasonOver, WeekIncomplete, load_week_data, report_for
     try:
         data = load_week_data(CACHE_DIR)
-    except SoloError as exc:  # the offseason, or a week whose box scores aren't in
+    except (SeasonOver, WeekIncomplete) as exc:  # the offseason, or box scores not in yet
         return str(exc)
     today = players_today(CACHE_DIR)
     byes = schedule_byes(CACHE_DIR, data.season, data.week) or set()
@@ -1208,14 +1210,14 @@ def check_email_widths() -> list[Gate]:
     announcement could scroll sideways on launch day with this gate green."""
     from render.email import render_email
     from render.live_sample import build
-    from run.solo import SeasonOver, SoloError
+    from run.solo import SeasonOver, WeekIncomplete
     emails: list[tuple[str, str]] = []
     try:
         sample = build()
         emails.append(("this week's sample", render_email(sample)))
     except SeasonOver as exc:
         return [Gate("Browser", "Every email fits a 390px phone", "SKIP", f"offseason: {exc}")]
-    except SoloError as exc:
+    except WeekIncomplete as exc:
         return [Gate("Browser", "Every email fits a 390px phone", "SKIP",
                      f"this week's report can't be built yet: {exc}")]
     built = battery_reports()
@@ -2316,7 +2318,7 @@ def check_email_senders() -> list[Gate]:
     that the variable was set — and the final check, all four welcomes, the
     renewal notice and the roster report never printed it (launch audit L3)."""
     from render.sender import postal_address, sender_line
-    from run.solo import SeasonOver, SoloError
+    from run.solo import SeasonOver, WeekIncomplete
     real = postal_address()
     try:
         with _env("SENDER_POSTAL_ADDRESS", real or PROBE_ADDRESS):
@@ -2325,7 +2327,7 @@ def check_email_senders() -> list[Gate]:
     except SeasonOver as exc:
         return [Gate("Email", "Every email names its sender and a way out", "SKIP",
                      f"offseason: {exc}")]
-    except SoloError as exc:
+    except WeekIncomplete as exc:
         # Monday night, before the last game's box score lands, this week's
         # report refuses to build (run.solo.assert_week_is_complete): no
         # sample to read, which is not a fault in any email.

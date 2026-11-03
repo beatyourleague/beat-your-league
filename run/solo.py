@@ -87,6 +87,13 @@ class SeasonOver(SoloError):
     played months ago. Runners treat it as a quiet exit, not a failure."""
 
 
+class WeekIncomplete(SoloError):
+    """Last week's box scores are not all in yet (``assert_week_is_complete``):
+    usually Monday night, and the next run succeeds. A SoloError like any
+    other to every runner; named so a caller that only reports (the launch
+    check) can tell "not yet" from a feed or a directory that is broken."""
+
+
 def week_has_kicked_off(cache_dir: Path, season: str, week: int,
                         today: "date | None" = None, *,
                         now: "datetime | None" = None) -> bool:
@@ -405,7 +412,7 @@ def assert_week_is_complete(cache_dir: Path, season: str, week: int,
         parts.append(f"{', '.join(unplayed)} {'is' if len(unplayed) == 1 else 'are'} "
                      f"not over and in yet (a box score usually lands about "
                      f"{lag} hours after kickoff)")
-    raise SoloError(
+    raise WeekIncomplete(
         f"week {prior}'s box scores are not all in — {'; '.join(parts)}. A report "
         f"built now would project week {week} from an incomplete week {prior}, "
         f"counting every game not yet in as a game missed. Re-run once nflverse "
