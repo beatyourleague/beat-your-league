@@ -345,3 +345,21 @@ def test_a_seat_link_that_is_not_https_is_never_an_href(monkeypatch) -> None:
     msg = welcome_message("c@example.com", "league_pass", "abc123def0", "2026",
                           seat_link=link)
     assert link not in msg.text and 'href="http://localhost:8000/join' not in msg.html
+
+
+def test_the_welcome_leads_with_the_self_serve_roster_update(monkeypatch) -> None:
+    """Launch review EM-3/PUR-6 (Nov 2026). With the site, the form backend and
+    the secret all set, the welcome said only "Reply to any report with your
+    updated roster", a `make roster-update` by hand for each one, while every
+    report ends with a link to do it yourself. The link leads now; the reply
+    stays as the second route, as the landing's FAQ gives them."""
+    from render.welcome import welcome_message
+    monkeypatch.setenv("UPDATE_SECRET", "s")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    text = welcome_message("a@example.com", "monthly", "abc123def0", "2026").text
+    assert "Every weekly report ends with a link to update it yourself" in text
+    assert text.index("link to update it yourself") < text.index("Reply to any report")
+    monkeypatch.delenv("SITE_URL")
+    text = welcome_message("a@example.com", "monthly", "abc123def0", "2026").text
+    assert "link to update it yourself" not in text and "Reply to any report" in text

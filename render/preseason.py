@@ -146,6 +146,42 @@ def next_report_line(meta: Mapping[str, Any]) -> str:
     return f"Your Week {week} report lands {day:%A}, {day:%b} {day.day}."
 
 
+# The roster report is a mid-season buyer's only email until their first
+# weekly report, and it named no way to change the roster they pasted (launch
+# review EM-3): a change after waivers had to be emailed to us and applied by
+# hand. ``meta["update_url"]`` is the subscription's own self-serve link
+# (run.updates.public_update_url), set only when the whole flow can work.
+# "The night before" is true in every week, the one whose report goes
+# Wednesday morning included (EM-1); the weekly report's own line gives the
+# later deadline a normal week allows.
+UPDATE_HEAD = "Roster changed?"
+UPDATE_LINK_TEXT = "Update your roster"
+
+
+def update_sentence(meta: Mapping[str, Any]) -> str:
+    """'Update it here by Tuesday night (ET) and your Week 9 report uses it.
+    We'll email you a button to confirm:' or "" with no link to offer."""
+    if not meta.get("update_url"):
+        return ""
+    nxt = meta.get("next_report") or {}
+    try:
+        from datetime import date
+        eve = date.fromisoformat(str(nxt.get("lands_on"))) - timedelta(days=1)
+        when = f"by {eve:%A} night (ET) and your Week {int(nxt['week'])} report uses it"
+    except (KeyError, TypeError, ValueError):
+        when = "by the night before your first weekly report (ET) and that report uses it"
+    return f"Update it here {when}. We'll email you a button to confirm:"
+
+
+def update_html(meta: Mapping[str, Any]) -> str:
+    """The footer line, with a navy link (PROD-7), or ""."""
+    body = update_sentence(meta)
+    if not body:
+        return ""
+    return (f'<b>{esc(UPDATE_HEAD)}</b> {esc(body)} <a href="{esc(meta["update_url"])}" '
+            f'style="color:#101E33;">{esc(UPDATE_LINK_TEXT)}</a><br>')
+
+
 CANT_PLAY_HEAD = "Can't play right now"
 CANT_PLAY_BASIS = ("Today's NFL roster status: injured reserve, the PUP or "
                    "non-football injury list, suspended, exempt or released. "
@@ -452,7 +488,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
         # neither has a one-time pass (COPY-1/GROWTH-1).
         return (
             f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}<br>'
-            f'{esc(WEEKLY_PROMISE)}<br>'
+            f'{esc(WEEKLY_PROMISE)}<br>{update_html(meta)}'
             f'{esc(NO_BETTING_LINE)}<br>{esc(NFLVERSE_LINE)}<br>'
             f'{sender_html()}{cancel_html(seat=route)}</footer>'
         )
@@ -460,7 +496,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
     cancel = (f' <a href="{esc(href)}">{esc(label)}</a>.' if href else "")
     return (
         f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}<br>'
-        f'{esc(WEEKLY_PROMISE)}<br>'
+        f'{esc(WEEKLY_PROMISE)}<br>{update_html(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>{esc(NFLVERSE_LINE)}<br>'
         f'{sender_html()}'
         f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}{cancel}</footer>'
@@ -554,8 +590,10 @@ def text_summary(report: Mapping[str, Any]) -> str:
         else:
             lines.append(f'  {row["position"]:<5} {row["name"]:<24} '
                          f'{(row.get("team") or "—"):<4} {bye:<14} {last}')
-    lines += ["", f"  {form_basis(meta)}", "", WEEKLY_PROMISE, "",
-              NO_BETTING_LINE, NFLVERSE_LINE]
+    lines += ["", f"  {form_basis(meta)}", "", WEEKLY_PROMISE, ""]
+    if update_sentence(meta):
+        lines += [f"{UPDATE_HEAD.upper()} {update_sentence(meta)} {meta['update_url']}", ""]
+    lines += [NO_BETTING_LINE, NFLVERSE_LINE]
     route = way_out(report["meta"])
     if route:
         lines += ["", *cancel_lines(seat=route)]
@@ -735,7 +773,7 @@ def email_html(report: Mapping[str, Any]) -> str:
         + card(form_head(meta), _roster_table(roster), form_basis(meta))
         + f'<tr><td style="background:{PAPER};padding:20px 4px 8px 4px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — {esc(BRAND_LINE)}'
-        f'<br>{esc(WEEKLY_PROMISE)}<br>{esc(NO_BETTING_LINE)}<br>'
+        f'<br>{esc(WEEKLY_PROMISE)}<br>{update_html(meta)}{esc(NO_BETTING_LINE)}<br>'
         f'{esc(NFLVERSE_LINE)}<br>{sender_html()}{exit_html}</p></td></tr>'
         f'</table></td></tr></table></body></html>'
     )
@@ -762,7 +800,7 @@ def _season_first_kickoff(season: str, cache_dir: Path | None = None) -> datetim
 
 def preseason_message(email: str, slug: str, report: Mapping[str, Any],
                       purchased_at: str = "", seat: "bool | str" = False,
-                      one_time: "bool | None" = None):
+                      one_time: "bool | None" = None, update_url: str = ""):
     """The pre-season report as a Message, keyed so it can only be sent once.
 
     Keyed on the PURCHASE, exactly like the welcome and for the same reason: a
@@ -783,11 +821,19 @@ def preseason_message(email: str, slug: str, report: Mapping[str, Any],
     (SELLING_ONE_TIME): every 2026 purchase is one payment, and the
     subscription footer told each of those buyers "Reports continue to the
     end of the period you've already paid for" (COPY-1/GROWTH-1).
+
+    ``update_url``: the subscription's self-serve roster link
+    (run.updates.public_update_url, built from its registry row), printed in
+    both halves' footers. Empty, the report offers no route, as before.
     """
     from run.delivery import Message
 
     if seat == ONCE:
         seat, one_time = False, True
+    if update_url:
+        # The subscription's own self-serve link (EM-3), which the intake
+        # builds from its registry row so it carries ``&o=``.
+        report = {**report, "meta": {**report["meta"], "update_url": update_url}}
     if one_time is None:
         one_time = SELLING_ONE_TIME
     if one_time and not seat:

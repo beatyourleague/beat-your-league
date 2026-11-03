@@ -277,6 +277,28 @@ def test_the_file_is_sent_once_per_purchase_not_once_per_season() -> None:
     assert repurchase.key != first.key
 
 
+def test_the_roster_report_names_the_self_serve_update_when_it_can_work() -> None:
+    """Launch review EM-3 (Nov 2026). A buyer after Thursday's kickoff gets
+    only this report until next Wednesday, and it named no way to change the
+    roster they pasted: a change after waivers had to be emailed to us and
+    applied by hand. With the subscription's link the footer says how and by
+    when, in both halves; without one, nothing changes."""
+    from render.preseason import email_html, preseason_message, text_summary
+
+    report = _report()
+    report["meta"]["next_report"] = {"week": 9, "lands_on": "2026-11-04"}
+    url = "https://example.com/join/?update=1&s=ppr&n=12&t=std&o=abc123def0"
+    message = preseason_message("fan@example.com", "abcdef0123", report, update_url=url)
+    for words in (message.text, message.html.replace("&#x27;", "'")):
+        assert "Update it here by Tuesday night (ET) and your Week 9 report uses it" in words
+    assert url in message.text
+    assert f'href="{url.replace("&", "&amp;")}" style="color:#101E33;">Update your roster' \
+        in message.html
+    plain = preseason_message("fan@example.com", "abcdef0123", report)
+    assert "Update it here" not in plain.text and "Update your roster" not in plain.html
+    assert "Update it here" not in email_html(_report()) + text_summary(_report())
+
+
 def test_the_subject_says_what_the_file_found() -> None:
     """An inbox line that says nothing gets opened by nobody, and this is the
     first thing a paying subscriber ever receives."""

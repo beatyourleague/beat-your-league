@@ -556,6 +556,31 @@ def _block(title: str, inner: str) -> str:
                                                    f'{inner}</div>'))
 
 
+# Launch review EM-3/PUR-6: the welcome sent every roster change to our inbox
+# ("Reply to any report … from the next Wednesday"), a `make roster-update` by
+# hand each time, while every report carries a link to do it yourself. The
+# link leads now, and the reply stays as the second route, as the landing's
+# FAQ gives them. No deadline here: the report's own line gives it, and it
+# moves in a week whose report goes Wednesday morning (render.report.
+# update_body), which this email cannot see.
+ROSTER_SELF_SERVE = ("Roster changed? Every weekly report ends with a link to "
+                     "update it yourself, and says when the change counts. Reply "
+                     "to any report with your updated roster if that's easier.")
+ROSTER_REPLY_ONLY = ("Roster changed? Reply to any report with your updated "
+                     "roster and your report follows it from the next Wednesday.")
+
+
+def roster_change_line() -> str:
+    """How a buyer changes their roster, or "" when no route can be applied:
+    an emailed roster goes in through ``make roster-update``, and the self-
+    serve link renders only when the site, the form backend and the secret all
+    exist (run.updates.public_update_url)."""
+    if not reply_update_works():
+        return ""
+    return (ROSTER_SELF_SERVE if os.environ.get("SITE_URL", "").strip()
+            else ROSTER_REPLY_ONLY)
+
+
 TEAMS_HEAD = "Another team?"
 TEAMS_BODY = (f"Your plan covers up to {TEAMS_INCLUDED} teams at no extra charge: redraft, "
               f"keeper or dynasty, each with its own report.")
@@ -627,9 +652,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
 
     when = None if seat else _purchase_date(purchased_at)
     opener = f"You {verb} {bought}." + (f" Purchased {when}." if when else "")
-    roster_line = ("Roster changed? Reply to any report with your updated roster "
-                   "and your report follows it from the next Wednesday."
-                   if reply_update_works() else "")
+    roster_line = roster_change_line()
     share = _share(plan, seat_link)
     site = _site()
     terms_url = f"{site}/terms.html" if site.startswith("https://") else ""

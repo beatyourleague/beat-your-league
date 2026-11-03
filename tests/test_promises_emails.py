@@ -176,7 +176,8 @@ def test_the_reply_route_is_offered_only_where_it_can_be_applied(monkeypatch) ->
 
 def test_the_update_deadline_is_one_the_pipeline_meets() -> None:
     """EMAILS-43/44: two hourly intakes before Saturday's 16:17 UTC check."""
-    for body in (rr.UPDATE_BODY, rr.UPDATE_BODY_LAST):
+    for body in (rr.UPDATE_BODY, rr.UPDATE_BODY_LAST, rr.UPDATE_BODY_MORNING,
+                 rr.UPDATE_BODY_EARLY_MORNING, rr.UPDATE_BODY_SAME_DAY):
         assert "by Friday night (ET)" in body
         assert "Saturday morning" not in body
 
