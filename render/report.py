@@ -838,6 +838,12 @@ def short_gate(gate: str | None, slot: str) -> str:
 def availability_basis(meta: Mapping[str, Any]) -> str:
     """The data-age sentence (principle 3), shared by both renderers.
 
+    "Week" is capitalised on the way out, as every card prints it (launch
+    review PROD-9: the footer said "the week 8 injury report" under a card
+    saying "the Week 8 injury report"). Only here: the engine's own string is
+    parsed lowercase, by this function and by render.anatomy's "Checked for
+    you" line.
+
     The engine names the information set itself ("the week 9 injury report,
     the last complete one before this report goes out"), which is true of a
     live Tuesday file and of a replayed sample alike. A bare timestamp is
@@ -845,6 +851,11 @@ def availability_basis(meta: Mapping[str, Any]) -> str:
     download time on a 2024 report — made a cold reader doubt what year they
     were looking at.
     """
+    return re.sub(r"\bthe week (\d+) injury report", r"the Week \1 injury report",
+                  _availability_basis(meta))
+
+
+def _availability_basis(meta: Mapping[str, Any]) -> str:
     availability = meta.get("availability_as_of")
     rebuilt = re.match(r"the week (\d+) injury report", str(availability or ""))
     if meta.get("rebuilt_after_kickoff") and rebuilt:

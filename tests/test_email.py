@@ -653,3 +653,27 @@ def test_a_subscribers_report_links_the_glossary_and_the_samples_do_not(monkeypa
         assert read_line(meta) == "" and read_lines(meta) == [], meta
     monkeypatch.delenv("SITE_URL")
     assert read_line(real) == "" and read_lines(real) == []
+
+
+def test_the_text_half_says_closest_call_with_odds_once() -> None:
+    """Launch review PROD-9(d), reproduced: "THE WEEK'S CLOSEST CALL: Michael
+    Wilson or Zay Flowers — either is fine (50%) — closest call with odds"."""
+    from render.email import text_summary
+    report = _solo_report()
+    report["regret"] = dict(report["regret"], label="Closest call with odds")
+    text = text_summary(report)
+    assert "THE WEEK'S CLOSEST CALL WITH ODDS: " in text
+    assert "— closest call with odds" not in text
+
+
+def test_the_withheld_total_names_one_subject() -> None:
+    """Launch review PROD-9(b), reproduced: "your K can't play this week and
+    your roster had nobody eligible to replace him. Any total we showed would
+    count points they cannot score." The gate test still finds "cannot
+    score" (tests/test_week_report.py)."""
+    from engine.week_report import TEAM_RANGE_ABSENT_STARTER
+    one = TEAM_RANGE_ABSENT_STARTER.format(slots="K", them="him")
+    assert one == ("no projected total — your K can't play this week and nobody on "
+                   "your roster can replace him. Any total we showed would count "
+                   "points your K cannot score. The lineup below flags who.")
+    assert " they " not in one

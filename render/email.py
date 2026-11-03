@@ -977,6 +977,17 @@ def text_summary(report: Mapping[str, Any]) -> str:
     return _solo_text(report)
 
 
+def _closest_head(regret: Mapping[str, Any]) -> tuple[str, str]:
+    """(the heading, the label after the call) for the text half. A label
+    that is itself "Closest call with odds" becomes the heading: "THE WEEK'S
+    CLOSEST CALL: … either is fine (50%) — closest call with odds" said it
+    twice (launch review PROD-9)."""
+    label = str(regret.get("label") or "")
+    if label.lower().startswith("closest call"):
+        return f"THE WEEK'S {label.upper()}", ""
+    return "THE WEEK'S CLOSEST CALL", (f" — {label.lower()}" if label else "")
+
+
 def _closest_text(regret: Mapping[str, Any]) -> list[str]:
     """The closest call's plain-text lines, today's words."""
     if "gate" in regret:
@@ -986,9 +997,8 @@ def _closest_text(regret: Mapping[str, Any]) -> list[str]:
         # "Start X" reads "start X" after the colon; a toss-up's head is
         # the bare NAME, which keeps its capital ("george Pickens or ...").
         before = before[:1].lower() + before[1:]
-    lines = [f"THE WEEK'S CLOSEST CALL: {before} {joiner} "
-             f"{after} ({regret['confidence']:.0%})"
-             + (f" — {regret['label'].lower()}" if regret.get("label") else "")]
+    head, tail = _closest_head(regret)
+    lines = [f"{head}: {before} {joiner} {after} ({regret['confidence']:.0%}){tail}"]
     drivers = " · ".join(f"{d['label']} {d['value']}" for d in regret.get("drivers") or [])
     if drivers:
         lines.append(f"  {drivers}")
@@ -1289,10 +1299,9 @@ def _league_text(report: Mapping[str, Any]) -> str:
             # "Start X" reads "start X" after the colon; a toss-up's head is
             # the bare NAME, which keeps its capital ("george Pickens or ...").
             before = before[:1].lower() + before[1:]
-        lines.append(
-            f"THE WEEK'S CLOSEST CALL: {before} {joiner} "
-            f"{after} ({regret['confidence']:.0%})"
-            + (f" — {regret['label'].lower()}" if regret.get("label") else ""))
+        head, tail = _closest_head(regret)
+        lines.append(f"{head}: {before} {joiner} {after} "
+                     f"({regret['confidence']:.0%}){tail}")
         for key in ("definition", "reason", "closer"):
             if regret.get(key):
                 lines.append(f"  {regret[key]}")

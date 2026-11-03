@@ -79,9 +79,14 @@ def test_a_rebuild_after_kickoff_says_it_reads_tuesdays_information() -> None:
     assert "Rebuilt every Wednesday of the season" in tuesday
     rebuilt = _banner({"live_demo": True, "week": 6, "rebuilt_after_kickoff": True})
     assert "exactly the way yours is built" not in rebuilt
-    assert "the week 5 injury report" in rebuilt and "later" in rebuilt
+    assert "the Week 5 injury report" in rebuilt and "later" in rebuilt
     basis = "the week 5 injury report, the last complete one before this report goes out"
     assert "last complete one" in rr.availability_basis({"availability_as_of": basis})
+    # "Week" as every card prints it (launch review PROD-9), the engine's own
+    # string still lowercase for the parsers that read it.
+    assert "as of the Week 5 injury report" in rr.availability_basis({"availability_as_of": basis})
+    assert "as of the Week 5 injury report" in rr.availability_basis(
+        {"availability_as_of": basis, "rebuilt_after_kickoff": True})
     said = rr.availability_basis({"availability_as_of": basis,
                                   "rebuilt_after_kickoff": True})
     assert "last complete one" not in said and "later injury news" in said

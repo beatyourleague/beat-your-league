@@ -516,10 +516,12 @@ TEAM_RANGE_INCOMPLETE = (
 # players who would score exactly 0.0 — a headline overstated by a fifth, with
 # the band drawn around it. Found by running the Tuesday path for real
 # (Aug 24 2026); no test could have caught it, because nothing ran it.
+# Launch review PROD-9 (Nov 2026): "…had nobody eligible to replace him. Any
+# total we showed would count points they cannot score" mixed him and they.
 TEAM_RANGE_ABSENT_STARTER = (
-    "no projected total — your {slots} can't play this week and your roster "
-    "had nobody eligible to replace {them}. Any total we showed would count "
-    "points they cannot score. The lineup below flags who.")
+    "no projected total — your {slots} can't play this week and nobody on "
+    "your roster can replace {them}. Any total we showed would count points "
+    "your {slots} cannot score. The lineup below flags who.")
 
 
 # The same withheld total when the seated starter's absence is NOT certain: he
@@ -528,9 +530,9 @@ TEAM_RANGE_ABSENT_STARTER = (
 # report that is not out yet; the total is still withheld, for the same reason.
 TEAM_RANGE_DOUBTFUL_STARTER = (
     "no projected total — your {slots} may not play this week (out on last "
-    "week's injury report) and your roster had nobody eligible to replace "
-    "{them}. Any total we showed would count points that may not happen. The "
-    "lineup below flags who.")
+    "week's injury report) and nobody on your roster can replace {them}. Any "
+    "total we showed would count points that may not happen. The lineup "
+    "below flags who.")
 
 
 # The same withheld total when somebody on the bench COULD replace an absent

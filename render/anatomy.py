@@ -185,7 +185,7 @@ def bands(report: Mapping[str, Any]) -> list[dict[str, str]]:
             out.append({"kind": "sample", "head": "THIS WEEK'S REPORT", "text": (
                 f"— Week {meta['week']} of the {meta['season']} season for a "
                 f"sample roster, rebuilt {rr._built_on(meta)} from this week's "
-                f"Wednesday information (the week {int(meta['week']) - 1} injury "
+                f"Wednesday information (the Week {int(meta['week']) - 1} injury "
                 f"report); later injury news is not in it.")})
         else:
             out.append({"kind": "sample", "head": "THIS WEEK'S REPORT", "text": (
@@ -520,24 +520,36 @@ def short_usage(text: str | None) -> str | None:
     if not match:
         return text
     games = int(match.group(1))
-    parts: list[tuple[float, str]] = []
+    parts: list[tuple[float, str, str]] = []      # (rate, as printed, noun)
     for clause in match.group(2).split(", "):
         targets = re.fullmatch(r"\d+ targets? \(([\d.]+) a game\)", clause)
         attempts = re.fullmatch(r"\d+ pass attempts? \(([\d.]+) a game\)", clause)
         carries = re.fullmatch(r"(\d+) carr(?:y|ies)", clause)
         if targets:
             rate = float(targets.group(1))
-            parts.append((rate, f"{targets.group(1)} targets"))
+            parts.append((rate, targets.group(1), "targets"))
         elif attempts:
             # A quarterback's volume (RQ-07): his throws, not a trick-play target.
             rate = float(attempts.group(1))
-            parts.append((rate, f"{attempts.group(1)} pass attempts"))
+            parts.append((rate, attempts.group(1), "pass attempts"))
         elif carries and games:
             rate = int(carries.group(1)) / games
-            parts.append((rate, f"{rate:.1f} carries"))
+            parts.append((rate, f"{rate:.1f}", "carries"))
         else:
             return text
-    shown = [words for rate, words in parts if rate >= MIN_SHOWN_RATE]
-    if not shown:
-        shown = [max(parts)[1]]
-    return f"last {games}: " + " · ".join(shown) + " a game"
+    shown = [part for part in parts if part[0] >= MIN_SHOWN_RATE] or [max(parts)]
+    if games == 1:
+        # One game is a count, not a rate (launch review PROD-9): the row read
+        # "last 1: 7.0 targets · 1.0 carries a game".
+        return "last game: " + " · ".join(_count(rate, noun) for rate, _, noun in shown)
+    return f"last {games}: " + " · ".join(f"{printed} {noun}"
+                                          for _, printed, noun in shown) + " a game"
+
+
+_SINGULAR = {"targets": "target", "pass attempts": "pass attempt", "carries": "carry"}
+
+
+def _count(rate: float, noun: str) -> str:
+    """"7 targets", "1 carry": one game's count, in words."""
+    count = int(round(rate))
+    return f"{count} {_SINGULAR[noun] if count == 1 else noun}"
