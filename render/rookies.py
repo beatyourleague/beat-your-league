@@ -344,40 +344,14 @@ def load_report(cache: Path, year: int, *, live: bool = False) -> dict[str, Any]
         current = season_rows(cache, str(year), live=live, columns=None)
     except NflverseError:
         current = {}                 # no stats file until the class has played
+    # Only weeks whose box scores are all in (DATA-06): the page says its games
+    # are "through Week N", and a week with Monday night still out is not.
+    if current:
+        from run.solo import last_complete_week
+        done = last_complete_week(cache, str(year), current)
+        current = {w: rows for w, rows in current.items() if done and w <= done}
     return build(players, seasons[year - 1], seasons, preset("ppr"), year,
-                 as_of=data_date(players_csv), current=current,
-                 playing=schedule_teams(cache, year, live=live))
-
-
-def schedule_teams(cache: Path, year: int, *, live: bool = False) -> dict[int, set[str]] | None:
-    """week -> the teams with a regular-season game that week, from games.csv,
-    or None when the schedule can't be read (engine.rookies.build then counts
-    every week with rows, as it did before SITE-5). Codes in the stat rows'
-    spelling (OAK -> LV, engine.context.team_code): the schedule archive keeps
-    the old names for 2014-2019, and a 2019 class read "through Week 6"."""
-    import csv
-    from engine.context import team_code
-    from ingest.nflverse import NflverseError, fetch
-    try:
-        path = fetch("schedules", "games.csv", cache, live=live)
-    except NflverseError:
-        return None
-    weeks: dict[int, set[str]] = {}
-    with path.open(encoding="utf-8", newline="") as handle:
-        for row in csv.DictReader(handle):
-            if str(row.get("season") or "") != str(year):
-                continue
-            if (row.get("game_type") or "REG").upper() != "REG":
-                continue
-            try:
-                week = int(row.get("week") or 0)
-            except ValueError:
-                continue
-            for side in ("home_team", "away_team"):
-                team = team_code(row.get(side))
-                if week and team:
-                    weeks.setdefault(week, set()).add(team)
-    return weeks
+                 as_of=data_date(players_csv), current=current)
 
 
 def main(argv: list[str] | None = None) -> int:

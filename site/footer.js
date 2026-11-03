@@ -1,8 +1,9 @@
 // The footer map's "This week's report" link. It waits for the landing hero's
 // rule, as every link to that page does (launch review PC-01): a current week
-// in the season, at least three odds and a closest call, on a page built in
-// the report's card layout. Anything else leaves it hidden; the sample report
-// is always one link away. Reads the site's own week.json and nothing else.
+// in the season, no later than that week's last game (DATA-02), at least three
+// odds and a closest call, on a page built in the report's card layout, with a
+// projected total. Anything else leaves it hidden; the sample report is always
+// one link away. Reads the site's own week.json and nothing else.
 (function () {
   "use strict";
   var links = document.querySelectorAll("footer [data-live-week]");
@@ -18,10 +19,9 @@
         .forEach(function (x) { part[x.type] = x.value; });
       var today = part.year + "-" + part.month + "-" + part.day;
       if (!/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "") || today > w.lands_on) return;
-      // Eight hours after the week's last kickoff (the box-score lag) the
-      // page is about games already played: not "this week's" (SITE-2).
-      var lastKick = Date.parse(w.last_kickoff || "");
-      if (!isNaN(lastKick) && Date.now() >= lastKick + 8 * 3600 * 1000) return;
+      // Only until the week's last game (week_ends, ET): after Monday night
+      // the page is about games already played. No week_ends, no link.
+      if (!/^\d{4}-\d\d-\d\d$/.test(w.week_ends || "") || today > w.week_ends) return;
       if (Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call && w.cards === true &&
           w.total !== false) {
         links.forEach(function (a) { a.hidden = false; });

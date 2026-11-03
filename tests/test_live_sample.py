@@ -505,6 +505,24 @@ def test_the_clock_says_the_page_is_in_the_card_layout_only_when_it_is(
     assert "cards" not in json.loads(plain.read_text(encoding="utf-8"))
 
 
+def test_the_clock_says_when_the_weeks_games_end(tmp_path, monkeypatch, week) -> None:
+    """Sweep DATA-02: lands_on is the NEXT report's Wednesday, so on the
+    Tuesday after Monday night the Week 8 page still read as "this week's
+    report" about games already played. The build writes the week's last
+    game day beside it, from run/solo's calendar, and every link waits for
+    it; a schedule that cannot say writes no key, which links nothing."""
+    seen = []
+    monkeypatch.setattr(live, "week_end_day",
+                        lambda _c, season, wk: seen.append((season, wk)) or "2026-11-02")
+    code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False)
+    clock = json.loads((out.parent / "week.json").read_text(encoding="utf-8"))
+    assert code == 0 and clock["week_ends"] == "2026-11-02"
+    assert seen == [(str(SEASON), int(WEEK))] or seen == [(SEASON, WEEK)]
+    plain = tmp_path / "plain.json"
+    live.write_week_json(week(), plain)
+    assert "week_ends" not in json.loads(plain.read_text(encoding="utf-8"))
+
+
 def test_the_clock_says_when_card_01_printed_no_total(tmp_path, week) -> None:
     """Launch review DES-1, reproduced: 2026 Week 8's live page opened card 01
     on "Heads up: no projected total — your QB can't play this week…" (Brock
@@ -521,28 +539,3 @@ def test_the_clock_says_when_card_01_printed_no_total(tmp_path, week) -> None:
     report["matchup"]["range_gate"] = "no projected total — your QB can't play this week."
     live.write_week_json(report, path)
     assert json.loads(path.read_text(encoding="utf-8"))["total"] is False
-
-
-def test_the_clock_carries_the_weeks_last_kickoff(tmp_path, monkeypatch, week) -> None:
-    """SITE-2, reproduced on Tue Nov 3 2026: every Week 8 game was over, but
-    lands_on is the NEXT report's Wednesday, so from Monday night to Wednesday
-    evening a page about games already played passed every "this week's
-    report" rule. The build writes the week's LAST kickoff beside the first
-    (the latest of the same schedule), and every reader stops calling the
-    page current BOX_SCORE_LAG after it. An older clock without the key keeps
-    the lands_on rule, so it is written only when known."""
-    from datetime import datetime, timezone
-    starts = {"CAR": datetime(2026, 10, 30, 0, 15, tzinfo=timezone.utc),
-              "GB": datetime(2026, 10, 30, 0, 15, tzinfo=timezone.utc),
-              "CHI": datetime(2026, 11, 3, 1, 15, tzinfo=timezone.utc),
-              "SEA": datetime(2026, 11, 3, 1, 15, tzinfo=timezone.utc),
-              "KC": datetime(2026, 11, 1, 21, 25, tzinfo=timezone.utc)}
-    monkeypatch.setattr(live, "_kickoffs", lambda season, wk: dict(starts))
-    code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False, extra=("--no-record",))
-    assert code == 0
-    clock = json.loads((out.parent / "week.json").read_text(encoding="utf-8"))
-    assert clock["first_kickoff"] == "2026-10-30T00:15:00Z"
-    assert clock["last_kickoff"] == "2026-11-03T01:15:00Z"
-    plain = tmp_path / "plain.json"
-    live.write_week_json(week(), plain)
-    assert "last_kickoff" not in json.loads(plain.read_text(encoding="utf-8"))

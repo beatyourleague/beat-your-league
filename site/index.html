@@ -1515,19 +1515,20 @@ function carryVia(href, via) {
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }
 
-// Flip to true the day the Stripe Payment Links are pasted into site/join/.
-// It turns the pricing cards into live CTAs — both of which point at join/,
-// because the intake page is what attaches the buyer's roster and scoring to
-// the payment. Checkout itself is hosted by Stripe; card data never touches this
-// site, and no payment URL is ever published on this page.
-// Closed again Sep 29 2026 while the join page's payment links are empty
-// (see there): a gold button that lands on "checkout isn't open" is
-// the cul-de-sac this flag exists to prevent.
+// True while site/join/ carries a payment link. It turns the pricing cards
+// into live CTAs, all of which point at join/, because the intake page is what
+// attaches the buyer's roster and scoring to the payment. Checkout itself is
+// hosted by Stripe; card data never touches this site, and no payment URL is
+// ever published on this page. It was closed Sep 29 2026 while the join
+// page's links were empty and opened again when the Monthly link went on it
+// (Nov 3 2026): the interim state, with CHECKOUT_CAN_COMPLETE still false.
 const CHECKOUT_OPEN = true;
-// Whether a purchase can actually FINISH — set to true only once the Stripe
-// payment links exist in site/join/index.html. CHECKOUT_OPEN sells; this says
-// whether selling works. While they disagree, the email capture stays up so a
-// visitor who cannot pay can still leave an address.
+// Whether a purchase can actually FINISH. CHECKOUT_OPEN sells; this says
+// whether selling works. It stays false until the crons hold STRIPE_API_KEY,
+// STRIPE_PAYMENT_LINKS and the email secrets and one real purchase has been
+// watched end to end (LAUNCH.md steps 1-4), even though the Monthly link is
+// already on the join page. While they disagree, the email capture stays up
+// so a visitor who cannot pay yet can still leave an address.
 const CHECKOUT_CAN_COMPLETE = false;
 // The free first report (join/?try=1 -> run/trials.py). Flip to true only once
 // the form Worker AND email sending are live (LAUNCH.md steps 2 and 5): until
@@ -2286,12 +2287,12 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
         const etToday = et.year + "-" + et.month + "-" + et.day;
         const landsOk = /^\d{4}-\d\d-\d\d$/.test(w.lands_on || "");
         const fresh = landsOk && etToday <= w.lands_on;
-        // The week's games are over eight hours after its last kickoff (the
-        // box-score lag, run/solo.py): from then until the next build the
-        // page is about games already played, so no link calls it "this
-        // week's" (SITE-2). An older clock without last_kickoff keeps lands_on.
-        const lastKick = Date.parse(w.last_kickoff || "");
-        const played = !isNaN(lastKick) && Date.now() >= lastKick + 8 * 3600 * 1000;
+        // The live page is "this week's" only until its week's last game
+        // (week_ends, ET). lands_on is the NEXT report's Wednesday, so from
+        // Monday night until then it is about games already played; a clock
+        // without week_ends links nothing (DATA-02).
+        const current = fresh && /^\d{4}-\d\d-\d\d$/.test(w.week_ends || "") &&
+          etToday <= w.week_ends;
         const kicked = !!w.first_kickoff && Date.now() >= Date.parse(w.first_kickoff);
         const last = w.week >= w.last_week;
         // Over: said so, or the last week's report day has been and gone.
@@ -2308,7 +2309,7 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
         // build or the offseason leaves an old week.json behind, and it must
         // not be called "this week's"; a page from before the card stack must
         // not be offered beside a phone that shows the cards (review BUYER-1).
-        if (phase === "season" && fresh && !played && Number.isInteger(w.odds) &&
+        if (phase === "season" && current && Number.isInteger(w.odds) &&
             w.odds >= 3 && w.closest_call && w.cards === true && w.total !== false) {
           document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
           // The hero keeps one link: in a week like this it opens this week's

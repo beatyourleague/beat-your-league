@@ -212,19 +212,27 @@ function run(w) {
     text: els["hero-sample"].textContent, href: els["hero-sample"].attrs.href || "" }), 50));
 }
 const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
+  week_ends: "2999-01-04",
   built_at: "2026-10-20T17:15:45+00:00", closest_call: true, cards: true,
   first_kickoff: "2999-01-01T00:15:00Z" };
 (async () => {
   const out = [];
   for (const w of [{ ...base, odds: 3 }, { ...base, odds: 2 },
                    { ...base, odds: 3, cards: undefined },
-                   { ...base, odds: 3, cards: "true" }]) out.push(await run(w));
+                   { ...base, odds: 3, cards: "true" },
+                   { ...base, odds: 3, week_ends: "2000-01-03" },
+                   { ...base, odds: 3, week_ends: undefined },
+                   { ...base, odds: 3, total: false }]) out.push(await run(w));
   console.log(JSON.stringify(out));
 })();
 """.replace("IIFE", iife)
-    shown, held, old_layout, loose = _node(harness)
+    shown, held, old_layout, loose, games_over, no_end, no_total = _node(harness)
     assert shown == {"text": "See this week's report", "href": "this-week.html"}
     assert held == old_layout == loose == {"text": "See a real report", "href": ""}
+    # DATA-02: the Tuesday after Monday night, lands_on still ahead and the
+    # week's games over, the hero stays on the pinned sample; a clock with no
+    # week_ends does too. DES-1: a page with no projected total never shows.
+    assert games_over == no_end == no_total == {"text": "See a real report", "href": ""}
 
 
 # --------------------------------------------------------------------- #

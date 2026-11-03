@@ -245,49 +245,16 @@ def base_rate(rows: Sequence[Mapping[str, Any]], position: str,
             if row else None)
 
 
-def complete_through(current: Mapping[int, Mapping[str, Mapping[str, Any]]],
-                     playing: Mapping[int, Iterable[str]]) -> int | None:
-    """The last week whose every regular-season game is in: each team the
-    schedule (``playing``: week -> the teams with a REG game that week) has
-    playing that week appears in the week's player stat rows. The run.solo
-    rule (assert_week_is_complete) for what "a week is in" means. A week the
-    schedule doesn't list can't be confirmed, so it never counts.
-
-    The stat release fills in game by game, so the newest week is often
-    partial: on Nov 3 2026 Week 8 held 26 of its 28 teams (CHI@SEA, Monday
-    night, not in yet), and the page said "games are through Week 8" while
-    every Bears and Seahawks rookie was a game short (SITE-5)."""
-    best: int | None = None
-    for week, rows in current.items():
-        teams = set(playing.get(week) or ())
-        if not teams:
-            continue
-        seen = {str((row or {}).get("team") or "").strip()
-                for pid, row in rows.items() if not str(pid).startswith("DEF-")}
-        if teams <= seen and (best is None or week > best):
-            best = week
-    return best
-
-
 def build(players: Sequence[Mapping[str, str]], last_season: Mapping[int, Mapping[str, Mapping]],
           seasons: Mapping[int, Mapping[int, Mapping[str, Mapping[str, Any]]]],
           rule: ScoringRule, year: int, as_of: str = "",
-          current: Mapping[int, Mapping[str, Mapping[str, Any]]] | None = None,
-          playing: Mapping[int, Iterable[str]] | None = None) -> dict[str, Any]:
+          current: Mapping[int, Mapping[str, Mapping[str, Any]]] | None = None) -> dict[str, Any]:
     """The whole report, the same for everyone but ``near_your_players``.
     ``current`` is the class's own season so far, empty until it has played.
-    ``as_of`` is the day the data was read, in words. ``playing`` is the
-    season's schedule (week -> teams playing): with it, this season counts
-    only through the last week whose every game is in (``complete_through``),
-    and a week still being played waits. Without it (the schedule can't be
-    read) every week with rows counts, as before."""
+    ``as_of`` is the day the data was read, in words."""
     rooms = team_rooms(players, last_season)
     rookies = draft_class(players, year)
     current = current or {}
-    if playing is not None:
-        through = complete_through(current, playing)
-        current = {week: rows for week, rows in current.items()
-                   if through is not None and week <= through}
     rows = history(players, seasons, rule, year)
     for rookie in rookies:
         rookie["room"] = rooms.get((rookie["team"], rookie["position"]))

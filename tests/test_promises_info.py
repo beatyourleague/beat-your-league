@@ -75,10 +75,10 @@ def test_each_sample_banner_says_what_its_week_was_built_from() -> None:
 
 def test_a_rebuild_after_kickoff_says_it_reads_tuesdays_information() -> None:
     tuesday = _banner({"live_demo": True, "week": 6})
-    assert "exactly the way yours is built" in tuesday
+    assert "for a sample roster, the same way yours is." in tuesday and "exactly" not in tuesday
     assert "Rebuilt every Wednesday of the season" in tuesday
     rebuilt = _banner({"live_demo": True, "week": 6, "rebuilt_after_kickoff": True})
-    assert "exactly the way yours is built" not in rebuilt
+    assert "the same way yours is" not in rebuilt
     assert "the Week 5 injury report" in rebuilt and "later" in rebuilt
     basis = "the week 5 injury report, the last complete one before this report goes out"
     assert "last complete one" in rr.availability_basis({"availability_as_of": basis})
@@ -246,7 +246,11 @@ def test_the_readers_link_this_week_only_while_the_clock_is_current(page) -> Non
     today = date.today()
     future, past = f"{today.year + 1}-01-05", f"{today.year - 1}-01-05"
     cases = {
-        "current": {"week": 6, "last_week": 18, "lands_on": future},
+        "current": {"week": 6, "last_week": 18, "lands_on": future, "week_ends": future},
+        # DATA-02: the Tuesday after Monday night: the next report is still
+        # ahead, the week's games are not; and a clock with no week_ends.
+        "played": {"week": 6, "last_week": 18, "lands_on": future, "week_ends": past},
+        "noend": {"week": 6, "last_week": 18, "lands_on": future},
         "stale": {"week": 6, "last_week": 18, "lands_on": past},
         "lastover": {"week": 18, "last_week": 18, "lands_on": past},
         "over": {"week": 18, "last_week": 18, "lands_on": future, "phase": "over"},
@@ -261,7 +265,8 @@ def test_the_readers_link_this_week_only_while_the_clock_is_current(page) -> Non
     assert got["stale"]["phase"] == "season" and not got["stale"]["current"]
     assert got["lastover"]["phase"] == "over"
     assert got["over"]["phase"] == "over" and got["pre"]["phase"] == "preseason"
-    for name in ("stale", "lastover", "over", "pre"):
+    assert got["played"]["phase"] == "season" and not got["played"]["current"]
+    for name in ("stale", "lastover", "over", "pre", "played", "noend"):
         live_link = got[name]["phase"] == "season" and got[name]["current"]
         assert not live_link, name
 

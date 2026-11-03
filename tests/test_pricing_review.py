@@ -195,9 +195,42 @@ def _row(name: str) -> str:
 
 
 def test_footclan_is_priced_as_its_own_page_prices_it() -> None:
-    """$11.99 is its top tier on annual billing only."""
+    """$11.99 is its top tier on annual billing only. And the month-to-month
+    range leads, the annual rate after it, as the STACKED row does: "$4.99–
+    $15.99/mo" mixed a billed-annually floor into a monthly range (DATA-04)."""
     row = _row("Fantasy Footballers UDK")
-    assert "FootClan membership $4.99–$15.99/mo" in row and "$11.99" not in row
+    assert "FootClan membership $7.99–$15.99/mo · from $4.99/mo billed annually" in row
+    assert "$11.99" not in row and "$4.99–" not in row
+
+
+def test_competitor_monthly_ranges_are_month_to_month() -> None:
+    """DATA-04: our $14.99 is month to month, so a competitor's range in the
+    same column is too; its annual-billed rate rides the sub-line."""
+    fp, ds = _row("FantasyPros"), _row("Draft Sharks")
+    assert "$11.99–$22.99 USD/mo" in fp and "from $3.99/mo billed annually" in fp
+    assert "$3.99–" not in fp
+    assert "$16–$44 USD/mo" in ds and "from $6/mo billed annually" in ds
+    assert "$6–" not in ds
+
+
+def test_our_compare_row_says_what_the_plan_now_is() -> None:
+    """DATA-03: the row said "One roster per plan" (a plan covers up to 3
+    teams since Nov 1), "pasting your players once" (rosters change), "the
+    odds on every call" (odds are gated) and that the record fills in "from
+    the first subscriber's first report" (the sample roster's calls were
+    already on it)."""
+    from run import plans
+    page = _page("compare/index.html")
+    ours = re.search(r'<tr class="us">.*?</tr>', page, re.S).group(0)
+    words = _words(ours)
+    assert f"Up to {plans.TEAMS_INCLUDED} teams per plan" in words
+    assert "again when it changes" in words
+    assert "odds only where both players are playing, off the injury report and have " \
+           "enough games on record" in words
+    assert "started in Week 7 with our sample roster's published calls" in words
+    for stale in ("One roster per", "once", "odds on every call", "first subscriber"):
+        assert stale not in words, stale
+    assert "odds on every call" not in _words(page) and "players once" not in _words(page)
 
 
 def test_stacked_is_not_criticised_for_hiding_a_price_it_publishes() -> None:

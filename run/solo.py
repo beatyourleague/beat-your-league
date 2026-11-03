@@ -276,6 +276,8 @@ def _prior_week_games(cache_dir: Path, season: str, week: int
     import csv as _csv
     from zoneinfo import ZoneInfo
 
+    from engine.context import team_code
+
     try:
         path = fetch("schedules", "games.csv", cache_dir, live=True)
     except NflverseError:
@@ -293,8 +295,12 @@ def _prior_week_games(cache_dir: Path, season: str, week: int
                     continue
             except ValueError:
                 continue
-            away = (row.get("away_team") or "").strip()
-            home = (row.get("home_team") or "").strip()
+            # The schedule archive says OAK/SD/STL where the stat rows say
+            # LV/LAC/LA (engine.context.team_code), so before 2020 every week
+            # read as "no rows" for those teams and never counted as in: the
+            # rookie report for a 2014-2019 class showed none of its games.
+            away = team_code(row.get("away_team"))
+            home = team_code(row.get("home_team"))
             if not away or not home:
                 continue
             day = (row.get("gameday") or "").strip()
@@ -420,6 +426,27 @@ def assert_week_is_complete(cache_dir: Path, season: str, week: int,
         f"kickoff can be named for one run: {POSTPONED_ENV}=AWAY@HOME.)")
 
 
+def last_complete_week(cache_dir: Path, season: str,
+                       weekly: Mapping[int, Mapping[str, Any]],
+                       now: "datetime | None" = None) -> int | None:
+    """The latest week of ``weekly`` whose box scores are all in, by
+    ``assert_week_is_complete``'s own rule (every game scored, stat rows for
+    both teams, a postponed game excused); None when no week is.
+
+    "The highest week with any row" is not that: on the Tuesday after a
+    Monday-night game that has not landed yet, week 8 already holds 26 teams'
+    rows, and the rookie report said its games were "through Week 8" with
+    CHI@SEA missing (sweep DATA-06). One rule, so a page and a report cannot
+    disagree about which weeks are over."""
+    for week in sorted((w for w in weekly if isinstance(w, int) and w > 0), reverse=True):
+        try:
+            assert_week_is_complete(cache_dir, season, week + 1, weekly, now=now)
+        except WeekIncomplete:
+            continue
+        return week
+    return None
+
+
 def _at(game: str) -> str:
     return game.replace("@", " at ")
 
@@ -541,6 +568,21 @@ def next_report_day(cache_dir: Path, season: str, week: int, *,
     last = date.fromisoformat(max(days))
     ahead = (2 - last.weekday()) % 7 or 7            # Wednesday is weekday 2
     return (last + timedelta(days=ahead)).isoformat()
+
+
+def week_end_day(cache_dir: Path, season: str, week: int, *,
+                 live: bool = True) -> str | None:
+    """The last day of ``week``'s regular window (``regular_week_end``) as an
+    ISO date, Eastern like the schedule's own gamedays. None when the schedule
+    cannot say.
+
+    The day a week's report stops being about games still to come: the live
+    sample's clock writes it as ``week_ends`` and every link that calls that
+    page "this week's report" waits for it (sweep DATA-02). It is the same
+    window ``current_week`` reads, so the page counts as current exactly while
+    the calendar still answers its week."""
+    days = (_weeks(_schedule(cache_dir, live=live), season).get(int(week)) or [])
+    return regular_week_end(days) if days else None
 
 
 def last_week(cache_dir: Path, season: str, *, live: bool = True,
