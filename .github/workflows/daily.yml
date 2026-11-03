@@ -505,7 +505,8 @@ jobs:
           body="$(date -u +%Y-%m-%d): a paid signup may be blocked, Stripe was
           unreadable, a renewal notice or a free report was not sent, monthly billing could
           not be stopped, or the sealed registry could not be opened or sealed (CACHE_KEY).
-          See the run.
+          From May, a ROOKIE REPORT NOT SENT line is SENDER_POSTAL_ADDRESS not being set,
+          and the report waits for it (LAUNCH.md section 8). See the run.
 
           Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           number=$(gh issue list --state open --limit 200 --json number,title \

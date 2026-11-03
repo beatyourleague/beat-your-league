@@ -633,7 +633,9 @@ jobs:
           CACHE_KEY set and unchanged (the open and seal steps), any BLOCKED line
           in the intake log (a paid roster naming a player the directory does not
           have), email provider credentials, then whether
-          data/processed/sent.jsonl shows a partial send. If commit-record is the
+          data/processed/sent.jsonl shows a partial send. In January, a SEASON
+          REVIEW NOT SENT line is SENDER_POSTAL_ADDRESS not being set, and the
+          review waits for it (LAUNCH.md section 8). If commit-record is the
           job that failed, the reports went out but the record never reached the
           branch: before the next run, use Re-run failed jobs (commit-record pushes
           the same record again) or commit this run's weekly-record artifact by
