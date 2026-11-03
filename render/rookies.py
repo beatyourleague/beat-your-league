@@ -344,6 +344,12 @@ def load_report(cache: Path, year: int, *, live: bool = False) -> dict[str, Any]
         current = season_rows(cache, str(year), live=live, columns=None)
     except NflverseError:
         current = {}                 # no stats file until the class has played
+    # Only weeks whose box scores are all in (DATA-06): the page says its games
+    # are "through Week N", and a week with Monday night still out is not.
+    if current:
+        from run.solo import last_complete_week
+        done = last_complete_week(cache, str(year), current)
+        current = {w: rows for w, rows in current.items() if done and w <= done}
     return build(players, seasons[year - 1], seasons, preset("ppr"), year,
                  as_of=data_date(players_csv), current=current)
 

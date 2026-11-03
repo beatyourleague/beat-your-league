@@ -639,6 +639,14 @@ def next_report_day(cache_dir: Path, season: str, week: int) -> str | None:
     return _day(cache_dir, season, week)
 
 
+def week_end_day(cache_dir: Path, season: str, week: int) -> str | None:
+    """The last day of ``week``'s regular window, Eastern (run/solo's rule):
+    the clock's ``week_ends``. Past it, the page is about games already
+    played and no link may call it "this week's report" (sweep DATA-02)."""
+    from run.solo import week_end_day as _end
+    return _end(cache_dir, season, week)
+
+
 # --------------------------------------------------------------------- #
 # the recorded closest call, for the clock (contract C9)
 # --------------------------------------------------------------------- #
@@ -809,7 +817,8 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
                     first_kickoff: str | None = None, *, recorded: bool = False,
                     after_kickoff: bool = False, phase: str = "season",
                     closest: Mapping[str, Any] | None = None,
-                    byes_left: bool | None = None, cards: bool = False) -> None:
+                    byes_left: bool | None = None, cards: bool = False,
+                    week_ends: str | None = None) -> None:
     """The season clock the landing page reads (site/week.json): the week this
     report covers, the season's last week, and the day the next report lands,
     so the hero can say "Week 7's report lands Tuesday" from the schedule
@@ -844,7 +853,15 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     product opens on "Heads up: no projected total". Week 8 of 2026 did, and
     the landing still linked it as "this week's report" (launch review
     DES-1); every rule that reveals a link to it checks ``total !== false``,
-    so an older clock, which lacks the key, links as before."""
+    so an older clock, which lacks the key, links as before.
+
+    ``week_ends`` is the Eastern date of this week's last regular-season game
+    (``week_end_day``). ``lands_on`` is the NEXT report's Wednesday, so from
+    Monday night until then the page is about games already played; every
+    rule that reveals a link to it as "this week's report" also requires
+    today (ET) to be no later than ``week_ends``, and a clock without it
+    links nothing (sweep DATA-02). ``lands_on`` keeps the season clock's line
+    and the season-over rule."""
     import json
     from render import anatomy
     meta = report["meta"]
@@ -854,6 +871,7 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     path.write_text(json.dumps({
         "season": meta["season"], "week": meta["week"],
         "last_week": meta.get("last_week"), "lands_on": lands_on,
+        **({"week_ends": week_ends} if week_ends else {}),
         "built_at": meta.get("generated_at"),
         # What the live page shows this week, so the landing links it only
         # when it actually shows the product (launch audit: a bye week once
@@ -1366,6 +1384,11 @@ def main(argv: list[str] | None = None) -> int:
                                    report["meta"]["week"])
     except Exception:  # noqa: BLE001 — no date means the page says nothing new
         lands_on = None
+    try:
+        week_ends = week_end_day(CACHE_DIR, report["meta"]["season"],
+                                 report["meta"]["week"])
+    except Exception:  # noqa: BLE001 — no date means no link calls it current
+        week_ends = None
     first_kickoff = first.strftime("%Y-%m-%dT%H:%M:%SZ") if first else None
     # The clock's closest call (C9): only from a recorded week before kickoff,
     # and through recorded_only, so the % is the one the ledger holds.
@@ -1375,7 +1398,7 @@ def main(argv: list[str] | None = None) -> int:
     write_week_json(report, week_json, lands_on, first_kickoff,
                     recorded=recorded, after_kickoff=kicked_off,
                     closest=closest, byes_left=byes_left,
-                    cards='class="card"' in page)
+                    cards='class="card"' in page, week_ends=week_ends)
     called = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"this week's sample -> {args.out} · {report['meta']['season']} week "
           f"{report['meta']['week']} · {called}/{len(report['lineup'])} with odds")

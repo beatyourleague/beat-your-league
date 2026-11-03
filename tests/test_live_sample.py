@@ -505,6 +505,24 @@ def test_the_clock_says_the_page_is_in_the_card_layout_only_when_it_is(
     assert "cards" not in json.loads(plain.read_text(encoding="utf-8"))
 
 
+def test_the_clock_says_when_the_weeks_games_end(tmp_path, monkeypatch, week) -> None:
+    """Sweep DATA-02: lands_on is the NEXT report's Wednesday, so on the
+    Tuesday after Monday night the Week 8 page still read as "this week's
+    report" about games already played. The build writes the week's last
+    game day beside it, from run/solo's calendar, and every link waits for
+    it; a schedule that cannot say writes no key, which links nothing."""
+    seen = []
+    monkeypatch.setattr(live, "week_end_day",
+                        lambda _c, season, wk: seen.append((season, wk)) or "2026-11-02")
+    code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False)
+    clock = json.loads((out.parent / "week.json").read_text(encoding="utf-8"))
+    assert code == 0 and clock["week_ends"] == "2026-11-02"
+    assert seen == [(str(SEASON), int(WEEK))] or seen == [(SEASON, WEEK)]
+    plain = tmp_path / "plain.json"
+    live.write_week_json(week(), plain)
+    assert "week_ends" not in json.loads(plain.read_text(encoding="utf-8"))
+
+
 def test_the_clock_says_when_card_01_printed_no_total(tmp_path, week) -> None:
     """Launch review DES-1, reproduced: 2026 Week 8's live page opened card 01
     on "Heads up: no projected total — your QB can't play this week…" (Brock

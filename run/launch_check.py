@@ -612,7 +612,30 @@ def check_week_json() -> list[Gate]:
                  f"week {w.get('week')}, next report lands {lands or 'unknown'}"
                  + (" — stale until the next Wednesday build (the hero shows its static sentence)"
                     if stale else "")),
-            recorded_odds_gate(w), closest_gate(w)]
+            recorded_odds_gate(w), closest_gate(w), live_total_gate(w)]
+
+
+def live_total_gate(week: dict, page: str | None = None) -> Gate:
+    """DATA-01 / DES-1: every link that calls site/this-week.html "this week's
+    report" checks week.json's ``total !== false``. render/live_sample writes
+    ``total: false`` when card 01 printed no projected total, but a clock
+    written before that rule (Week 8 of 2026) lacked the key, so the landing
+    linked a page opening on "no projected total" as the product. This reads
+    the page itself: if it says so, the clock must too."""
+    name = "The live page's clock says when it has no projected total"
+    if page is None:
+        try:
+            page = (SITE / "this-week.html").read_text(encoding="utf-8")
+        except OSError:
+            return Gate("Site", name, "PASS", "no live page published")
+    if "no projected total" in page and week.get("total") is not False:
+        return Gate("Site", name, "FAIL",
+                    "site/this-week.html says \"no projected total\" but site/week.json "
+                    "lacks \"total\": false, so the landing links it as this week's report "
+                    "— add the key (render/live_sample.write_week_json writes it)")
+    return Gate("Site", name, "PASS",
+                "no total on the page, and the clock says so" if week.get("total") is False
+                else "the page prints a projected total")
 
 
 def _instant(stamp: Any) -> datetime | None:

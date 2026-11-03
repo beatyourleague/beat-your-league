@@ -566,6 +566,7 @@ const past = new Date(Date.now() - 3600e3).toISOString().replace(/\.\d+Z$/, "Z")
 const call = { start: "Odunze", over: "Shaheed", slot: "WR", pct: 61, start_proj: "11.4",
                over_proj: "9.8", label: "Closest call with odds", tossup: false };
 const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
+  week_ends: "2999-01-04",
   built_at: "2026-10-20T17:15:45+00:00", closest_call: true, odds: 3, phase: "season",
   first_kickoff: soon, recorded: true, closest: call, cards: true };
 const cases = CASES;

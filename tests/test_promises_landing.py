@@ -19,7 +19,10 @@ def test_live_week_links_wait_for_a_current_season_week() -> None:
     revealed "see this week's" for a January report. The reveal now needs phase
     "season" and an Eastern today no later than lands_on."""
     reveal = SCRIPT.split('querySelectorAll("[data-live-week]")')[0].rsplit("if (", 1)[1]
-    assert 'phase === "season" && fresh' in reveal and "w.odds >= 3 && w.closest_call" in reveal
+    assert 'phase === "season" && current' in reveal and "w.odds >= 3 && w.closest_call" in reveal
+    # DATA-02: and no later than the week's own last game, since lands_on is
+    # the NEXT report's Wednesday; a clock without week_ends links nothing.
+    assert "const current = fresh &&" in SCRIPT and "etToday <= w.week_ends" in SCRIPT
     assert "etToday <= w.lands_on" in SCRIPT and 'timeZone: "America/New_York"' in SCRIPT
     assert 'w.phase || "season"' in SCRIPT, "a week.json without phase reads as season"
 

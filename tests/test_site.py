@@ -1793,10 +1793,11 @@ def test_compare_lists_our_own_weaknesses_like_everyone_elses() -> None:
     version that goes soft on its own row is just a longer ad. The row must
     name real product gaps, including the one that matters most to a buyer
     right now: no live track record yet. (It said "until October" until Sep 29
-    2026; the record starts with the first subscriber's file, not a date.)"""
+    2026; since Nov 3 2026 it says the record started in Week 7 with the sample
+    roster's published calls, DATA-03.)"""
     our_row = COMPARE.split('class="us"')[1].split("</tr>")[0]
     for admission in ("No draft kit", "no app", "we're new",
-                      "record fills in", "backtest and a sample"):
+                      "record started in", "backtest and a sample"):
         assert admission in our_row, \
             f"our own weaknesses column lost {admission!r}"
 
@@ -1841,7 +1842,7 @@ def test_compare_never_denies_a_rival_feature_we_verified_they_have() -> None:
         "their per-roster tool must be acknowledged, not quietly dropped"
     # Our own row carries the mirror admission.
     our_row = COMPARE.split('class="us"')[1].split("</tr>")[0]
-    assert re.search(r"you enter it yourself|type or past", our_row, re.I), \
+    assert re.search(r"you enter (?:it|each roster) yourself|type or past", our_row, re.I), \
         "we advertise a rival's one-tap sync without admitting our own typing"
     # And the guidance section still sends the sync-wanters to them by name.
     picks = COMPARE.split("Which one, honestly")[1]
