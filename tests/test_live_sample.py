@@ -503,3 +503,21 @@ def test_the_clock_says_the_page_is_in_the_card_layout_only_when_it_is(
     plain = tmp_path / "plain.json"
     live.write_week_json(week(), plain)
     assert "cards" not in json.loads(plain.read_text(encoding="utf-8"))
+
+
+def test_the_clock_says_when_card_01_printed_no_total(tmp_path, week) -> None:
+    """Launch review DES-1, reproduced: 2026 Week 8's live page opened card 01
+    on "Heads up: no projected total — your QB can't play this week…" (Brock
+    Purdy on bye, nobody cleared behind him), and week.json said odds 3,
+    closest_call true, cards true, so the landing linked it as "this week's
+    report". The clock says so now, written only when false, so every link
+    can wait for a week whose card 01 shows the product."""
+    report = week()
+    path = tmp_path / "week.json"
+    from render import anatomy
+    assert anatomy.lineup(report).get("week"), "the fixture prints a total"
+    live.write_week_json(report, path)
+    assert "total" not in json.loads(path.read_text(encoding="utf-8"))
+    report["matchup"]["range_gate"] = "no projected total — your QB can't play this week."
+    live.write_week_json(report, path)
+    assert json.loads(path.read_text(encoding="utf-8"))["total"] is False
