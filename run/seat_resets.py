@@ -23,13 +23,20 @@ it so the operator can reply with it at once.
 
 The file (``data/processed/seat-resets.txt``) is committed, like the stop
 list, because the crons read the committed copy. One line per reset:
-``<code> <UTC stamp>``, where the code is sha256 of the pass's Stripe id
-(``pi_…`` / ``sub_…``) cut to 16 hex. A Stripe id is random and not derived
-from an address, so nothing in the file can be matched back to a person;
-the newest stamp per pass stands.
+``<code> <UTC stamp>``, where the code is sha256 of the pass's Stripe id cut
+to 16 hex. A Stripe id is random and not derived from an address, so nothing
+in the file can be matched back to a person; the newest stamp per pass stands.
 
-    python -m run.seat_resets pi_123…              # reset, print the new link
-    python -m run.seat_resets pi_123… --email buyer@example.com   # with the link
+The id is the one the intake names the pass by. The League Pass sold now is a
+monthly plan, so that is its SUBSCRIPTION (``sub_…``, Stripe → Subscriptions).
+A ``pi_…`` names only a one-time payment, and the PaymentIntent behind a
+subscription's charge matches no pass: the reset would record, and the old
+link would keep working (TOOLS-11). So ``pi_…`` is refused without
+``--one-time``, kept for a one-time pass of the dormant backend.
+
+    python -m run.seat_resets sub_123…             # reset, print the new link
+    python -m run.seat_resets sub_123… --email buyer@example.com   # with the link
+    python -m run.seat_resets pi_123… --one-time   # a one-time pass only
 """
 
 from __future__ import annotations
@@ -47,7 +54,7 @@ HEADER = (
     "# League Pass seat resets (run/seat_resets.py): one line per reset, the\n"
     "# pass's code (sha256 of its Stripe id, 16 hex) and when it was reset (UTC).\n"
     "# A reset rotates that pass's seat link and releases every seat claimed\n"
-    "# before it. Add with `make seat-reset PASS=pi_…`, then commit it.\n"
+    "# before it. Add with `make seat-reset PASS=sub_…`, then commit it.\n"
 )
 _LINE = re.compile(r"^([0-9a-f]{16})\s+(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ)$")
 _PASS_ID = re.compile(r"^(pi|sub)_[A-Za-z0-9]{6,}$")
@@ -107,10 +114,21 @@ def reset_time(stamp: str) -> datetime | None:
         return None
 
 
-def add_reset(pass_id: str, now: datetime | None = None, path: Path | None = None) -> str:
-    """Append one reset for ``pass_id``. -> its stamp."""
+ONE_TIME_REFUSAL = ("a monthly League Pass is named by its subscription (sub_…): Stripe → "
+                    "Subscriptions → the pass. A pi_… is a payment and matches no monthly "
+                    "pass, so the old seat link would keep working. Only for a one-time "
+                    "pass, add --one-time")
+
+
+def add_reset(pass_id: str, now: datetime | None = None, path: Path | None = None,
+              one_time: bool = False) -> str:
+    """Append one reset for ``pass_id``. -> its stamp. A ``pi_…`` id is
+    refused unless ``one_time`` (see the module docstring, TOOLS-11)."""
     if not _PASS_ID.match(pass_id or ""):
-        raise ValueError("a pass is named by its Stripe id (pi_… or sub_…)")
+        raise ValueError("a pass is named by its Stripe id (sub_…, or pi_… for a "
+                         "one-time pass)")
+    if pass_id.startswith("pi_") and not one_time:
+        raise ValueError(ONE_TIME_REFUSAL)
     path = path or RESETS_FILE
     load_resets(path)                     # refuse to append to a file we cannot read
     stamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc) \
@@ -127,13 +145,16 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m run.seat_resets",
         description="Reset a League Pass's seats when its buyer asks: the seat link "
                     "changes and every seat claimed before now is released.")
-    parser.add_argument("pass_id", help="the pass's Stripe id (pi_… or sub_…)")
+    parser.add_argument("pass_id", help="the pass's subscription id (sub_…, Stripe → "
+                                         "Subscriptions)")
+    parser.add_argument("--one-time", action="store_true",
+                        help="the pass was a one-time payment, named pi_…")
     parser.add_argument("--email", default="",
                         help="the buyer's address, to print their new seat link")
     parser.add_argument("--file", type=Path, default=None)
     args = parser.parse_args(argv)
     try:
-        stamp = add_reset(args.pass_id.strip(), path=args.file)
+        stamp = add_reset(args.pass_id.strip(), path=args.file, one_time=args.one_time)
     except (ValueError, SeatResetError) as exc:
         print(str(exc), file=sys.stderr)
         return 2

@@ -23,7 +23,7 @@ import run.stats as stats
 from run.dashboard import Context, Source
 
 NOW = datetime(2026, 10, 28, 16, 0, tzinfo=timezone.utc)
-LEAK = "leak.me+tag@example.com"
+LEAK = "leak.me+tag@fans.mail"
 SECRET = "rk_live_SECRETSECRETSECRET123"
 CF_TOKEN = "cf-token-VERYSECRET-0123456789"
 
@@ -372,8 +372,8 @@ def test_collectors_turn_addresses_into_digests_and_the_page_holds_none(monkeypa
     monkeypatch.setattr(intake, "fetch_seats", lambda endpoint, key=None: rows)
     ev = traffic_events(NOW, days=20)
     monkeypatch.setattr(stats, "counter_endpoint", lambda path=None: "https://forms.example/e")
-    monkeypatch.setattr(stats, "query_counts", lambda a, t, days: aggregate(ev, NOW, days))
-    monkeypatch.setattr(dash, "query_daily", lambda a, t, days: daily(ev))
+    monkeypatch.setattr(stats, "query_counts", lambda a, t, days, **k: aggregate(ev, NOW, days))
+    monkeypatch.setattr(dash, "query_daily", lambda a, t, days, **k: daily(ev))
     ref = _a_roster_ref()
     raw = [_raw_session(i, LEAK) | {"client_reference_id": ref} for i in range(3)]
     monkeypatch.setattr(stats, "_stripe_list", lambda path, params, key: raw)
@@ -390,7 +390,7 @@ def test_collectors_turn_addresses_into_digests_and_the_page_holds_none(monkeypa
     page = out.read_text(encoding="utf-8")
     assert LEAK not in page and "Second.Person" not in page.lower().replace("second.person", "Second.Person") \
         or "second.person@gmail.com" not in page.lower()
-    assert "@example.com" not in page and "@gmail.com" not in page
+    assert "@fans.mail" not in page and "@gmail.com" not in page
     for secret in (SECRET, CF_TOKEN):
         assert secret not in page
 
@@ -1082,7 +1082,7 @@ def test_an_optional_or_unverifiable_launch_step_never_reads_as_undone(monkeypat
     S["launch"] = dash._source("launch", data={"gates": gates}, read_at=NOW)
     issues = dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
     steps = [i for i in issues if "waiting on you" in i.title]
-    assert steps and steps[0].title == "1 launch step is waiting on you."
+    assert steps and steps[0].title == "1 of the quick launch checks is waiting on you."
     assert steps[0].fix[0] == "Check by hand: GitHub Actions secrets are set."
     optional = [i for i in issues if i.title.startswith("Optional:")]
     assert optional and optional[0].severity == "low"

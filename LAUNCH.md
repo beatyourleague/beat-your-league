@@ -7,60 +7,45 @@ each ending by itself so that it won't renew after Week 16's report goes out, an
 step below is written for them. The yearly steps that come back in 2027 keep their own
 "2027" headings.
 
-## This weekend, in order
+## Now, in order (Nov 3)
 
-About four and a half hours of your time, plus waiting for DNS. Each line links to the
-section with the exact strings and clicks.
+The form Worker is live and starts the crons on time, the page counter is on, and the Monthly
+link is on the join page. Checkout can't complete yet, the free report is off, and the League
+Pass is held. What's left, in order:
 
-1. **Three quick checks** (~5 min) — [Where things stand](#where-things-stand): payments from
-   the old links, the old automatic issues, the Dependabot branches.
-2. **Lock the accounts** (~45 min) — [step 0](#0-lock-the-accounts-45-min-today): a private
-   login mailbox; passkeys on Google, Cloudflare, Stripe and GitHub; Cloudflare auto-renew,
-   DNSSEC and login alerts; GitHub's Actions settings and the `main` ruleset; the domain
-   verified for GitHub Pages; the DMARC record.
-3. **The form Worker** (~25 min) — [step 5](#5-the-form-worker-25-min--do-this-first): deploy
-   it with its `ROWS` store and two variables; give it `forms.beatyourleague.com` and switch
-   `workers.dev` off **before** any GitHub secret; the flood limit; then the GitHub secrets
-   `FORM_ENDPOINT`, `FORM_API_KEY`, `UPDATE_SECRET` **and `LOG_SECRET`**; the cron trigger.
-   Tell me it's live.
-4. **The page counter** (~10 min) — [step 5b](#5b-the-page-counter-10-min-right-after-step-5):
-   the `COUNTS` binding, Workers Logs and the injected scripts off, a read token in `.env`.
-   Tell me "counter on".
-5. **Payment links** (~40 min) — [step 1](#1-fresh-payment-links-25-min): switch the three old
-   links off; make the $14.99 and $34.99 monthly links; set the text above Stripe's Pay
-   button; check the billing page in test mode; public details, the card-statement name and
-   branding; delete the setup key; add the USD payout account.
-6. **Resend** (~20 min, plus up to an hour for DNS) — [step 2](#2-resend--the-sender-20-min):
-   the domain, the sending key, the optional bounce key. **Start renting the mailbox today**
-   (step 2.6): reports go out without it, but the waitlist email can't, and a mailbox can take
-   days to verify.
-7. **The two Stripe keys** (~5 min) — [step 3](#3-stripe-keys-and-github-secrets-15-min): add
-   Payment Intents, Charges and Disputes **Read** to `github-actions-crons` (without them
-   Wednesday's send mails nobody), and create the read-only `owner-stats` key for the launch
-   check and `make stats`.
-8. **GitHub secrets** (~10 min) — [step 3](#3-stripe-keys-and-github-secrets-15-min): the rest
-   of the table, the old-cache check, then **run daily-intake once by hand** and wait for green
-   before anything else runs.
-9. **I put the links on the join page and push.** Then run `make launch-check` (~8 min) with
-   `gh` logged in and `RESEND_API_KEY` and the `owner-stats` key in the shell
-   ([Where things stand](#where-things-stand)).
-10. **Your own purchase** (~1 hour, Saturday or Sunday) —
-    [step 4](#4-the-proving-run-1-hour): the Monthly plan on your own card, every email read in
-    your mail apps.
-11. **Opening** (~20 min, the day after your purchase checks out) — [step 6](#6-opening-morning): I switch
-    checkout and the free report on together, you set the Worker's `TRIAL_OPEN` the same
-    minute, and the waitlist gets its one email if the sender address exists and the count
-    fits the day.
-12. **Before the first launch post** (~30 min) —
-    [section 11, A1](#a1-before-the-first-launch-post): the site moves to Cloudflare Pages,
-    and `www` redirects to the bare domain.
+1. **Check what's still yours** (~10 min) — run `gh auth login` once, then `make launch-check`
+   ([Where things stand](#where-things-stand)). It confirms the GitHub secrets, the Stripe keys,
+   Resend and the crons. Anything it still lists as OWNER is still to do, and each line names
+   its step: the accounts in [step 0](#0-lock-the-accounts-45-min-today), the payment links in
+   [step 1](#1-fresh-payment-links-25-min), Resend in [step 2](#2-resend--the-sender-20-min),
+   and the keys and secrets in [step 3](#3-stripe-keys-and-github-secrets-15-min): Payment
+   Intents, Charges and Disputes **Read** on `github-actions-crons`, and the read-only
+   `owner-stats` key. If you change a secret, **run daily-intake once by hand** and wait for
+   green before anything else runs.
+2. **Keep your own visits out of the count** (~10 min) —
+   [step 5b](#5b-the-page-counter-10-min-right-after-step-5), items 8 and 11: the Cloudflare rule
+   that drops your own page views, and `TRAFFIC_FROM` in `.env` set to the end of today's checks.
+3. **Your own purchase** (~1 hour) — [step 4](#4-the-proving-run-1-hour): the Monthly plan on
+   your own card, every email read in your mail apps. Bought today, or Wednesday before about
+   5:17pm ET: the welcome and an early look at Week 9's report, then Wednesday evening's report
+   with everyone else. Bought after Wednesday's run and before Thursday's 8:15pm ET kickoff: the
+   welcome and Week 9's report within the hour.
+4. **Tell me it arrived** (~5 min) — [step 6](#6-opening-morning): I turn on
+   `CHECKOUT_CAN_COMPLETE` and the free report together and write today as D in PLAN §6; you
+   set the Worker's `TRIAL_OPEN` the same minute.
+
+**Held on purpose:** the League Pass, until the lawyer
+([section 12](#12-questions-for-a-lawyer-and-the-wording-waiting-on-them); `STRIPE_LINK_PASS`
+stays empty, so its page says it opens soon), and the sender address (set
+`SENDER_POSTAL_ADDRESS` by Jan 11, 2027; [Where things stand](#where-things-stand) says which
+four emails wait for it).
+
+**Before the first launch post:** [section 11, A1](#a1-before-the-first-launch-post): the site
+moves to Cloudflare Pages, and `www` redirects to the bare domain.
 
 **Can wait — none of these blocks a send:** Gmail's "Send mail as" (step 2.5); a CAA record
-(step 0); Do Not Track on your own browsers (step 5b.8); Google Search Console (step 7.1); the
-decisions in section 10; and making the repo private (section 11, A2). **One choice you make
-now:** section 12's lawyer questions come before the first League Pass sale. Either send the
-$34.99 link only if you accept section 12's risk for now, or hold it back (Claude leaves
-`STRIPE_LINK_PASS` empty, so the League Pass page says it opens soon) until the consult.
+(step 0); Google Search Console (step 7.1); the decisions in section 10; and making the repo
+private (section 11, A2).
 
 ---
 
@@ -71,6 +56,9 @@ remaining item shows as OWNER (yours) or FAIL (code), and it says READY when not
 It reads more when you give it more, all read-only:
 - `gh auth login` once: secrets, cron timing, the fork-PR setting.
 - `RESEND_API_KEY` in the shell: whether Resend says the domain is verified.
+- `FORM_ENDPOINT`, `FORM_API_KEY`, `STRIPE_PAYMENT_LINKS` and `RESEND_READ_KEY` in this shell or
+  `.env` (the dashboard's): the Worker's free-report switch against the site's, the link map,
+  the bounce key.
 - `STRIPE_API_KEY` = the read-only `owner-stats` key from step 3
   (`read -s STRIPE_API_KEY && export STRIPE_API_KEY`): public details, refund and dispute
   rates, sales against the tax threshold.
@@ -80,14 +68,6 @@ It reads more when you give it more, all read-only:
 FAILs a checkout opened without it (every roster change would be a reply you apply by hand).
 Your own purchase comes before opening: nobody else's money moves until you've watched yours
 go all the way through.
-
-**The date.** Week 7 (Oct 20) passed with checkout closed. Aim to do the list above this
-weekend, make the proving purchase on **Saturday Oct 24** or Sunday (step 4 — a weekend buyer
-gets the welcome and the roster report that day, which is exactly what it tests), and open on
-**Sunday Oct 25 or Monday Oct 26**, so the Week 8 Tuesday send (Oct 27) carries the first
-buyers. Anyone who buys before Thursday's 8:15pm ET kickoff gets Week 8's report. Each closed
-week now costs about a tenth of what's left of 2026 (`.venv/bin/python -m run.economics` shows
-the arithmetic; its `OPENS` date is the assumption to move if this slips).
 
 **Opening without the sender address (Nov 3 2026).** Without `SENDER_POSTAL_ADDRESS`, reports,
 welcomes, roster reports, the Saturday check and confirmations go out without the sender
@@ -108,9 +88,10 @@ Done:
 - The Stripe customer portal is on; its login link is in the terms. Buyers cancel there.
 - The restricted key `github-actions-crons` exists, made Sep 29 with three permissions. Step 3
   adds the three it now needs.
-
-**Checkout has been closed since Sep 29.** The join page's links are empty and the buttons
-say "Checkout opens at launch", because nothing read Stripe without step 3's key.
+- The form Worker is live at `forms.beatyourleague.com` and starts the crons on time: GitHub's
+  Actions record shows its dispatches at :17 and :47 since Nov 2.
+- The page counter is on: `site/count.js` posts to the Worker's `/e`.
+- The $14.99 Monthly link is on the join page. The League Pass link stays empty (held).
 
 **Three checks first:**
 - **Stripe → Payments, anything since Aug 27?** Any payment from then was never processed.
@@ -378,7 +359,7 @@ join page and switch the pricing buttons on; it's live on the next push.
 
 Nobody else's money moves until you've watched your own go all the way through.
 
-1. **Saturday Oct 24** (or any day; when matters only for which emails come — below), buy the
+1. **Any day** (when matters only for which emails come — below), buy the
    **Monthly plan** at https://beatyourleague.com/join/ with your own email, a real card and
    your real roster. Stripe's page must show $14.99 a month, the terms box, and the text
    saying billing stops on its own.
@@ -399,7 +380,7 @@ Nobody else's money moves until you've watched your own go all the way through.
 4. **Tell me they arrived.** I turn on `CHECKOUT_CAN_COMPLETE` (step 6). After a Saturday
    purchase that is the welcome plus the roster report; the weekly path is proven by
    Wednesday's send (item 5), which carries your own row first.
-5. **Wednesday:** the new week's report by about 5:30pm ET (6:30 before Nov 1), weekly-report
+5. **Wednesday:** the new week's report by about 5:30pm ET, weekly-report
    green in Actions. The one case nothing has rehearsed is a Wednesday-to-Thursday buyer's
    same-day weekly report; if one fails, the hourly run retries it.
 6. **Keep the plan** (section 10, "Keep your own plan"), at least through Wednesday's report
@@ -546,6 +527,14 @@ sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly t
    site in DuckDuckGo's browser (it sends Global Privacy Control on its own), or in Firefox
    on Android with the same setting on — or accept that your own phone views are in the
    numbers, a handful a day at most.
+   **And one rule that keeps your home connection out on every device** (free): Cloudflare →
+   the `beatyourleague.com` zone → **Security → WAF → Custom rules → Create rule**, name it
+   "My own views", **Edit expression** and paste
+   `(http.host eq "forms.beatyourleague.com" and http.request.uri.path eq "/e" and ip.src in {<your IP>})`
+   with your IP from a search for "what is my IP" (add the IPv6 one beside it if it shows
+   one), action **Block** → **Deploy**. It drops only your page-count lines; every form still
+   works. When your home IP changes, edit the rule. For one page from somewhere else, add
+   `?nocount=1` to its address: that view isn't counted (the next page you click is).
 9. **Tell me "counter on".** I set `ENDPOINT` in `site/count.js` to
    `https://forms.beatyourleague.com/e` and run the launch check ("The page counter answers
    204 with no cookie").
@@ -556,11 +545,22 @@ sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly t
     open in a browser (only to a gitignored path). If two days pass with the counter on and
     nothing recorded, the launch check warns: a Worker missing its `COUNTS` binding still
     answers every line with a 204.
+11. **Leave your own checks out of the numbers.** Counted lines can't be deleted, so a day of
+    testing the site reads as visitors for three months. Put the time your checks ended in
+    `.env` (UTC):
+    ```
+    TRAFFIC_FROM=2026-11-03T23:00Z
+    ```
+    `make stats` and the dashboard then count only views from then on, and both say
+    "Counting from …". On opening day, move it to that morning (D), so the funnel starts with
+    the first real buyers. Delete the line to count everything again.
 
 ## 6. Opening morning
 
-1. **After step 4's two emails arrive,** I turn on `CHECKOUT_CAN_COMPLETE`: the "leave your
-   email" box retires and the page says the first report lands today. **The free report opens
+1. **After step 4's two emails arrive,** I turn on `CHECKOUT_CAN_COMPLETE` and, in the same
+   push, write today's date as D in PLAN §6, so your step-4 purchase stays out of the gates and
+   the refund rate. The "leave your email" box retires and the page says the first report lands
+   today. Move `TRAFFIC_FROM` in `.env` to this morning too (step 5b.11). **The free report opens
    in the same push** (`TRIAL_OPEN`, on the homepage, the join page and the bye planner),
    because the $14.99 price was set on the basis of a free first report, and the launch check
    fails if checkout completes without it. **When I tell you it's pushed, set the Worker's own
@@ -615,11 +615,12 @@ The order is PLAN §5.1's — subscribers per hour of your time.
    never carry the link; the bio does. In **Google Search Console**, add the domain and verify
    it with the TXT record it gives you (Cloudflare → DNS). After 2–3 weeks of posting, send me
    the handles: I add them to the site footer.
-2. **Talk to five managers — Tuesday Oct 27, for Week 8.** Before anyone pays, find out
+2. **Talk to five managers.** Before anyone pays, find out
    whether they would. Ask five managers you already know (your leagues, a Discord you're in)
-   for their roster, and send each this week's report on it, free. Build them Monday night to
-   Thursday afternoon: `run.trial` refuses a week already underway, and before Monday night's
-   game it builds from a week that isn't finished. It needs `LOG_SECRET` in the shell
+   for their roster, and send each this week's report on it, free. Build them from Tuesday
+   morning (once Monday night's game is in) to Thursday afternoon: `run.trial` refuses a week
+   already underway. If it says the box scores aren't in yet, try again in an hour. It needs
+   `LOG_SECRET` in the shell
    (`read -s LOG_SECRET && export LOG_SECRET`):
    ```bash
    pbpaste | .venv/bin/python -m run.trial --email them@example.com --roster - --print
@@ -666,16 +667,15 @@ win-loss totals, nothing about betting.
 
 ## 8. Every week from here
 
-| When (ET until Nov 1) | What runs | What you do |
+| When (ET) | What runs | What you do |
 |---|---|---|
-| Wednesday about 5:17pm ET, retry about 7:17pm (9:17am in a week with a Wednesday game) | **weekly-report:** new signups, every subscriber's report, this week's live sample (its odds are recorded before kickoff) | Open your own report |
-| Daily 10:17am, plus every hour at :47 | **daily-intake:** purchases, welcomes, first reports, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
-| Saturday 12:17pm | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
-| Monday 9:17am | **monday-receipts:** grades last week's calls, republishes the record | Nothing, unless it goes red |
+| Wednesday about 5:17pm, retry about 7:17pm (8:17am too in a week with a Wednesday game) | **weekly-report:** new signups, every subscriber's report, this week's live sample (its odds are recorded before kickoff) | Open your own report |
+| Daily 9:17am, plus every hour at :47 | **daily-intake:** purchases, welcomes, first reports, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
+| Saturday 11:17am | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
+| Monday 8:17am | **monday-receipts:** grades last week's calls, republishes the record | Nothing, unless it goes red |
 
-UTC: Tue 12:17 and 16:17, daily 14:17 and :47 hourly, Sat 16:17, Mon 13:17. The Worker
-starts each on time (`17,47 * * * *`); GitHub's schedules are the backup. From Nov 1 the ET
-times are an hour earlier.
+UTC: Wed 22:17 and Thu 00:17 (plus Wed 13:17), daily 14:17 and :47 hourly, Sat 16:17, Mon
+13:17. The Worker starts each on time (`17,47 * * * *`); GitHub's schedules are the backup.
 
 A red run opens a GitHub issue and GitHub emails you. The same failure again comments on the
 open issue instead, so close each once it's fixed.
@@ -684,8 +684,10 @@ open issue instead, so close each once it's fixed.
 kickoff, run that workflow by hand from Actions (nobody is mailed twice). After kickoff,
 don't: the Wednesday run refuses a week already underway.
 
-**A red Wednesday run saying "box scores are not all in"** names a game. Usually Monday night
-just isn't published yet and the 12:17pm retry builds: do nothing. If that game was
+**A red Wednesday run saying "box scores are not all in"** names a game. Usually Monday
+night's game isn't published yet and the 7:17pm retry builds: do nothing. Monday's box
+score is normally in by Tuesday morning, so a red Wednesday-evening run naming a game usually
+means it was postponed. If that game was
 **postponed or suspended** (the news says so — BUF@CIN in 2022 is the precedent), the report
 would wait for a score that isn't coming, and so would first reports and free reports. Then:
 1. GitHub → repo Settings → Secrets and variables → Actions → **Variables** → New repository
@@ -729,9 +731,10 @@ reply): put the names they sent in a file, one per line, then
 ```bash
 make roster-update EMAIL=fan@example.com ROSTER=names.txt
 ```
-It needs `UPDATE_SECRET`, `FORM_ENDPOINT` and `FORM_API_KEY` in the shell (the Worker takes
-a post from outside the site only with the read key). `ARGS=--dry-run` resolves the names and
-posts nothing. The next hourly intake applies it.
+It needs `UPDATE_SECRET` in the shell, and `FORM_ENDPOINT` and `FORM_API_KEY` in the shell or
+`.env` (the Worker takes a post from outside the site only with the read key); it checks all
+three before it reads the names. `ARGS=--dry-run` resolves the names, needs none of them, and
+posts nothing. It works any day, Monday night included. The next hourly intake applies it.
 
 **When someone asks to stop** (mail to hello@ saying stop or unsubscribe). A buyer on a plan
 cancels from their own billing page, and a report's unsubscribe link goes there; if one writes
@@ -748,10 +751,12 @@ money back, that's the refund checks below. Someone who signs up again:
 
 **A League Pass buyer asks to reset seats** (their report's seat count shows seats they
 don't recognize, usually because their link was forwarded outside the league): find the
-pass's payment in Stripe (its id starts `pi_`), then
+pass in Stripe → **Subscriptions** → the pass (its id starts `sub_`), then
 ```bash
-make seat-reset PASS=pi_… EMAIL=buyer@example.com
+make seat-reset PASS=sub_… EMAIL=buyer@example.com
 ```
+A `pi_…` id (a payment) is refused: it matches no monthly pass, and the old link would keep
+working.
 (`SITE_URL` and `UPDATE_SECRET` in your shell print the new link.) Commit and push
 `data/processed/seat-resets.txt`, **then** reply to the buyer with the new link. The next
 hourly run releases every seat claimed before the reset, and the old link stops working;
@@ -798,8 +803,12 @@ roster updates, seat claims and seats filled per League Pass, sends by week, pla
 season by type with gross, refunded, net and the refund rate, free report → paid within 14
 days, and paid signups by `?via=` tag. It reads `FORM_ENDPOINT` and `FORM_API_KEY` for the
 form rows and the step 5b pair for traffic from this shell, else `.env`. For payments it
-needs the `owner-stats` key from step 3 in `STRIPE_API_KEY` (the cron key can't read
-refunds). Put `STRIPE_PAYMENT_LINKS` in `.env` too: the same `m:…,p:…` map as the GitHub
+reads the `owner-stats` key from step 3 the same way the dashboard does: `STRIPE_STATS_KEY` if
+you keep the read-only key under its own name, else `STRIPE_API_KEY`, from this shell or
+`.env` (the cron key can't read refunds). `TRAFFIC_FROM` (step 5b.11) leaves your own checks
+out of the traffic, and the TRAFFIC block says when it counts from. Rows from our own domain
+or a reserved test domain (example.com and the like) are test rows: the counts leave them out
+and say how many. Put `STRIPE_PAYMENT_LINKS` in `.env` too: the same `m:…,p:…` map as the GitHub
 secret. It holds link ids, not a key, and without it a sale is named by its price instead of
 the link that took the money. The Stripe Dashboard's phone app is the live view of money;
 `make stats` is the funnel around it. It never runs in CI.
@@ -838,7 +847,8 @@ costs, and shows which post sold once each post has its own link. All of it is k
 small files in the `data/` folder, which is never committed:
 - `make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly` records a cost (`once`, `monthly` or
   `yearly`; add `DATE=2026-08-01` for a past one). A recurring cost counts on each day it's
-  charged. The Money section shows profit, how many monthly charges until you break even, what's due
+  charged. Amounts in US dollars. Stripe's fees are already taken out of net revenue, so
+  don't log them here. The Money section shows profit, how many monthly charges until you break even, what's due
   in the next 30 days, and, if you log your time with `make hours H=1.5`, what you earn per hour.
 - `make link TAG=reddit-oct28 WHERE="r/fantasyfootball"` prints the link to use in a post (add
   `PAGE=byes/` to send people to another page) and logs it. Start the tag with the channel:
@@ -966,7 +976,8 @@ by Week 16 (Dec 22), about 30 purchases plus 2 League Passes and at least 30 gra
 the public record. Weekly, read replies, roster-update requests, stop requests, refunds and
 your hours against the ~59-hour budget — never an open rate, which the privacy promise rules
 out measuring. Under 5 paid by D+14 means stop selling hours and spend the rest of the season
-on the 2027 work below. Tell me the day you adopt them; I write D into PLAN §6.
+on the 2027 work below. Tell me you adopt them; I write D into PLAN §6 in the push that turns
+on checkout (step 6.1), so your own step-4 purchase never counts in them.
 
 **A USD payout account — decided (Oct 24): yes.** It is step 1.8 now.
 

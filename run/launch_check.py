@@ -9,7 +9,10 @@ The account gates read GitHub (`gh`, signed in), Stripe (STRIPE_API_KEY),
 Resend (RESEND_API_KEY) and the page counter (CF_ACCOUNT_ID and the read-only
 CF_ANALYTICS_TOKEN, in the shell or .env) only when those are present, and
 only ever read (one SQL query for the counter); without them each says SKIP
-or OWNER rather than guessing. The
+or OWNER rather than guessing. The config gates (the Worker's switches, the
+payment-link map, the bounce key, the payout currency) read their settings
+from the shell, else the gitignored .env, as the dashboard does (GATE_ENV);
+the proving run and the test suite never see .env. The
 accessibility gate needs axe-core: set AXE_CORE_PATH to an axe.min.js, or
 `npm install --no-save axe-core@4.11.4` in the repo (LAUNCH.md, "Where things stand").
 
@@ -1734,8 +1737,9 @@ def check_worker_switches() -> list[Gate]:
             return [Gate("Owner", name, "OWNER",
                          "TRIAL_OPEN is on in the site — set the Worker's TRIAL_OPEN variable "
                          "to true as well (LAUNCH.md step 5), then run this with FORM_ENDPOINT "
-                         "and FORM_API_KEY in the shell to confirm")]
-        return [Gate("Owner", name, "SKIP", "needs FORM_ENDPOINT and FORM_API_KEY in the shell")]
+                         "and FORM_API_KEY in this shell or .env to confirm")]
+        return [Gate("Owner", name, "SKIP",
+                     "needs FORM_ENDPOINT and FORM_API_KEY in this shell or .env")]
     try:
         worker = bool(worker_status(endpoint, key).get("trial_open"))
     except Exception as exc:  # noqa: BLE001 — reported, never guessed
@@ -1755,9 +1759,9 @@ def check_resend_read_key() -> list[Gate]:
     RESEND_READ_KEY it says so once per run and checks nothing."""
     name = "The bounce check has a Resend key that can read sent email"
     if os.environ.get("RESEND_READ_KEY", "").strip():
-        return [Gate("Email", name, "PASS", "RESEND_READ_KEY is set in this shell")]
+        return [Gate("Email", name, "PASS", "RESEND_READ_KEY is set in this shell or .env")]
     return [Gate("Email", name, "OWNER",
-                 "RESEND_READ_KEY is not in this shell — Resend's Sending access key can only "
+                 "RESEND_READ_KEY is not in this shell or .env — Resend's Sending access key can only "
                  "send, so a bounced buyer address goes unseen. Create a Full access key and "
                  "save it as the GitHub secret RESEND_READ_KEY (LAUNCH.md step 2)")]
 
@@ -1891,7 +1895,7 @@ def check_link_map() -> list[Gate]:
     raw = os.environ.get("STRIPE_PAYMENT_LINKS", "").strip()
     if not raw:
         gates.append(Gate("Owner", "The payment-link map names each pass under its own prefix",
-                          "OWNER", f"STRIPE_PAYMENT_LINKS isn't in this shell — check the "
+                          "OWNER", f"STRIPE_PAYMENT_LINKS isn't in this shell or .env — check the "
                           f"GitHub secret is {SHAPE}, then run "
                           f"infra/stripe_paylink_text.py with it (LAUNCH.md steps 1 and 3)"))
         return gates
@@ -1976,7 +1980,7 @@ def check_season_2027() -> list[Gate]:
              f"{SEASON_2027_LINK_PREFIX}: entry, so every purchase is PAID-UNATTRIBUTED")))
     elif ready:
         gates.append(Gate("Owner", "The payment-link map names the 2027 Season Pass", "OWNER",
-                          f"STRIPE_PAYMENT_LINKS isn't in this shell — check the GitHub secret "
+                          f"STRIPE_PAYMENT_LINKS isn't in this shell or .env — check the GitHub secret "
                           f"has {SEASON_2027_LINK_PREFIX}:plink_… (LAUNCH.md, "
                           f"\"Turning on the 2027 Season Pass\")"))
     if ready:
@@ -2927,6 +2931,41 @@ def check_economics() -> list[Gate]:
 
 MARK = {"PASS": "✓", "FAIL": "✗", "WARN": "!", "OWNER": "○", "SKIP": "–"}
 
+# The settings the account and config gates read, which the owner keeps in
+# the gitignored .env as well as (or instead of) the shell. For the length of
+# those gates only, a name the shell lacks is filled from .env (TOOLS-4: from
+# a plain Terminal the site/Worker TRIAL_OPEN gate said SKIP while the
+# dashboard, reading .env, ran it). Never around check_proving or
+# check_tests: _simulation_env copies os.environ into their subprocesses, and
+# the real Worker's address and key must not reach a simulation.
+GATE_ENV = ("STRIPE_PAYMENT_LINKS", "FORM_ENDPOINT", "FORM_API_KEY", "RESEND_READ_KEY",
+            "STRIPE_PAYOUT_CURRENCY")
+DOTENV_GATES = ("check_worker_switches", "check_link_map", "check_season_2027",
+                "check_season_2027_stripe", "check_resend_read_key", "check_volume",
+                "check_economics")
+
+
+@contextlib.contextmanager
+def filled_env(values: dict[str, str] | None = None) -> Iterator[None]:
+    """os.environ with GATE_ENV names filled from ``values`` (default: the
+    gitignored .env) where the shell has nothing; put back afterwards, so
+    nothing outlives the gates' run."""
+    if values is None:
+        from run.stats import ENV_FILE, read_env_file
+        values = read_env_file(ENV_FILE, GATE_ENV)
+    before = {name: os.environ.get(name) for name in GATE_ENV}
+    try:
+        for name in GATE_ENV:
+            if values.get(name) and not before[name]:
+                os.environ[name] = values[name]
+        yield
+    finally:
+        for name, value in before.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
 
 def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[Gate]:
     steps: list[tuple[str, Callable[[], Iterable[Gate]]]] = [
@@ -2965,7 +3004,8 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
     for label, fn in steps:
         progress(label)
         try:
-            gates.extend(fn())
+            with (filled_env() if fn.__name__ in DOTENV_GATES else contextlib.nullcontext()):
+                gates.extend(fn())
         except Exception as exc:  # noqa: BLE001 — one broken check never hides the rest
             gates.append(Gate("Check", f"{label} could not run", "FAIL",
                               f"{type(exc).__name__}: {exc}"))

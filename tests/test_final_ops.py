@@ -82,18 +82,31 @@ def _module_source(module: str) -> str:
 # the checklist, and the document agreeing with itself
 # --------------------------------------------------------------------- #
 
-def test_launch_opens_with_the_weekend_checklist() -> None:
+def test_launch_opens_with_the_checklist_for_now() -> None:
     """Reproduction (ops lens): the owner's minimal path through ~1,000 lines
     lived only in a reviewer's notes, and the two steps it found missing (edit
     the cron key, create the read-only stats key) were in no step at all. The
-    checklist is now the first section: every item has a time and a link, the
-    two missing steps are on it, and so is what can wait."""
+    checklist is the first section: every item has a time and a link, the two
+    missing steps are on it, and so is what can wait.
+
+    TOOLS-8, reproduced on Nov 3: it was still "This weekend, in order", for a
+    weekend of Oct 24, listing as to-dos a Worker that already dispatched the
+    crons and a counter that already counted, and the section below it said
+    checkout had been closed since Sep 29 under a live Monthly link. It is
+    "Now, in order", with no dead date in it and nothing it calls done that
+    the repo doesn't show done."""
     text = _launch()
     headings = re.findall(r"(?m)^## (.+)$", text)
-    assert headings[:2] == ["This weekend, in order", "Where things stand"], headings[:3]
-    checklist = _section(text, "This weekend, in order")
-    items = re.findall(r"(?ms)^(\d+)\. (.+?)(?=^\d+\. |^\*\*Later|\Z)", checklist)
-    assert len(items) >= 10, [n for n, _ in items]
+    assert headings[0].startswith("Now, in order") and headings[1] == "Where things stand", \
+        headings[:3]
+    checklist = _section(text, headings[0])
+    items = re.findall(r"(?ms)^(\d+)\. (.+?)(?=^\d+\. |^\*\*|\Z)", checklist)
+    assert len(items) >= 3, [n for n, _ in items]
+    flat_all = _flat(checklist + _section(text, "Where things stand"))
+    for stale in ("Oct 24", "Oct 27", "This weekend", "closed since Sep 29", "The date."):
+        assert stale not in flat_all, stale
+    assert "make launch-check" in _flat(items[0][1]) and "OWNER" in _flat(items[0][1])
+    assert "Held on purpose" in flat_all and "Jan 11" in flat_all
     for number, body in items:
         assert re.search(r"\(~\d+ (min|hour)", body), f"item {number} has no time estimate"
         assert "](#" in body or "I put the links" in body, f"item {number} links nowhere"

@@ -135,7 +135,7 @@ def load_list(path: Path) -> tuple[list[str], list[str]]:
     """
     if not path.is_file():
         raise FileNotFoundError(f"no waitlist export at {path}")
-    from run.trials import canonical_email
+    from run.trials import canonical_email, is_test_address
     addresses: list[str] = []
     problems: list[str] = []
     seen: set[str] = set()
@@ -155,6 +155,10 @@ def load_list(path: Path) -> tuple[list[str], list[str]]:
             if not EMAIL_RE.match(value):
                 problems.append(f"row {index}: not an address")
                 continue
+            if is_test_address(value):
+                problems.append(f"row {index}: a test row from our own domain or a "
+                                f"reserved test domain")
+                continue
             if canonical_email(value) in seen:
                 continue                       # one mailbox, one message
             seen.add(canonical_email(value))
@@ -171,15 +175,19 @@ def waitlist_addresses(rows) -> list[str]:
     asked for this message.
 
     One MAILBOX, one entry (the first spelling seen): ``a+1@`` and ``a+2@``
-    are one inbox, and so are Gmail's dotted spellings.
+    are one inbox, and so are Gmail's dotted spellings. A row at our own
+    domain or a reserved test domain is the owner's test, never a person on
+    the list (``run.trials.is_test_address``; ``main`` says how many).
     """
-    from run.trials import canonical_email
+    from run.trials import canonical_email, is_test_address
     addresses: list[str] = []
     seen: set[str] = set()
     for row in rows:
         if str(row.get("kind") or "") != "waitlist":
             continue
         value = str(row.get("email") or "").strip().lower()
+        if is_test_address(value):
+            continue
         if EMAIL_RE.match(value) and canonical_email(value) not in seen:
             seen.add(canonical_email(value))
             addresses.append(value)
@@ -505,6 +513,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Could not read the waitlist: {exc}", file=sys.stderr)
             return 1
         addresses, refs = waitlist_addresses(rows), saved_refs(rows)
+        from run.trials import count_test_rows
+        tests = count_test_rows(r for r in rows if str(r.get("kind") or "") == "waitlist")
+        if tests:
+            print(f"  left out {tests} test row(s) from our own domain or a reserved "
+                  f"test domain", file=sys.stderr)
 
     for problem in problems:
         print(f"  skipped {problem}", file=sys.stderr)

@@ -1197,12 +1197,12 @@ def test_the_waitlist_is_one_message_per_mailbox_and_a_send_needs_a_ceiling(
     WAITLIST_MAX) and when more than that are still to be announced."""
     import run.waitlist as wl
     rows = [{"kind": "waitlist", "email": e} for e in
-            ("john.doe@gmail.com", "johndoe+launch@gmail.com", "a@junk.example",
-             "b@junk.example", "c@junk.example", "fan@example.com")]
-    assert wl.waitlist_addresses(rows) == ["john.doe@gmail.com", "a@junk.example",
-                                           "b@junk.example", "c@junk.example",
-                                           "fan@example.com"]
-    assert wl.top_domains(wl.waitlist_addresses(rows))[0] == ("junk.example", 3)
+            ("john.doe@gmail.com", "johndoe+launch@gmail.com", "a@junk.mail",
+             "b@junk.mail", "c@junk.mail", "fan@fans.mail")]
+    assert wl.waitlist_addresses(rows) == ["john.doe@gmail.com", "a@junk.mail",
+                                           "b@junk.mail", "c@junk.mail",
+                                           "fan@fans.mail"]
+    assert wl.top_domains(wl.waitlist_addresses(rows))[0] == ("junk.mail", 3)
     monkeypatch.setenv("SITE_URL", "https://x.test")
     monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
     monkeypatch.setattr(wl, "fetch_seats", lambda *a, **k: rows)
@@ -1210,8 +1210,8 @@ def test_the_waitlist_is_one_message_per_mailbox_and_a_send_needs_a_ceiling(
     monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
     assert wl.main([]) == 0
     out = capsys.readouterr().out
-    assert "5 mailbox(es)" in out and "junk.example 3" in out and "@" not in \
-        out.split("commonest domains:")[1].split("\n")[0].replace("junk.example", "")
+    assert "5 mailbox(es)" in out and "junk.mail 3" in out and "@" not in \
+        out.split("commonest domains:")[1].split("\n")[0].replace("junk.mail", "")
     for name, value in (("EMAIL_PROVIDER", "resend"), ("RESEND_API_KEY", "re_x"),
                         ("EMAIL_FROM", "B <b@x.test>"), ("SENDER_POSTAL_ADDRESS", "PO Box 1")):
         monkeypatch.setenv(name, value)

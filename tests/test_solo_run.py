@@ -651,7 +651,7 @@ def test_the_player_directory_is_never_served_frozen(tmp_path) -> None:
     import run.solo as solo_module
     from render import player_index
 
-    for module, name in ((solo_module, "load_week_data"),
+    for module, name in ((solo_module, "_load_directory"),
                          (player_index, "main")):
         source = inspect.getsource(getattr(module, name))
         for asset in ('"players.csv"', '"teams_colors_logos.csv"'):

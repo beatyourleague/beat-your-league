@@ -253,13 +253,20 @@ def today_et() -> date:
     return datetime.now(timezone.utc).astimezone(ET).date()
 
 
+# Said wherever a cost is recorded (TOOLS-20): profit is Stripe's net less
+# these costs, and Stripe's fees are already out of that net, so a fee logged
+# here would count twice. The books keep one currency, US dollars.
+COST_NOTE = ("Amounts in US dollars. Stripe's fees are already taken out of net "
+             "revenue, so don't log them here.")
+
+
 def cli(argv: list[str] | None = None, root: Path = REPO_ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("cost", help="record a cost")
+    c = sub.add_parser("cost", help="record a cost. " + COST_NOTE, description=COST_NOTE)
     c.add_argument("item")
-    c.add_argument("amount")
+    c.add_argument("amount", help="US dollars, like 12 or 12.50")
     c.add_argument("--repeats", default="once", choices=REPEATS)
     c.add_argument("--date", default="")
     hh = sub.add_parser("hours", help="record time spent on the business")
@@ -294,7 +301,7 @@ def cli(argv: list[str] | None = None, root: Path = REPO_ROOT) -> int:
         append(data / COSTS.name, (when(args.date), args.item.strip()[:60], f"{amount:.2f}", args.repeats))
         every = {"once": "", "monthly": ", every month", "yearly": ", every year"}[args.repeats]
         print(f"Recorded ${amount:.2f} for {args.item.strip()}{every}. It shows on the dashboard's "
-              f"Money section.")
+              f"Money section.\n{COST_NOTE}")
         return 0
     if args.cmd == "hours":
         try:
@@ -313,6 +320,8 @@ def cli(argv: list[str] | None = None, root: Path = REPO_ROOT) -> int:
                   "reddit-oct28, x-thread1, discord-myleague.", file=sys.stderr)
             return 2
         page = args.page.strip().lstrip("/")
+        if not PAGE_RE.fullmatch(page) and PAGE_RE.fullmatch(page + "/"):
+            page += "/"                 # "byes" is the planner's folder, byes/
         if not PAGE_RE.fullmatch(page):
             print("PAGE must be a page of the site such as byes/ or sample-report.html "
                   "(empty for the home page).", file=sys.stderr)

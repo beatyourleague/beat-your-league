@@ -1143,25 +1143,10 @@ def _this_week_cover(report: dict, spec: RosterSpec, data: "WeekData",
             item["detail"] = f"{item['detail']} {line}" if item.get("detail") else line
 
 
-def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
-                   week: int | None = None, *, live: bool = True,
-                   session: requests.Session | None = None,
-                   today: date | None = None,
-                   now: datetime | None = None) -> WeekData:
-    """Fetch and assemble one week. Costs the same for one subscriber or a
-    hundred — nothing in here depends on a particular roster. ``now`` is the
-    clock the completeness check reads (default: the real one)."""
-    cache_dir = Path(cache_dir)
-    season = (str(season) if season
-              else current_season(cache_dir, today, session=session))
-    if not week and season_over(cache_dir, season, today, session=session):
-        raise SeasonOver(f"the {season} season is over; nothing to build until "
-                         f"the next season's schedule")
-    week = int(week) if week else current_week(cache_dir, season, today,
-                                               session=session)
-    if week < 1:
-        raise SoloError(f"week {week} is not a week")
-
+def _load_directory(cache_dir: Path, season: str, *, live: bool,
+                    session: requests.Session | None):
+    """(players.csv, the season's directory): the part of a week every
+    reader of names needs (``load_week_data``, ``load_names``)."""
     try:
         # live=True on BOTH. The directory is not static — players sign, get
         # cut and get traded every week — and a subscriber who rosters someone
@@ -1187,6 +1172,43 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
     directory = load_directory(players_csv, teams_csv,
                                min_last_season=int(season) - 1,
                                eligible_teams=teams)
+    return players_csv, directory
+
+
+def load_names(cache_dir: Path = CACHE_DIR, season: str | None = None, *,
+               session: requests.Session | None = None,
+               today: date | None = None):
+    """The player directory and its name index, and nothing else: what
+    resolving typed names needs (``make roster-update``). No stat rows and no
+    completeness check, so it answers from Monday night, while week W-1's last
+    game is still unpublished and ``load_week_data`` rightly refuses (TOOLS-10).
+    The intake re-checks every id against the directory anyway."""
+    cache_dir = Path(cache_dir)
+    season = str(season) if season else current_season(cache_dir, today, session=session)
+    _players_csv, directory = _load_directory(cache_dir, season, live=True, session=session)
+    return directory, player_index(directory)
+
+
+def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
+                   week: int | None = None, *, live: bool = True,
+                   session: requests.Session | None = None,
+                   today: date | None = None,
+                   now: datetime | None = None) -> WeekData:
+    """Fetch and assemble one week. Costs the same for one subscriber or a
+    hundred — nothing in here depends on a particular roster. ``now`` is the
+    clock the completeness check reads (default: the real one)."""
+    cache_dir = Path(cache_dir)
+    season = (str(season) if season
+              else current_season(cache_dir, today, session=session))
+    if not week and season_over(cache_dir, season, today, session=session):
+        raise SeasonOver(f"the {season} season is over; nothing to build until "
+                         f"the next season's schedule")
+    week = int(week) if week else current_week(cache_dir, season, today,
+                                               session=session)
+    if week < 1:
+        raise SoloError(f"week {week} is not a week")
+
+    players_csv, directory = _load_directory(cache_dir, season, live=live, session=session)
 
     # The season's own stat rows. Before kickoff this release does not exist
     # yet, which is a real state and not an error: there is simply no form to
