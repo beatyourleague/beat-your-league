@@ -31,8 +31,10 @@ on:
     # Safe to run hourly for the same reason the Tuesday retry is safe: every
     # message carries an idempotency key checked against sent.jsonl, so a run
     # with no new payments finds nothing to do and mails nobody. The 14:17 run
-    # above is the one that also sends renewal notices and drafts the reply
-    # kit; those steps are cheap and idempotent too.
+    # above is the one that also stops monthly billing, checks the other crons
+    # ran and drafts the reply kit. Pre-renewal notices go out on EVERY run:
+    # each is keyed by its renewal date, so an hourly pass sends nothing twice,
+    # and a notice the law requires is never held for a once-a-day gate.
     #
     # This is the interim. Once the form Worker is deployed, a Stripe webhook
     # can trigger this workflow directly and the wait drops from an hour to a
@@ -375,9 +377,12 @@ jobs:
 
       # The reply kit: the day's defensible numbers, all of them from the
       # public record. Cheap, deterministic, and the one growth channel that
-      # runs without the owner writing anything from scratch.
+      # runs without the owner writing anything from scratch. Once a day, like
+      # the steps above: drafted hourly it filled the artifact list with a
+      # copy of the same morning's kit every hour (launch review OPS-9).
       - name: Draft the daily reply kit
-        if: always()
+        id: replykit
+        if: always() && steps.today.outputs.due != 'false' && github.event.schedule != '47 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
         run: .venv/bin/python -m run.posts replykit
 
       # Sealed before it leaves the runner, never in plain text: without
@@ -416,7 +421,7 @@ jobs:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
       - name: Upload the day's reply kit
-        if: always()
+        if: always() && steps.replykit.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: reply-kit
