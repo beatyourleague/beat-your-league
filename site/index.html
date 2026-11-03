@@ -1197,7 +1197,7 @@
     your title game.</p>
     <ul class="creds" aria-label="Works with">
       <li><span><a href="espn/">ESPN</a>, <a href="yahoo/">Yahoo</a>, <a href="sleeper/">Sleeper</a>,
-      <a href="cbs/">CBS</a>: paste your roster, no login</span></li>
+      <a href="cbs/">CBS</a>. No login.</span></li>
     </ul>
     <!-- One action, one link (owner review, Oct 31 2026: a sentence, an apps
          line, a date, two buttons, a reassurance line and a third link was too
@@ -1347,7 +1347,7 @@
     <tbody>
       <tr><th scope="row">Made for</th><td class="no">Everyone at once</td><td class="yes">Your roster and scoring</td></tr>
       <tr><th scope="row">Your lineup</th><td class="no">You work it out</td><td class="yes">Every slot decided</td></tr>
-      <tr><th scope="row">Close calls</th><td class="no">A rank, no odds</td><td class="yes">The odds, against your own bench</td></tr>
+      <tr><th scope="row">Close calls</th><td class="no">A rank, no odds</td><td class="yes">Explained, with odds where we can</td></tr>
       <tr><th scope="row">Late news</th><td class="no">Check back yourself</td><td class="yes">An if/then and the Saturday check</td></tr>
       <tr><th scope="row">Bye weeks</th><td class="no">Yours to track</td><td class="yes">Checked to your title game</td></tr>
     </tbody>
@@ -1370,7 +1370,7 @@
       <ul>
         <li>Stops on its own after your title game
         (<a href="terms.html#price">how it ends</a>).</li>
-        <li>Up to 3 teams: redraft, keeper, dynasty.</li>
+        <li>Up to 3 teams: redraft, keeper or dynasty.</li>
         <li>Your first report usually lands within the hour.</li>
         <li>Read your first weekly report. Not for you? Full refund before its first
         game. One per person (<a href="terms.html#refunds">details</a>).</li>
@@ -1534,6 +1534,16 @@ const CHECKOUT_CAN_COMPLETE = false;
 // then the button would lead to "free reports aren't open", so it stays hidden
 // — the static page is the closed state, as with checkout.
 const TRIAL_OPEN = false;
+// The League Pass on sale. True only while join's STRIPE_LINK_PASS is set AND
+// league-pass.html's SEATS_OPEN is true (thanks.html's PASS_HELD is its twin,
+// held by test). While the pass is held, the strip under the price says it
+// opens soon, rather than stating terms for a plan nobody can buy yet (sweep
+// SELL-3). The static markup keeps the full terms for when it opens.
+const LEAGUE_PASS_OPEN = false;
+if (!LEAGUE_PASS_OPEN) {
+  const lpTerms = document.querySelector(".lpline .lpterms");
+  if (lpTerms) lpTerms.textContent = "Opens soon. $34.99 a month for the whole league.";
+}
 // The 2027 Season Pass: all of 2027 with the rest of this season included. Off
 // until its payment link is on the join page: SEASON_2027_READY must equal
 // Boolean(join's STRIPE_LINK_2027), and the join page carries the same flag.
@@ -1832,7 +1842,7 @@ if (CHECKOUT_OPEN) {
     if (closerHead) closerHead.textContent = "Your first report lands today.";
     const closerNote = document.getElementById("closer-note");
     if (closerNote) {
-      closerNote.textContent = "Set up takes about two minutes. Then a new " +
+      closerNote.textContent = "Setup takes about two minutes. Then a new " +
         "report every Wednesday evening.";
     }
     const finance = document.getElementById("finance-note");
@@ -1858,7 +1868,7 @@ if (CHECKOUT_OPEN) {
         " Not ready yet? Leave your email at the end of this page."));
     }
     const closerNote = document.getElementById("closer-note");
-    if (closerNote) closerNote.textContent = "Set up takes about two minutes.";
+    if (closerNote) closerNote.textContent = "Setup takes about two minutes.";
     const watchButton = document.querySelector("#watch-form button");
     if (watchButton) watchButton.textContent = "Email me once";
     watchDoneTail = "One message from us, nothing else.";
@@ -2367,7 +2377,7 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
           if (head) head.textContent = "Your first report lands today.";
           const note = document.getElementById("closer-note");
           if (note) {
-            note.textContent = "Set up takes about two minutes. Week 1's report lands " +
+            note.textContent = "Setup takes about two minutes. Week 1's report lands " +
               landsDay + ", then a new one every Wednesday evening.";
           }
         }

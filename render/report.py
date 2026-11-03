@@ -1286,8 +1286,8 @@ def _generated_stamp(meta: Mapping[str, Any]) -> str:
         # UTC, a build after 8 PM ET was dated tomorrow.
         from zoneinfo import ZoneInfo
         local = stamp.astimezone(ZoneInfo("America/New_York"))
-        return local.strftime(f"Rebuilt %b %d, %Y from the {meta.get('season')} "
-                              f"season archive")
+        return (f"Rebuilt {local:%b} {local.day}, {local:%Y} from the "
+                f"{meta.get('season')} season archive")
     return "Built " + eastern(stamp)
 
 

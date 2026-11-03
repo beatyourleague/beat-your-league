@@ -1101,6 +1101,8 @@ _RETIRED_CHROME = (
     ('<p class="standing"><b>Saturday:</b>', '<p class="standing"><b>The Saturday check:</b>'),
     ("If he is, Saturday&#x27;s final check will tell you.",
      "If he is, the Saturday check will tell you."),
+    # "exactly" is on the owner's banned list (sweep SELL-2).
+    ("exactly the way yours is built.", "the same way yours is built."),
 )
 # A row's reason, sentence case (render.anatomy): the style used to draw it in
 # capitals, so a page built before then carries it in lower case.
