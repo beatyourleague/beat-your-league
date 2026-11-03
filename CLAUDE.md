@@ -1996,6 +1996,17 @@ registry copy is present, how many free-report and waitlist mailboxes subscribe 
 only, never an address; read-only; an unreadable Worker exits 1 rather than printing zeros.
 Not a CI step on purpose: the repo is public, so a job summary would publish subscriber counts.
 
+**`make signups` (`run/signups.py`, Nov 3 2026)** — the one view that prints ADDRESSES, because
+the owner asked to see who joined the waitlist. Terminal only: refuses in CI; `--csv` writes
+only to a gitignored path outside `site/` (mode 600, formula-safe cells). Every Worker kind that
+carries an email is a group, each printed with the one use privacy §1 allows for it (the
+waitlist gets the one launch email, nothing else); one line per canonical mailbox. The stop
+list is honoured: a stopped address is marked and left out of the CSV, and a non-empty stop
+list with no `LOG_SECRET` marks everyone unchecked and refuses the CSV. The forgotten list holds
+keyed customer ids, so it can't be matched to an address; `make privacy … delete` removes the
+person's Worker rows itself. `make stats` and the dashboard stay counts-only; the dashboard's
+forms card points here. `make signups-registry` marks subscribers from the sealed backup.
+
 **Persona review and the trust pass (Sep 29 2026).** Seven simulated buyers (casual, veteran,
 Sleeper-native, analyst, high-stakes, free-league, commissioner) averaged ~6.9/10; the recurring
 gaps were "who is this?", "can I check it?", "what does the % mean?", and League Pass buried in a

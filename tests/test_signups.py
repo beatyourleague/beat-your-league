@@ -157,10 +157,13 @@ def test_an_unreadable_stop_list_shows_nothing(tmp_path, capsys) -> None:
     assert code == 1 and "@" not in out and "stop list" in err
 
 
-def test_the_csv_goes_only_to_a_gitignored_path_outside_site(tmp_path, capsys) -> None:
+def test_the_csv_goes_only_to_a_gitignored_path_outside_site(tmp_path, capsys,
+                                                              monkeypatch) -> None:
     target = tmp_path / "signups.csv"
     code, _, err = run(["--csv", str(target)], capsys, gitignored=lambda p: False)
     assert code == 2 and not target.exists() and "not gitignored" in err
+    # A stand-in site/, so a broken guard can't leave a file in the real one.
+    monkeypatch.setattr(signups, "SITE_DIR", tmp_path / "site")
     inside = signups.SITE_DIR / "signups.csv"
     code, _, err = run(["--csv", str(inside)], capsys)
     assert code == 2 and not inside.exists() and "inside site/" in err
