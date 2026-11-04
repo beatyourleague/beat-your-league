@@ -312,6 +312,11 @@ def collect_forms(ctx: Context) -> Source:
     from run.owner import count_not_counted, not_counted, owner_addresses
     owners = owner_addresses(ctx.env)
     rows = fetch_seats(endpoint, ctx.env.get("FORM_API_KEY") or None)
+    from run.digest import address, available
+    # A free-report request's keyed mailbox code, the one its send key ends
+    # in (run.trials.trial_key), so free_to_paid counts reports MAILED. The
+    # code is already in the committed send log; without LOG_SECRET, none.
+    keyed = available()
     clean = []
     for row in rows:
         # A row at our own domain, a reserved test domain or one of the
@@ -325,6 +330,8 @@ def collect_forms(ctx: Context) -> Source:
             "at": _iso(row.get("received_at")),
             "via": via if isinstance(via, str) and stats.VIA_RE.fullmatch(via) else None,
             "who": who(row.get("email")),
+            "sent_code": (address(str(row["email"])) if keyed and row.get("email")
+                          and row.get("kind") == "trial" else None),
         })
     channels = {k: dict(c) for k, c in stats.channel_summary(rows, owners).items()}
     return _source("forms", data={"rows": clean,
@@ -1015,14 +1022,30 @@ def forms_metrics(src: Source, period: str, now: datetime) -> dict | None:
 FREE_TO_PAID_DAYS = stats.FREE_TO_PAID_DAYS
 
 
-def free_to_paid(forms: Source, stripe: Source, now: datetime) -> tuple[int, int, int] | None:
-    """(paid within 14 days, requests old enough to judge, requests still
-    inside the window) — the join ``make stats`` prints, on digests."""
-    if not (forms.ok and stripe.ok):
+def free_to_paid(forms: Source, stripe: Source, now: datetime,
+                 sends: Source | None = None) -> tuple[int, int, int] | None:
+    """(paid within 14 days of the free report, free reports MAILED old
+    enough to judge, mailed ones still inside the window) — the rate
+    ``make stats`` prints (stats.free_to_paid_lines), on digests. Only free
+    reports the send log says went out count: a refused, stale or
+    unbuildable request is not somebody who got one. None without the send
+    log, or without LOG_SECRET (no request can then be matched to a send)."""
+    if not (forms.ok and stripe.ok) or sends is None or not sends.ok:
         return None
+    from run.trials import is_owner_trial_key
+    went: dict[str, datetime] = {}
+    for entry in sends.data["entries"]:
+        key, stamp = str(entry.get("key") or ""), _ts(entry.get("sent_at"))
+        if key.startswith("trial-") and not is_owner_trial_key(key) and stamp \
+                and key.count("-") >= 2:
+            code = key.split("-", 2)[2]
+            went[code] = min(went.get(code, stamp), stamp)
+    trials = [row for row in forms.data["rows"] if row["kind"] == "trial"]
+    if trials and not any(row.get("sent_code") for row in trials):
+        return None                         # read without LOG_SECRET
     first: dict[str, datetime] = {}
     for row in forms.data["rows"]:
-        stamp = _ts(row["at"])
+        stamp = went.get(row.get("sent_code") or "")
         if row["kind"] == "trial" and row["who"] and stamp:
             first[row["who"]] = min(first.get(row["who"], stamp), stamp)
     bought: dict[str, list[datetime]] = defaultdict(list)
@@ -1752,10 +1775,13 @@ def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
     if ftp is not None and m.period == "all":
         paid, judged, young = ftp
         if judged >= 10:
-            out.append(Insight("info", f"{paid} of {judged} free-report requesters bought within "
-                                       f"{FREE_TO_PAID_DAYS} days ({paid / judged:.0%}).",
-                               "Follow up with a one-line nudge at day 3 if this is low.",
-                               f"{young} newer requests not judged yet"))
+            # Never a follow-up email: the free report says it's the only one
+            # we'll send unless they sign up (render.email.TRIAL_ONLY).
+            out.append(Insight("info", f"{paid} of {judged} people mailed a free report bought "
+                                       f"within {FREE_TO_PAID_DAYS} days ({paid / judged:.0%}).",
+                               "If this is low, work on the free report's ask. Never send a "
+                               "follow-up: it promises to be the only email.",
+                               f"{young} newer free reports not judged yet"))
     if forms is not None and forms["waitlist"]["total"] and m.days:
         w = forms["waitlist"]
         from render.sender import sender_line
@@ -3023,7 +3049,7 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
     ledger = ledger_view(sources["ledger"], now)
     health = workflow_health(sources["github"], now, root)
     issues = build_issues(sources, now, health, ledger, M["7d"], root)
-    ftp = free_to_paid(sources["forms"], sources["stripe"], now)
+    ftp = free_to_paid(sources["forms"], sources["stripe"], now, sources["sends"])
     insights = {p: build_insights(sources, M[p], now, ftp, ledger) for p, _l, _d in PERIODS}
     from render.report import mark_svg
     urgent = sum(i.severity in ("critical", "high") for i in issues)

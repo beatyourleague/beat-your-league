@@ -269,7 +269,10 @@ def _paid_by_channel_line(sessions: list[dict]) -> str:
     reference). Form rows only ever counted who ASKED; this is who PAID, the
     number a partner or affiliate decision needs (G09). Only this product's
     payments count — a Sleeper-era reference is not one — and the tag is
-    re-checked to its shape before it is printed."""
+    re-checked to its shape before it is printed. A post's tag counts under
+    its channel (``reddit-oct28`` is reddit, run.books.channel_of), as the
+    dashboard groups it; the dashboard's posts table keeps each post."""
+    from run.books import channel_of
     from run.checkout import is_paid
     from run.intake import split_via
     from run.refs import is_roster_ref
@@ -280,7 +283,7 @@ def _paid_by_channel_line(sessions: list[dict]) -> str:
                 or not isinstance(ref, str) or not is_roster_ref(ref)):
             continue
         _ref, via = split_via(ref)
-        counts[via if via and VIA_RE.fullmatch(via) else NO_VIA] += 1
+        counts[channel_of(via) if via and VIA_RE.fullmatch(via) else NO_VIA] += 1
     if not counts:
         return "  Paid signups by channel (ever): none yet"
     ranked = sorted(((t, n) for t, n in counts.items() if t != NO_VIA),
@@ -389,12 +392,14 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
                    season_label: str = "ever", since: int | None = None,
                    one_time: bool | None = None,
                    season_2027: Iterable[str] = (),
-                   owners: Iterable[str] | None = None) -> list[str]:
+                   owners: Iterable[str] | None = None,
+                   sent: Iterable[Mapping] | None = None) -> list[str]:
     """The payments half. Each read is independent — a key without Refunds
     access still shows subscriptions and checkouts — and a part that cannot
     be read says so instead of printing a zero it never counted.
 
-    ``rows`` (the form Worker's, when read) adds free report → paid; ``since``
+    ``rows`` (the form Worker's, when read) adds free report → paid, measured
+    from the free reports the send log ``sent`` says went out; ``since``
     (epoch seconds, the day after last season's final game) scopes passes to
     this season, named ``season_label``; ``one_time`` (default: what the site
     sells, render.report.SELLING_ONE_TIME) labels subscriptions as 2027's.
@@ -419,7 +424,7 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
     def passes(sessions: list[dict]) -> list[str]:
         out = passes_lines(sessions, plans, season_label, since)
         if rows is not None:
-            out.append(free_to_paid_line(rows, sessions, now, since, owners))
+            out.extend(free_to_paid_lines(rows, sessions, now, since, owners, sent))
         return out
 
     label = SUBSCRIPTIONS_LABEL_ONE_TIME if one_time else SUBSCRIPTIONS_LABEL
@@ -587,25 +592,74 @@ def passes_lines(sessions: Iterable[Mapping], link_plans: Mapping[str, str],
     return lines
 
 
-def free_to_paid_line(rows: Iterable[Mapping], sessions: Iterable[Mapping],
-                      now: datetime, since: int | None = None,
-                      owners: Iterable[str] | None = None) -> str:
-    """Of the people who asked for a free report, how many bought a pass
-    within FREE_TO_PAID_DAYS of first asking — joined on the mailbox the way
-    the free report counts people (run.trials.canonical_email). Requests
-    younger than the window are counted apart: they can still convert. The
-    owner's own requests are not people who asked (their purchases are left
-    out of ``sessions`` by the caller, run/owner.py)."""
-    from run.owner import is_owner_address
+# The shorter window beside FREE_TO_PAID_DAYS: a week is long enough for the
+# first weekly report after a free one, and closes twice as soon.
+FREE_TO_PAID_WINDOWS = (7, FREE_TO_PAID_DAYS)
+FREE_MAILED_UNKNOWN = ("  Free reports mailed: can't be matched to requests here ({why}), "
+                       "so no free report → paid rate")
+
+
+def free_reports_mailed(requested: Iterable[str], sent: Iterable[Mapping]
+                        ) -> dict[str, datetime]:
+    """canonical mailbox -> when its free report went out (the earliest),
+    for each of ``requested`` the send log holds a free report for. Matched on
+    the send key run.trials writes (``trial_key``, keyed under LOG_SECRET, so
+    this raises run.digest.DigestError without it); the owner's own test
+    reports have keys of their own and never match. A refused, stale or
+    unbuildable request has no key in the log, so it is never counted as
+    mailed. Counts in, never an address out."""
+    from run.digest import secret
+    from run.trials import is_owner_trial_key, trial_key
+    secret()                                  # no key, no match: say so
+    when: dict[str, datetime] = {}
+    seasons: set[str] = set()
+    for entry in sent:
+        key = str(entry.get("key") or "")
+        if not key.startswith("trial-") or is_owner_trial_key(key):
+            continue
+        at = _when(entry.get("sent_at"))
+        if at is None:
+            continue
+        seasons.add(key.split("-")[1])
+        when[key] = min(when.get(key, at), at)
+    out: dict[str, datetime] = {}
+    for who in requested:
+        hits = [when[k] for k in (trial_key(s, who) for s in seasons) if k in when]
+        if hits:
+            out[who] = min(hits)
+    return out
+
+
+def free_to_paid_lines(rows: Iterable[Mapping], sessions: Iterable[Mapping],
+                       now: datetime, since: int | None = None,
+                       owners: Iterable[str] | None = None,
+                       sent: Iterable[Mapping] | None = None) -> list[str]:
+    """Free reports requested, mailed and followed by a purchase, then the
+    rate from a MAILED free report to a purchase within 7 and 14 days of it.
+
+    The denominator is free reports that went out (``free_reports_mailed``,
+    from the send log ``sent``): every Worker row used to count, so a refused,
+    stale or unbuildable request read as somebody who got a report and didn't
+    buy. A mailing younger than the window is counted apart, since it can
+    still convert; the raw counts need no closed window. People are mailboxes
+    as the free report counts them (run.trials.canonical_email); owner and
+    test addresses are left out (run.owner.not_counted), and the owner's own
+    purchases are left out of ``sessions`` by the caller."""
+    from run.digest import DigestError
+    from run.owner import not_counted
     from run.trials import canonical_email
     owners = _owners(owners)
-    first: dict[str, datetime] = {}
-    for row in rows:
-        stamp = _when(row.get("received_at"))
-        if (row.get("kind") == "trial" and row.get("email") and stamp is not None
-                and not is_owner_address(row.get("email"), owners=owners)):
-            who = canonical_email(str(row["email"]))
-            first[who] = min(first.get(who, stamp), stamp)
+    requested = {canonical_email(str(row["email"])) for row in rows
+                 if row.get("kind") == "trial" and row.get("email")
+                 and not not_counted(row["email"], owners)}
+    if sent is None:
+        return [f"  Free reports: {len(requested)} requested",
+                FREE_MAILED_UNKNOWN.format(why="the send log wasn't read")]
+    try:
+        mailed = free_reports_mailed(requested, sent)
+    except DigestError:
+        return [f"  Free reports: {len(requested)} requested",
+                FREE_MAILED_UNKNOWN.format(why="LOG_SECRET isn't set")]
     bought: dict[str, list[datetime]] = defaultdict(list)
     for session in _paid_pass_sessions(sessions, since):
         email = ((session.get("customer_details") or {}).get("email")
@@ -613,15 +667,19 @@ def free_to_paid_line(rows: Iterable[Mapping], sessions: Iterable[Mapping],
         if email and isinstance(session.get("created"), int):
             bought[canonical_email(str(email))].append(
                 datetime.fromtimestamp(session["created"], timezone.utc))
-    window = timedelta(days=FREE_TO_PAID_DAYS)
-    closed = {who: at for who, at in first.items() if at <= now - window}
-    young = len(first) - len(closed)
-    paid = sum(any(at <= b <= at + window for b in bought.get(who, ()))
-               for who, at in closed.items())
-    tail = (f" ({young} asked under {FREE_TO_PAID_DAYS} days ago, not counted yet)"
-            if young else "")
-    return (f"  Free report → paid within {FREE_TO_PAID_DAYS} days: {paid} of "
-            f"{len(closed)}" + tail)
+    paid = sum(any(b >= at for b in bought.get(who, ())) for who, at in mailed.items())
+    lines = [f"  Free reports: {len(requested)} requested, {len(mailed)} mailed, "
+             f"{paid} paid after theirs"]
+    for days in FREE_TO_PAID_WINDOWS:
+        window = timedelta(days=days)
+        closed = {who: at for who, at in mailed.items() if at <= now - window}
+        young = len(mailed) - len(closed)
+        won = sum(any(at <= b <= at + window for b in bought.get(who, ()))
+                  for who, at in closed.items())
+        lines.append(f"  Free report → paid within {days} days of it: {won} of {len(closed)}"
+                     + (f" ({young} mailed under {days} days ago, not counted yet)"
+                        if young else ""))
+    return lines
 
 
 # --------------------------------------------------------------------- #
@@ -1216,7 +1274,8 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
                          f"copy, then pass --registry PATH.")
     # The owner's own teams, and the seats on a pass they bought, are tests:
     # out of every subscriber count, and their mail out of the send counts.
-    sends = send_summary(load_send_log(SENT_LOG), season, send_marks(registry, owners))
+    send_log = load_send_log(SENT_LOG)
+    sends = send_summary(send_log, season, send_marks(registry, owners))
     if registry is not None:
         registry, owner_rows = without_owner_rows(registry, owners)
     if registry is not None and rows is not None:
@@ -1238,7 +1297,7 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
             api_key, now, rows=rows,
             link_plans=parse_link_plans(raw_links),
             season_label=f"{season} season" if since is not None else "ever", since=since,
-            season_2027=season_2027_links(raw_links), owners=owners)
+            season_2027=season_2027_links(raw_links), owners=owners, sent=send_log)
     # The same rule for traffic: one line says why it is missing, the exit
     # code is the rest of the page's.
     # Credentials arrive only through ``cf`` (the command line's), never read

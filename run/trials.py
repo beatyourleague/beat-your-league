@@ -230,6 +230,40 @@ def trial_key(season: str, email: str) -> str:
     return f"trial-{season}-{address(email)}"
 
 
+def row_vias(rows) -> dict[tuple[str, str], str]:
+    """(canonical mailbox, ref) -> the channel tag its free-report row carried
+    (the Worker's ``via``, ^[a-z0-9-]{1,24}$), latest row winning. A tag of
+    any other shape is left out, never cleaned up into one."""
+    from run.refs import VIA_RE
+    out: dict[tuple[str, str], str] = {}
+    for row in sorted(rows, key=lambda r: str(r.get("received_at") or "")):
+        if str(row.get("kind") or "") != "trial":
+            continue
+        via = str(row.get("via") or "").strip()
+        if VIA_RE.fullmatch(via):
+            out[(canonical_email(str(row.get("email") or "")),
+                 str(row.get("ref") or "").strip())] = via
+    return out
+
+
+def trial_ref(roster, via: str | None = None) -> str | None:
+    """The roster a free report was built from, as the ref its buy links
+    carry (render.email.trial_join_url): a MONTHLY ref, so a click on the
+    $14.99 plan never opens on another plan's card, tagged with the channel
+    the request came through or ``trial`` (``with_via`` drops a tag rather
+    than pass Stripe's 200 characters, never the roster). None when the
+    roster can't be written as a ref, which leaves the plain join link."""
+    from render.email import TRIAL_VIA
+    from run.refs import MONTHLY, RefError, VIA_RE, encode_roster
+    tag = via if isinstance(via, str) and VIA_RE.fullmatch(via) else TRIAL_VIA
+    try:
+        return encode_roster(MONTHLY, roster.scoring, roster.slots, roster.player_ids,
+                             league_size=roster.league_size, via=tag,
+                             league_type=roster.league_type)
+    except RefError:
+        return None
+
+
 OWNER_KEY_PART = "owner"
 
 
@@ -559,7 +593,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"(TRIAL_OPEN).", file=sys.stderr)
             return 1
 
-    from render.email import render_email, text_summary
+    from render.email import render_email, text_summary, trial_subject
     from run.refs import decode_roster
     from run.solo import load_week_data, report_for, spec_from_ref
     try:
@@ -575,6 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     digests_of: dict[str, frozenset[str]] = {}
     messages, failed, skipped, refused = [], 0, [], 0
     known = {p.player_id for p in data.directory.players}
+    vias = row_vias(rows)
     for email, ref, key, owner in todo:
         if len(messages) >= limit:
             break                       # the caps count BUILT reports only
@@ -603,6 +638,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  trial not built ({type(exc).__name__}: {exc})")
             continue
         report["meta"]["trial"] = True
+        # The buy links open the join page on this roster (trial_ref), tagged
+        # with the channel the request came through; and the week's first
+        # kickoff, which dates the this-week line (render.email).
+        built_ref = trial_ref(roster, vias.get((email, ref)))
+        if built_ref:
+            report["meta"]["trial_ref"] = built_ref
+        report["meta"]["first_kickoff"] = cutoff.isoformat()
         # Held as served from the moment it is built, so a second request for
         # the same roster in this run is refused too. The owner's own tests
         # are never remembered: a test roster must not refuse a real buyer.
@@ -610,7 +652,7 @@ def main(argv: list[str] | None = None) -> int:
             served.append(digests)
             digests_of[key] = digests
         messages.append(Message(
-            to=email, subject=f"Your free report: Week {data.week}, decided",
+            to=email, subject=trial_subject(report),
             html=render_email(report), text=text_summary(report),
             key=key,
             # No list to leave and no subscription to cancel: a header pointing
