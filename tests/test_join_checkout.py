@@ -173,9 +173,22 @@ def test_open_the_page_says_get_your_lineups_with_the_price_first() -> None:
 
 
 def test_the_menus_gold_item_follows_checkout() -> None:
+    """The join page's Menu says the site's ask in today's words, with the
+    same two labels the generated pages use (render.report.ask_label).
+
+    Reproduction (integration, Nov 4 2026): the landing branch made the static
+    item the open label to match site_bar, while the join branch fell back to
+    the static text when the season closed, so the fallback became the buy
+    label, set after footer.js had pointed the same link at the waitlist: a
+    Menu item reading "Get my lineups" that opened the email capture. A season
+    that is over is now left to footer.js."""
+    from render import report as rr
     menu = _js_function(JOIN, "drawMenuGo")
-    assert 'monthlyLink() && !seasonOver() ? "Get my lineups" : MENU_GO' in menu
-    assert '<a class="go" href="../join/index.html">Check my team free</a>' in JOIN
+    assert "if (!MENU_GO_LINK || seasonOver()) return;" in menu
+    assert "monthlyLink() ? MENU_GO_OPEN : MENU_GO_CLOSED" in menu
+    assert f'const MENU_GO_OPEN = "{rr.SAMPLE_CTA}";' in JOIN
+    assert f'const MENU_GO_CLOSED = "{rr.CHECK_LABEL}";' in JOIN
+    assert f'<a class="go" href="../join/index.html">{rr.ask_label()}</a>' in JOIN
     assert "drawMenuGo();" in _js_function(JOIN, "drawBuyState")
 
 

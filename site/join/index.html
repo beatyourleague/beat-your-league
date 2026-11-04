@@ -2806,11 +2806,14 @@ const MONTHLY_STATE = {};
 const MONTHLY_SUBMIT = $("submit").textContent;
 // The static heading, title and Menu item are the free check's: what the page
 // says when no plan can take money, and what a page whose script never runs
-// says. drawBuyHeading and drawMenuGo put them back when checkout closes.
+// says (the Menu's static item follows render.report.site_menu, so the
+// script names both of its words). drawBuyHeading and drawMenuGo put them
+// back when checkout closes.
 const FREE_HEAD = document.querySelector("header h1").textContent;
 const FREE_TITLE = document.title;
 const MENU_GO_LINK = document.querySelector(".sitemenu-list a.go");
-const MENU_GO = MENU_GO_LINK ? MENU_GO_LINK.textContent : "";
+const MENU_GO_OPEN = "Get my lineups";
+const MENU_GO_CLOSED = "Check my team free";
 
 // A mode that charges nothing shows no checkout step and no currency line.
 function nothingToPay(stepLabel) {
@@ -3267,10 +3270,13 @@ function drawBuyHeading() {
       "refund before your first weekly report's first game."));
 }
 // The Menu's one gold item says what the site's main button says: the buy
-// label while checkout is open, the free check otherwise (the landing's rule).
+// label while checkout is open, the free check while it is closed (the
+// landing's rule). A season that is over is footer.js's: it points this item
+// at the waitlist, and a label set here after it would say one thing and go
+// somewhere else.
 function drawMenuGo() {
-  if (!MENU_GO_LINK) return;
-  MENU_GO_LINK.textContent = monthlyLink() && !seasonOver() ? "Get my lineups" : MENU_GO;
+  if (!MENU_GO_LINK || seasonOver()) return;
+  MENU_GO_LINK.textContent = monthlyLink() ? MENU_GO_OPEN : MENU_GO_CLOSED;
 }
 // The gold under the tally. Shown once the roster checks out and the facts
 // panel stands between the tally and step 3; kept while an edit waits to be

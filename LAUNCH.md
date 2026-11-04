@@ -9,9 +9,9 @@ step below is written for them. The yearly steps that come back in 2027 keep the
 
 ## Now, in order (Nov 3)
 
-The form Worker is live and starts the crons on time, the page counter is on, and the Monthly
-link is on the join page. Checkout can't complete yet, the free report is off, and the League
-Pass is held. What's left, in order:
+The form Worker is live and starts the crons on time, the page counter is on, and your own
+Monthly purchase arrived end to end on Nov 3. Checkout and the free report open with the next
+push (I do that once you say so); the League Pass is held. What's left, in order:
 
 1. **Check what's still yours** (~20 min) — run `gh auth login` once, then `make launch-check`
    ([Where things stand](#where-things-stand)). It confirms the GitHub secrets, the Stripe keys,
@@ -25,15 +25,15 @@ Pass is held. What's left, in order:
 2. **Keep your own visits out of the count** (~10 min) —
    [step 5b](#5b-the-page-counter-10-min-right-after-step-5), items 8 and 11: the Cloudflare rule
    that drops your own page views, and `TRAFFIC_FROM` in `.env` set to the end of today's checks.
-3. **Your own purchase** (~1 hour) — [step 4](#4-the-proving-run-1-hour): first the Stripe
-   webhook for instant delivery (~10 min, "Before you buy"), then the Monthly plan on your own
-   card, every email read in your mail apps. Bought today, or Wednesday before about 5:17pm ET:
-   the welcome and an early look at Week 9's report, then Wednesday evening's report with
-   everyone else. Bought after Wednesday's run and before Thursday's 8:15pm ET kickoff: the
-   welcome and Week 9's report within the hour.
-4. **Tell me it arrived** (~5 min) — [step 6](#6-opening-morning): I turn on
-   `CHECKOUT_CAN_COMPLETE` and the free report together and write today as D in PLAN §6; you
-   set the Worker's `TRIAL_OPEN` the same minute.
+3. **The Worker's free-report switch, right after the opening push** (~5 min) —
+   [step 6](#6-opening-morning), item 1: Worker → **Settings → Variables** → add `TRIAL_OPEN` =
+   `true`, then **Deploy**. Until then the Worker refuses every free-report request.
+4. **Your own addresses** (~5 min) — [step 4](#your-own-addresses-5-min): `OWNER_EMAILS` as a
+   GitHub secret and the same line in `.env`, so your test purchases and free reports stay out
+   of the numbers.
+5. **Apple Pay and Google Pay** (~2 min) — [step 1](#1-fresh-payment-links-25-min), the wallet
+   line: Stripe → **Settings → Payment methods**, both on. Then open the join page on your phone
+   and look for the wallet button on Stripe's page.
 
 **Held on purpose:** the League Pass, until the lawyer
 ([section 12](#12-questions-for-a-lawyer-and-the-wording-waiting-on-them); `STRIPE_LINK_PASS`
@@ -204,6 +204,9 @@ still open one. Make three new links and switch the old ones off.
    Two account settings the links follow:
    - **Settings → Payment methods → Link: Off.** With it on, the checkout shows "Link's
      Terms" beside ours and offers to save the card with a third party.
+   - **Settings → Payment methods → Apple Pay and Google Pay: On** (2 min). Most buyers are
+     on a phone, and a wallet button means paying without typing a card. Check the wallet
+     button shows on your phone during your own purchase (step 4).
    - **Settings → Payments → Adaptive Pricing (local currency): Off.** Every price, renewal
      amount and refund on our pages is in USD; a buyer shown euros or pounds would be charged
      an amount no disclosure names, and renew at whatever the rate is next year.

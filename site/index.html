@@ -1613,8 +1613,8 @@ function season2027Card() {
 }
 // The free report is the hero's second button only while a purchase cannot
 // finish. Once one can, the hero keeps one action and one link (the owner's
-// Oct 31 2026 rule above it), and the free report sits one scroll down: under
-// the price card and in the closer (the CHECKOUT_CAN_COMPLETE branch below).
+// Oct 31 2026 rule above it), and the free report sits one scroll down, one
+// link under the price card (the CHECKOUT_CAN_COMPLETE branch below).
 if (TRIAL_OPEN && !CHECKOUT_CAN_COMPLETE) {
   const tryCta = document.getElementById("try-cta");
   if (tryCta) {

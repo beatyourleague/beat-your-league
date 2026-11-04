@@ -245,7 +245,7 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status (Nov 3 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (3,465 tests passing after owner addresses and opening, Nov 3 2026). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29. The GitHub secrets went in on Nov 2–3 2026 (the manual daily intake ran green) and the Monthly link is back on the join page; checkout opens in its interim state until the owner's own purchase (LAUNCH step 4). Any payment from the Aug–Sep window is swept by the intake now that the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
+**Status (Nov 3 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (3,529 tests passing after the ready-buyer and free-report work, Nov 4 2026). **The only payment ever processed is the owner's own Monthly purchase on Nov 3 2026**, watched end to end. The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29. The GitHub secrets went in on Nov 2–3 2026 (the manual daily intake ran green) and the Monthly link is back on the join page; with the owner's purchase delivered, checkout and the free report open in one push (LAUNCH step 6), the Worker's `TRIAL_OPEN` set the same minute. Any payment from the Aug–Sep window is swept by the intake now that the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
 Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
 probability at report time, grades only after both players' games are final, RULES L1-L4:
 never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
@@ -1643,6 +1643,32 @@ the last week from its first kickoff (how-it-works' rule), the Menu's ask goes t
 capture as "Tell me when it opens" (tag kept) and `[data-free-try]` hides; the landing
 (`#watch-form`) closes its own Menu. footer.js is digest-versioned, so changing it means
 regenerating or re-pasting every footed page (a test fails on a stale digest).
+
+The join page relabels its own Menu item with the same two words
+(`MENU_GO_OPEN`/`MENU_GO_CLOSED`, pinned to `SAMPLE_CTA`/`CHECK_LABEL`) and leaves a season that
+is over to footer.js: relabelling after it had made a "Get my lineups" item that opened the
+waitlist (found at integration, Nov 4 2026).
+
+**The free report asks for the sale (Nov 4 2026, `tests/test_free_report_ask.py`).** Its buy
+links (the price line and the button, "Start my plan") go to `SITE/join/?ref=<ref>` and nothing
+else: `run.trials` re-encodes the request's roster as a Monthly ref tagged with the row's own
+`via` ("trial" when it has none or a bad one; an over-long tag gives way, never the roster) and
+sets `meta["trial_ref"]`. No `?via=`, no `try=1`, no address. Without a `trial_ref` (the operator
+copy, `run/trial.py`) the link stays `join/?via=trial`. The join page sets `window.bylVia` from
+the restored ref and `count.js` uses it on join pages when the URL carries no `?via=`, so the
+click still counts under its channel; count.js never reads the ref. The subject is
+`trial_subject` ("Your free report: Week N, <lead>'s team"), one function for both senders; the
+masthead names the team; the glossary line rides free reports. The ask box reads button, then
+`TRIAL_REFUND`, then `TRIAL_ONLY` as its own block (the final week's waitlist ask has no refund
+line). **Three lines are built and stay off until `SENDER_POSTAL_ADDRESS` exists** (the owner
+launched without one): a dated "join before the <kickoff> and this week's report usually comes
+too" (`meta["first_kickoff"]`, `render.report.eastern`, never the final week or after kickoff),
+`TRIAL_SATURDAY_NOTE` when a plan carries a Saturday promise (it says no more than the landing
+FAQ), and, with byes ahead, an ask naming the bye week. `make stats` counts free report → paid
+against reports MAILED (send-log keys rebuilt with `trial_key` under `LOG_SECRET`, read from the
+shell or `.env`; owner keys and test addresses never count), paid within 7 and 14 days of the
+mail, grouped by `channel_of`; without the log or the key it says why and prints no rate, and the
+dashboard says the same. No follow-up email, ever: the free report promises it is the only one.
 
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
 30. You lost by four." and its answer is "Stop making that call five minutes before kickoff. Every
