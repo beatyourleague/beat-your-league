@@ -318,6 +318,13 @@ def test_every_unconnected_source_shows_its_setup_card(key: str) -> None:
         if key == "plan":
             assert "not connected yet" in page and dash.h(setup) in page
         return
+    if key in dash.CONNECT_SOURCE_STEP:
+        # A source with a step on the Connect card shrinks to one line naming it.
+        step = dash.CONNECT_STEPS[dash.CONNECT_SOURCE_STEP[key] - 1]
+        assert f"{dash.h(label)} isn't connected." in page
+        assert (f"Needs step {step.n}: {dash.h(step.short)}" in page if not step.optional
+                else dash.h(step.how) in page)
+        return
     assert f"{dash.h(label)} — not connected yet" in page or "Not connected" in page
     assert dash.h(setup) in page or re.search(r"step [0-9a-z.]+", setup).group(0) in page
 
@@ -1719,3 +1726,278 @@ def test_a_build_reads_githubs_copy_end_to_end(tmp_path) -> None:
         assert "This checkout is 3 commits behind GitHub" in page
     finally:
         out.unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------- #
+# Connect your dashboard (A4), "includes you" labels (A5), and the
+# dashboard's own registry command (B1)
+# --------------------------------------------------------------------- #
+
+OWNER_VALUE = "owner.one@fans.mail,owner.two@fans.mail"
+LOG_VALUE = "logsecret-0123456789abcdef0123456789"
+ALL_SET = {"OWNER_EMAILS": OWNER_VALUE, "LOG_SECRET": LOG_VALUE,
+           "TRAFFIC_FROM": "2026-10-01T00:00Z", "STRIPE_STATS_KEY": SECRET}
+
+
+def _connected(**over: Source) -> dict[str, Source]:
+    """Every step's source read: the rich scenario already has Stripe,
+    costs, bounces and a registry."""
+    S = rich_sources()
+    S.update(over)
+    return S
+
+
+def _card(page: str) -> str:
+    assert 'id="connect"' in page, "the Connect card is missing"
+    return page.split('id="connect"', 1)[1].split("</ol></div>", 1)[0]
+
+
+def _state(S: dict, env: dict, n: int) -> str:
+    return next(s["state"] for s in dash.connect_steps(S, env) if s["step"].n == n)
+
+
+def test_the_connect_card_lists_seven_numbered_steps_in_order() -> None:
+    """A4: one ordered list of what to connect, each saying what it unlocks
+    and where to put it, under the attention strip."""
+    page = dash.render_page(empty_sources(), NOW, fonts=False, env={})
+    card = _card(page)
+    assert "Connect your dashboard" in page and "0 of 7 done" in card
+    names = ["OWNER_EMAILS", "STRIPE_STATS_KEY", "TRAFFIC_FROM", "make cost", "LOG_SECRET",
+             "RESEND_READ_KEY", "make dashboard-registry"]
+    assert [s.name for s in dash.CONNECT_STEPS] == names
+    at = [card.index(f"<code>{dash.h(n)}</code>") for n in names]
+    assert at == sorted(at)
+    for n in range(1, 8):
+        assert f"<b>{n}</b>" in card
+    # Under the attention strip, above the period switch.
+    assert page.index('class="attn') < page.index('id="connect"') < page.index('class="filters"')
+    # It unlocks what the plan says it does.
+    stripe = dash.CONNECT_STEPS[1].unlocks
+    for word in ("Money", "Profit", "Intake check", "PLAN §6 targets"):
+        assert word in stripe
+    assert "Optional" in card and "make dashboard-registry" in card and "CACHE_KEY" in card
+
+
+@pytest.mark.parametrize("step", dash.CONNECT_STEPS, ids=lambda s: s.name)
+def test_every_step_points_at_a_launch_step_that_says_it(step) -> None:
+    """The LAUNCH.md step each line names must exist and talk about the same
+    thing; a renumbered LAUNCH.md must fail here, not mislead the owner."""
+    text = (dash.REPO_ROOT / "LAUNCH.md").read_text(encoding="utf-8")
+    ref = re.search(r"LAUNCH\.md (?:step|section) ([0-9]+b?)(?:, item ([0-9]+))?", step.how)
+    assert ref, f"step {step.n} names no LAUNCH.md step"
+    num_, item = ref.groups()
+    head = re.search(rf"^## {re.escape(num_)}\. .*$", text, re.M)
+    assert head, f"LAUNCH.md has no section {num_}"
+    nxt = re.search(r"^## ", text[head.end():], re.M)
+    body = text[head.end(): head.end() + nxt.start()] if nxt else text[head.end():]
+    token = {"STRIPE_STATS_KEY": "owner-stats", "make dashboard-registry": "CACHE_KEY"}.get(
+        step.name, step.name)
+    assert token in body, f"LAUNCH.md section {num_} doesn't mention {token}"
+    if item:
+        assert re.search(rf"^\s*{item}\. ", body, re.M), f"section {num_} has no item {item}"
+
+
+def test_each_step_ticks_itself_and_the_card_hides_when_done() -> None:
+    page = dash.render_page(_connected(), NOW, fonts=False, env=ALL_SET)
+    assert 'id="connect"' not in page and "Connect your dashboard" not in page
+    # One name missing brings it back, with that step open and the rest ticked.
+    env = {k: v for k, v in ALL_SET.items() if k != "LOG_SECRET"}
+    card = _card(dash.render_page(_connected(), NOW, fonts=False, env=env))
+    assert "6 of 7 done" in card
+    assert card.count('class="cs done"') == 6 and card.count('class="cs open"') == 1
+    assert "Add LOG_SECRET= to .env" in card
+
+
+def test_step_2_is_never_done_while_step_1_is_open() -> None:
+    """Connecting Stripe without OWNER_EMAILS counts the owner's own test
+    purchase as the first sale, so a read Stripe still waits on step 1."""
+    env = {k: v for k, v in ALL_SET.items() if k != "OWNER_EMAILS"}
+    S = _connected()
+    assert _state(S, env, 1) == "open" and _state(S, env, 2) == "waiting"
+    card = _card(dash.render_page(S, NOW, fonts=False, env=env))
+    assert "do step 1 first" in card and 'class="cs waiting"' in card
+    assert _state(S, ALL_SET, 2) == "done"
+    # Without Stripe, step 2 is open whatever step 1 says.
+    off = _connected(stripe=dash.off("stripe", "No key."))
+    assert _state(off, ALL_SET, 2) == "open"
+    # An OWNER_EMAILS holding nothing usable is not done.
+    junk = {**ALL_SET, "OWNER_EMAILS": "not-an-address"}
+    assert _state(S, junk, 1) == "open" and _state(S, junk, 2) == "waiting"
+
+
+def test_an_optional_step_never_keeps_the_card_up() -> None:
+    S = _connected(bounces=dash.off("bounces", "RESEND_READ_KEY is not in this shell or .env."))
+    page = dash.render_page(S, NOW, fonts=False, env=ALL_SET)
+    assert 'id="connect"' not in page
+    # The bounce line then carries its own how-to, never a link to a hidden card.
+    line = page.split("Resend isn't connected.", 1)[1].split("</p>", 1)[0]
+    assert "RESEND_READ_KEY" in line and "#connect" not in line and "Optional" in line
+
+
+def test_a_typo_in_traffic_from_is_not_a_done_step() -> None:
+    env = {**ALL_SET, "TRAFFIC_FROM": "yesterday"}
+    S = _connected()
+    assert _state(S, env, 3) == "open"
+    card = _card(dash.render_page(S, NOW, fonts=False, env=env))
+    assert "isn&#x27;t a UTC time" in card
+    assert dash.own_flags(env)["visits"] is True
+
+
+def test_costs_tick_step_4_and_hours_alone_do_not() -> None:
+    from run.books import Books, Hours
+    hours_only = Books(costs=[], hours=[Hours(NOW.date(), 1.0, "")], posts=[], problems=[],
+                       found=("hours.csv",))
+    S = _connected(books=dash._source("books", data=hours_only, read_at=NOW))
+    assert _state(S, ALL_SET, 4) == "open"
+    assert "no cost is recorded yet" in _card(dash.render_page(S, NOW, fonts=False, env=ALL_SET))
+    assert _state(_connected(), ALL_SET, 4) == "done"
+
+
+def test_the_card_shows_names_never_values() -> None:
+    env = {**ALL_SET, "RESEND_READ_KEY": "re_live_ABCDEFGHIJKL0123"}
+    S = _connected(registry=dash.off("registry", "Not on this Mac."))
+    page = dash.render_page(S, NOW, fonts=False, env=env)
+    card = _card(page)
+    assert "OWNER_EMAILS" in card and "LOG_SECRET" in card
+    for value in (OWNER_VALUE, *OWNER_VALUE.split(","), LOG_VALUE, SECRET,
+                  "re_live_ABCDEFGHIJKL0123", "2026-10-01T00:00Z"):
+        assert value not in page
+    assert "@" not in card
+    assert dash.set_names(env) >= {"OWNER_EMAILS", "LOG_SECRET", "TRAFFIC_FROM",
+                                   "STRIPE_STATS_KEY", "RESEND_READ_KEY"}
+    assert "STRIPE_API_KEY" not in dash.set_names({**env, "STRIPE_API_KEY": "  "})
+
+
+def test_unconnected_sections_shrink_to_one_line_naming_their_step() -> None:
+    S = rich_sources()
+    S["stripe"] = dash.off("stripe", "No Stripe key in this shell or .env.")
+    S["registry"] = dash.off("registry", "The registry lives sealed in the CI cache.")
+    page = dash.render_page(S, NOW, fonts=False, env={})
+    money = page.split('id="money"', 1)[1].split('id="customers"', 1)[0]
+    assert '<a href="#connect">Needs step 2: Stripe key</a>' in money
+    assert "Stripe — not connected yet" not in page and "Once connected: Plans sold" not in page
+    cust = page.split('id="customers"', 1)[1].split('id="issues"', 1)[0]
+    assert "Needs step 7: Subscriber list" in cust
+    # The KPI tiles say the same in their few words.
+    tiles = re.findall(r'<div class="kpi off"><p class="kl">(Plans sold|Net revenue)</p>'
+                       r'<p class="kval">—</p><p class="ks">.*?</p>', page)
+    assert tiles and all("Needs step 2: Stripe key" in t for t in re.findall(
+        r'<div class="kpi off"><p class="kl">(?:Plans sold|Net revenue)</p><p class="kval">—</p>'
+        r'<p class="ks">(.*?)</p>', page))
+    # A source with no step (the page counter) keeps its full setup card,
+    # and an error is never shrunk to "not connected".
+    S["traffic"] = dash.off("traffic", "CF keys missing.", "LAUNCH.md step 5b, items 6–7")
+    S["bounces"] = dash._source("bounces", status="error", note="That key can only send.")
+    page = dash.render_page(S, NOW, fonts=False, env={})
+    assert "Page counter — not connected yet" in page and "Resend couldn" in page
+
+
+def test_the_issues_all_clear_counts_what_it_could_not_read() -> None:
+    """It used to say every source was healthy while five were never read."""
+    S = rich_sources()
+    for key in ("traffic", "stripe", "bounces", "registry", "books"):
+        S[key] = dash.off(key, "Not connected in this test.")
+    assert dash.sources_read_line(S) == (
+        "Nothing to fix in the 7 sources read; 5 aren’t connected yet.")
+    html = dash.issues_section([], [], S, NOW)
+    assert "Nothing to fix in the 7 sources read; 5 aren’t connected yet." in html
+    assert "healthy" not in html
+    S["stripe"] = dash._source("stripe", status="error", note="boom")
+    assert dash.sources_read_line(S) == (
+        "Nothing to fix in the 7 sources read; 4 aren’t connected yet and 1 couldn’t be read.")
+    one = rich_sources()
+    one["books"] = dash.off("books", "Nothing yet.")
+    assert dash.sources_read_line(one).endswith("; 1 isn’t connected yet.")
+    assert dash.sources_read_line(rich_sources()) == "Nothing to fix in the 12 sources read."
+
+
+def _kl(page: str, label: str) -> list[str]:
+    """The label line of each Overview tile called ``label``."""
+    return re.findall(rf'<div class="kpi"[^>]*><p class="kl">{re.escape(label)}(.*?)</p>', page)
+
+
+def test_counts_holding_the_owners_own_activity_say_so() -> None:
+    """A5: without OWNER_EMAILS and TRAFFIC_FROM the owner's own visits and
+    test purchase read as demand; the counts carry an amber chip until then."""
+    page = dash.render_page(rich_sources(), NOW, fonts=False, env={})
+    assert all(dash.OWN_VISITS in k for k in _kl(page, "Page views")) and _kl(page, "Page views")
+    for label in ("Plans sold", "Net revenue"):
+        assert _kl(page, label) and all(dash.OWN_TESTS in k for k in _kl(page, label))
+    assert dash.OWN_TESTS not in "".join(_kl(page, "Rosters checked"))
+    cust = page.split('id="customers"', 1)[1].split('id="issues"', 1)[0]
+    assert cust.count(dash.OWN_TESTS) == 2      # weekly reports and the other mail
+    assert dash.OWN_VISITS in page.split("<h3>Page views per day", 1)[1].split("</h3>", 1)[0]
+    # Each name clears its own chips.
+    owner_only = dash.render_page(rich_sources(), NOW, fonts=False,
+                                  env={"OWNER_EMAILS": OWNER_VALUE})
+    assert dash.OWN_TESTS not in owner_only and dash.OWN_VISITS in owner_only
+    both = dash.render_page(rich_sources(), NOW, fonts=False,
+                            env={"OWNER_EMAILS": OWNER_VALUE, "TRAFFIC_FROM": "2026-10-01"})
+    assert dash.OWN_TESTS not in both and dash.OWN_VISITS not in both
+
+
+def test_one_day_holding_most_views_is_named() -> None:
+    days = [f"2026-11-0{d}" for d in range(1, 6)]
+    assert dash.one_day_hint(days, [1, 1, 49, 1, 1]) == "49 of 53 views are from Nov 3"
+    assert dash.one_day_hint(days, [10, 10, 40, 0, 0]) == ""         # 67%: not most
+    assert dash.one_day_hint(days, [0, 0, 8, 0, 0]) == ""            # too few to say
+    assert dash.one_day_hint(days, [0, 0, 41, 0, 9]) == "41 of 50 views are from Nov 3"
+    assert dash.one_day_hint(days, [0, 0, 40, 0, 10]) == ""          # exactly 80% is not over
+
+
+def test_the_traffic_card_and_tile_carry_the_one_day_hint() -> None:
+    now = datetime(2026, 11, 4, 16, 0, tzinfo=timezone.utc)
+    lines = [{"day": "2026-11-03", "e": "view", "p": "index", "s": "", "v": "", "n": 49}]
+    lines += [{"day": f"2026-11-0{d}", "e": "view", "p": "join", "s": "", "v": "", "n": 1}
+              for d in (1, 2, 4)]
+    lines.append({"day": "2026-10-30", "e": "view", "p": "join", "s": "", "v": "", "n": 1})
+    rows = [{"e": "view", "p": l["p"], "v": "", "r": "", "d": "d", "s": "", "c": "CA", "n": l["n"]}
+            for l in lines]
+    S = rich_sources(now)
+    S["traffic"] = dash._source("traffic", data={"rows": {"7d": rows, "30d": rows, "all": rows},
+                                                 "daily": lines, "since": ""}, read_at=now)
+    page = dash.render_page(S, now, fonts=False, env={})
+    assert "49 of 53 views are from Nov 3. If that was you testing, step 3 in Connect your " \
+           "dashboard leaves it out." in page
+    assert 'title="Counts page views, never people (privacy §3). 49 of 53 views are from Nov 3"' \
+        in page
+    quiet = dash.render_page(S, now, fonts=False, env={"TRAFFIC_FROM": "2026-10-01"})
+    assert "49 of 53 views are from Nov 3." in quiet and "If that was you" not in quiet
+
+
+def test_the_funnel_says_what_the_counter_skips_and_count_js_agrees() -> None:
+    page = dash.render_page(rich_sources(), NOW, fonts=False, env={})
+    funnel = page.split('id="funnel"', 1)[1].split('id="money"', 1)[0]
+    assert funnel.count(dash.h(dash.COUNTER_SKIPS)) == len(dash.PERIODS)
+    # Every exemption the note names is one count.js really makes.
+    js = (dash.REPO_ROOT / "site" / "count.js").read_text(encoding="utf-8")
+    quiet = js.split("function quiet()", 1)[1].split("function ", 1)[0]
+    for claim, code in (("Global Privacy Control", "globalPrivacyControl"),
+                        ("Do Not Track", "doNotTrack"), ("?nocount=1", '"nocount") === "1"'),
+                        ("automated browsers", "webdriver")):
+        assert claim in dash.COUNTER_SKIPS and code in quiet
+    # "Rosters checked" is one press of Check my roster on the join page.
+    join = (dash.REPO_ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
+    press = join.split('$("resolve").addEventListener("click"', 1)[1].split("});", 1)[0]
+    assert 'bylCount("roster"' in press and "Check my roster" in dash.COUNTER_SKIPS
+
+
+def test_the_page_names_the_dashboards_own_registry_command() -> None:
+    """B1: make stats-registry builds the terminal summary, never this page."""
+    S = rich_sources()
+    entries = S["sends"].data["entries"]
+    S["sends"] = dash._source("sends", data={"entries": entries, "season": "2026", "stopped": 0,
+                                             "summary": stats.send_summary(entries, "2026", None)},
+                              read_at=NOW)
+    assert S["sends"].data["summary"]["note"] == stats.OWNER_MAIL_UNKNOWN
+    S["registry"] = dash._source("registry", status="error", note="unreadable copy")
+    page = dash.render_page(S, NOW, fonts=False, env={})
+    assert "make stats-registry" not in page
+    assert "`make dashboard-registry`" in page          # the send log's note
+    assert "make dashboard-registry" in dash.SOURCE_INFO["registry"][1]
+    assert "CACHE_KEY" in dash.SOURCE_INFO["registry"][1]
+    # make stats keeps its own command, which is right for it.
+    assert "`make stats-registry`" in stats.OWNER_MAIL_UNKNOWN
+    makefile = (dash.REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    recipe = makefile.split("\ndashboard-registry:", 1)[1].split("\n\n", 1)[0]
+    assert "-m run.dashboard --registry" in recipe and "CACHE_KEY" in recipe

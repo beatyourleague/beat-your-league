@@ -485,8 +485,8 @@ address):
   you apart. Test in a browser with Global Privacy Control or Do Not Track turned on (the
   counter then sends nothing), or set `TRAFFIC_FROM` (step 5b, item 11).
 - **Emails to your own subscriptions** are told apart only when `make stats` or the
-  dashboard has a registry copy (`make stats-registry`); without one they're counted, and
-  the page says so.
+  dashboard has a registry copy (`make stats-registry` for the summary,
+  `make dashboard-registry` for the page); without one they're counted, and the page says so.
 
 What it doesn't change: a weekly report still needs a paid plan, the stop list still stops,
 a refund or cancel still ends the plan, and the three-team limit still holds. Nothing prints

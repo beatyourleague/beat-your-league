@@ -184,7 +184,8 @@ SOURCE_INFO = {
                "Payments the hourly intake can't serve (PAID-UNATTRIBUTED)."),
     "sends": ("Send log", "The crons commit data/processed/sent.jsonl; the page reads GitHub's copy",
               "Emails sent per week, welcomes, free reports and stop requests."),
-    "registry": ("Registry", "`make stats-registry` opens a copy; pass --registry PATH",
+    "registry": ("Registry", "`make dashboard-registry` builds this page with a copy (gh signed "
+                             "in, and CACHE_KEY in the shell: read -s CACHE_KEY && export CACHE_KEY)",
                  "Subscribers by plan and League Pass seats claimed against each cap."),
     "bounces": ("Resend", "LAUNCH.md step 2 — a Full access key as RESEND_READ_KEY",
                 "Emails of the last 48 hours that bounced or were marked spam."),
@@ -2279,6 +2280,8 @@ def icon(name: str, klass: str = "ic") -> str:
 def setup_card(src: Source, compact: bool = False) -> str:
     """The friendly empty state: what's missing, how to connect it, what the
     panel will show once data arrives."""
+    if needs_line(src):
+        return needs_line(src)
     if src.status == "error":
         return (f'<div class="empty err{" compact" if compact else ""}">{icon("alert", "eic")}'
                 f'<div><p class="et">{h(src.label)} couldn\'t be read</p>'
@@ -2293,16 +2296,17 @@ def setup_card(src: Source, compact: bool = False) -> str:
 
 
 def kpi(label: str, value: str, chip: str, sparkline: str, sub: str, hint: str = "",
-        missing: Source | None = None, why: str = "") -> str:
+        missing: Source | None = None, why: str = "", flag: str = "") -> str:
     if missing is not None:
         step = re.search(r"step [0-9a-z.]+", missing.setup)
+        why = why or needs_word(missing)
         if not why:
             why = "Not connected" if missing.status == "off" else "Couldn't read"
             why += f" · {step.group(0)}" if step else ""
         return (f'<div class="kpi off"><p class="kl">{h(label)}</p><p class="kval">—</p>'
                 f'<p class="ks">{icon("plug", "ic tiny")} {h(why)}</p></div>')
     title = f' title="{h(hint)}"' if hint else ""
-    return (f'<div class="kpi"{title}><p class="kl">{h(label)}</p>'
+    return (f'<div class="kpi"{title}><p class="kl">{h(label)}{own_chip(flag) if flag else ""}</p>'
             f'<p class="kval">{value}</p><div class="krow">{chip}<span class="ks">{h(sub)}</span></div>'
             f'{sparkline}</div>')
 
@@ -2324,7 +2328,12 @@ def prev_label(m: Metrics) -> str:
     return f"vs previous {m.days} days" if m.days else "all time"
 
 
-def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | None) -> str:
+def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | None,
+             own: Mapping[str, bool] | None = None) -> str:
+    own = own or {}
+    visits = OWN_VISITS if own.get("visits") else ""
+    tests = OWN_TESTS if own.get("tests") else ""
+
     def one(p: str) -> str:
         m = M[p]
         t, mo, fo = m.traffic, m.money, m.forms
@@ -2334,8 +2343,10 @@ def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | No
         cards.append(kpi("Page views", num(t["views"]) if t else "",
                          delta_chip(t["views_delta"]) if t else "", spark(t["spark_views"]) if t else "",
                          prev_label(m) if p != "all" else span_word,
-                         "Counts page views, never people (privacy §3)",
-                         missing=None if t else tr))
+                         "Counts page views, never people (privacy §3)"
+                         + (f". {one_day_hint(t['chart_days'], t['chart'])}"
+                            if t and one_day_hint(t["chart_days"], t["chart"]) else ""),
+                         missing=None if t else tr, flag=visits))
         cards.append(kpi("Rosters checked", num(t["rosters"]) if t else "",
                          delta_chip(t["rosters_delta"]) if t else "",
                          spark(t["spark_rosters"]) if t else "",
@@ -2349,12 +2360,12 @@ def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | No
                          missing=None if t else tr))
         cards.append(kpi("Plans sold", num(mo["count"]) if mo else "",
                          delta_chip(mo["count_delta"]) if mo else "", spark(mo["spark"]) if mo else "",
-                         prev_label(m), missing=None if mo else st))
+                         prev_label(m), missing=None if mo else st, flag=tests))
         cards.append(kpi("Net revenue", money_fmt(mo["net"]) if mo else "",
                          delta_chip(mo["net_delta"]) if mo else "", spark(mo["spark_net"]) if mo else "",
                          f"{money_fmt(mo['gross'])} gross" if mo else "",
                          "After refunds and Stripe's modelled fee (run/economics.py)",
-                         missing=None if mo else st))
+                         missing=None if mo else st, flag=tests))
         pr = m.profit
         if pr is not None and pr["profit"] is not None:
             cards.append(kpi("Profit", money_fmt(pr["profit"]), money_chip(pr["profit"], pr["prev"])
@@ -2385,7 +2396,9 @@ def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | No
                    by_period(one))
 
 
-def traffic_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
+def traffic_section(S: Mapping[str, Source], M: Mapping[str, Metrics],
+                    own: Mapping[str, bool] | None = None) -> str:
+    own = own or {}
     src = S["traffic"]
     if not src.ok:
         return section("traffic", "Traffic", "Where visits come from and what they look at.",
@@ -2422,9 +2435,15 @@ def traffic_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
                       for i, (k, n) in enumerate(devices.most_common()))
         legend = "".join(f'<span class="lg"><i class="sw s{i}"></i>{h(k)} <b>{n / total:.0%}</b></span>'
                          for i, (k, n) in enumerate(devices.most_common()))
-        return (f'<div class="card chartcard"><div class="cardhead"><div><h3>Page views per day</h3>'
+        peak = one_day_hint(t["chart_days"], t["chart"])
+        if peak:
+            peak += (". If that was you testing, step 3 in Connect your dashboard leaves it out."
+                     if own.get("visits") else ".")
+        peak_line = f'<p class="ownhint">{h(peak)}</p>' if peak else ""
+        return (f'<div class="card chartcard"><div class="cardhead"><div><h3>Page views per day'
+                f'{own_chip(OWN_VISITS) if own.get("visits") else ""}</h3>'
                 f'<p class="muted small">{num(t["views"])} views · {span} · UTC days'
-                f'{" · gold pins mark your posts" if marks else ""}</p></div>'
+                f'{" · gold pins mark your posts" if marks else ""}</p>{peak_line}</div>'
                 f'<div class="devices"><div class="segbar">{dev}</div>'
                 f'<div class="legend">{legend}</div></div></div>{chart}</div>'
                 f'<div class="grid2">'
@@ -2526,7 +2545,8 @@ def funnel_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
         table += posts_card(m, S)
         return (f'<div class="card"><div class="cardhead"><div>'
                 f'<h3>Landing → paid</h3><p class="muted small">Step counts in the period. Cookieless, so '
-                f'these are counts of each step, not one cohort of people.</p></div></div>{main}</div>'
+                f'these are counts of each step, not one cohort of people.</p></div></div>{main}'
+                f'<p class="muted small counternote">{h(COUNTER_SKIPS)}</p></div>'
                 f'<div class="grid2"><div class="card"><div class="cardhead"><h3>Free report</h3></div>{tryf}</div>'
                 f'<div class="card"><div class="cardhead"><h3>Bye planner</h3></div>{plan}</div></div>'
                 f'{table}')
@@ -2797,7 +2817,9 @@ def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: dateti
                    "plan's gates.", by_period(one) + season_2027_card(S) + profit + gates)
 
 
-def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime) -> str:
+def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime,
+                      own: Mapping[str, bool] | None = None) -> str:
+    tests = own_chip(OWN_TESTS) if (own or {}).get("tests") else ""
     parts = []
     reg = S["registry"]
     if reg.ok:
@@ -2854,11 +2876,12 @@ def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime
         extras += (f'<li><span>Stop requests on the list</span><b>{num(stopped)}</b></li>'
                    if stopped is not None else "")
         if sends["summary"].get("note"):
-            extras += f'<li class="muted small">{h(sends["summary"]["note"])}</li>'
-        left = (f'<div><div class="cardhead"><div><h3>Weekly reports sent</h3>'
+            extras += f'<li class="muted small">{h(for_dashboard(sends["summary"]["note"]))}</li>'
+        left = (f'<div><div class="cardhead"><div><h3>Weekly reports sent{tests}</h3>'
                 f'<p class="muted small">{h(sends["season"])} season · data/processed/sent.jsonl</p>'
                 f'</div><span class="big">{num(sum(weekly.values()))}</span></div>{chart}</div>')
-        mid = f'<div><h4 class="first">Other mail this season</h4><ul class="kv">{extras}</ul></div>'
+        mid = (f'<div><h4 class="first">Other mail this season{tests}</h4>'
+               f'<ul class="kv">{extras}</ul></div>')
     else:
         left = (f'<div><div class="cardhead"><h3>Emails sent</h3></div>'
                 f'{setup_card(S["sends"], compact=True)}</div>')
@@ -2887,7 +2910,7 @@ def issues_section(issues: list[Issue], health: list[dict], S: Mapping[str, Sour
         body = f'<ol class="issues">{items}</ol>'
     else:
         body = (f'<div class="allclear">{icon("check", "eic")}<div><p class="et">Nothing to resolve</p>'
-                f'<p class="ed">Every source that could be read is healthy.</p></div></div>')
+                f'<p class="ed">{h(sources_read_line(S))}</p></div></div>')
     if health:
         rows = []
         for wf in health:
@@ -3170,6 +3193,265 @@ def freshness(S: Mapping[str, Source], now: datetime, cron: Mapping | None = Non
 
 
 # --------------------------------------------------------------------- #
+# connect your dashboard (the checklist, the "includes you" labels)
+# --------------------------------------------------------------------- #
+
+@dataclass(frozen=True)
+class ConnectStep:
+    n: int
+    short: str            # "Stripe key": the words a muted line uses
+    name: str             # the variable or command the step is about
+    unlocks: str
+    how: str
+    optional: bool = False
+
+
+# The order is the order to do them in. Step 2 waits on step 1: a Stripe key
+# read before OWNER_EMAILS counts the owner's own test purchase as the first
+# real sale (run/owner.py). Step numbers here are the card's own; the LAUNCH.md
+# step that explains each is named in full beside it.
+CONNECT_STEPS = (
+    ConnectStep(1, "Your own addresses", "OWNER_EMAILS",
+                "Your own test purchases, free reports and emails stop counting as customers.",
+                "Add OWNER_EMAILS= to .env with your addresses, comma separated, the same value as "
+                "the GitHub secret (LAUNCH.md step 4, Your own addresses)."),
+    ConnectStep(2, "Stripe key", "STRIPE_STATS_KEY",
+                "Money, the revenue half of Profit, the Intake check and the PLAN §6 targets "
+                "that count sales.",
+                "Add STRIPE_STATS_KEY= to .env with the read-only owner-stats key from your "
+                "password manager (LAUNCH.md step 3, item 2)."),
+    ConnectStep(3, "Your own visits", "TRAFFIC_FROM",
+                "Page views start after your own checks, so the traffic is visitors.",
+                "Add TRAFFIC_FROM= to .env with the UTC time your checks ended, such as "
+                "2026-11-03T23:00Z (LAUNCH.md step 5b, item 11)."),
+    ConnectStep(4, "Your costs", "make cost",
+                "Profit after costs, when you break even and what you earn per hour.",
+                'Record each cost from its receipt: make cost ITEM="Domain" AMOUNT=<receipt> '
+                "REPEATS=yearly (LAUNCH.md section 8, Profit and posts)."),
+    ConnectStep(5, "Send log key", "LOG_SECRET",
+                "Free report → paid: each free report mailed, matched to a later purchase.",
+                "Add LOG_SECRET= to .env, the same value as the GitHub secret, from your "
+                "password manager (LAUNCH.md step 5, item 6)."),
+    ConnectStep(6, "Bounce key", "RESEND_READ_KEY",
+                "Bounces: emails of the last 48 hours that bounced or were marked spam.",
+                "Add RESEND_READ_KEY= to .env with a Full access Resend key (LAUNCH.md step 2, "
+                "item 3). Optional: the hourly run checks bounces without it.",
+                optional=True),
+    ConnectStep(7, "Subscriber list", "make dashboard-registry",
+                "Subscribers by plan, League Pass seats, and which emails went to your own "
+                "subscriptions.",
+                "Run read -s CACHE_KEY && export CACHE_KEY, then make dashboard-registry, with "
+                "gh signed in (CACHE_KEY is in your password manager, LAUNCH.md step 3). It "
+                "builds one page with the list and deletes its copy, so run it when you want them."),
+)
+# The source each step brings in: an unconnected one shrinks to one line
+# naming its step. The intake check has no panel of its own.
+CONNECT_SOURCE_STEP = {"stripe": 2, "books": 4, "bounces": 6, "registry": 7}
+
+
+def set_names(env: Mapping[str, str]) -> frozenset[str]:
+    """Which of the dashboard's names hold something. The values are never
+    kept, compared or shown: only that a name is set."""
+    return frozenset(name for name in (*ENV_NAMES, "CACHE_KEY")
+                     if str(env.get(name) or "").strip())
+
+
+def traffic_from_set(env: Mapping[str, str]) -> bool:
+    """TRAFFIC_FROM holds a time the counter can use. A typo is not set:
+    the traffic source turns it into an error card of its own."""
+    try:
+        return stats.parse_traffic_from(env.get("TRAFFIC_FROM", "")) is not None
+    except ValueError:
+        return False
+
+
+def owners_set(env: Mapping[str, str]) -> bool:
+    """OWNER_EMAILS holds at least one address run/owner.py can use."""
+    from run.owner import owner_addresses
+    return bool(owner_addresses(env))
+
+
+def own_flags(env: Mapping[str, str]) -> dict[str, bool]:
+    """Which counts still hold the owner's own activity: page views until
+    TRAFFIC_FROM is set, sales and sends until OWNER_EMAILS is."""
+    return {"visits": not traffic_from_set(env), "tests": not owners_set(env)}
+
+
+OWN_VISITS = "includes your own visits"
+OWN_TESTS = "includes your own tests"
+
+
+def own_chip(text: str) -> str:
+    step = 1 if text == OWN_TESTS else 3
+    return (f'<span class="ownchip" title="Step {step} in Connect your dashboard leaves '
+            f'you out">{h(text)}</span>')
+
+
+def connect_steps(S: Mapping[str, Source], env: Mapping[str, str]) -> list[dict]:
+    """Each step's state, from the sources and from which names are set.
+    ``state`` is done, open, or waiting (step 2 read while step 1 is open)."""
+    books = S["books"].data if S["books"].ok else None
+    costs = getattr(books, "costs", None) if books is not None else None
+    names = set_names(env)
+    owner = owners_set(env)
+    out = []
+    for step in CONNECT_STEPS:
+        note = ""
+        if step.n == 1:
+            done = owner
+            if not done and "OWNER_EMAILS" in names:
+                note = "OWNER_EMAILS is set but holds no address the page can read."
+        elif step.n == 2:
+            done = S["stripe"].ok and owner
+            if S["stripe"].ok and not owner:
+                note = ("Stripe is read, but do step 1 first: until then your own test purchase "
+                        "counts as a sale.")
+            elif S["stripe"].status == "error":
+                note = "Stripe couldn't be read with this key. The Money section says why."
+        elif step.n == 3:
+            done = traffic_from_set(env)
+            if not done and "TRAFFIC_FROM" in names:
+                note = "TRAFFIC_FROM is set but isn't a UTC time such as 2026-11-03T23:00Z."
+        elif step.n == 4:
+            done = bool(costs)
+            if not done and books is not None:
+                note = "Your books are read, but no cost is recorded yet."
+        elif step.n == 5:
+            done = "LOG_SECRET" in names
+        elif step.n == 6:
+            done = S["bounces"].ok
+            if S["bounces"].status == "error":
+                note = "That Resend key couldn't read sent email. It needs Full access."
+        else:
+            done = S["registry"].ok
+            if S["registry"].status == "error":
+                note = "The registry copy couldn't be read. The Customers section says why."
+        state = "done" if done else ("waiting" if step.n == 2 and S["stripe"].ok else "open")
+        out.append({"step": step, "state": state, "note": note})
+    return out
+
+
+def connect_card(S: Mapping[str, Source], env: Mapping[str, str]) -> str:
+    """Numbered steps that tick themselves. Hidden once every step that isn't
+    optional is done: an optional step never keeps the card up."""
+    steps = connect_steps(S, env)
+    if all(s["state"] == "done" for s in steps if not s["step"].optional):
+        return ""
+    done = sum(s["state"] == "done" for s in steps)
+    items = []
+    for s in steps:
+        step = s["step"]
+        mark = icon("check", "ic") if s["state"] == "done" else f'<b>{step.n}</b>'
+        tag = (' <span class="pill">Optional</span>' if step.optional and s["state"] != "done"
+               else "")
+        body = f'<p class="cs-u">{h(step.unlocks)}</p>'
+        if s["state"] != "done":
+            body += f'<p class="cs-h">{h(step.how)}</p>'
+            if s["note"]:
+                body += f'<p class="cs-n">{h(s["note"])}</p>'
+        items.append(f'<li class="cs {s["state"]}"><span class="cs-m">{mark}</span><div>'
+                     f'<p class="cs-t">{h(step.short)} <code>{h(step.name)}</code>{tag}</p>'
+                     f'{body}</div></li>')
+    return (f'<div class="card connect" id="connect"><div class="cardhead"><div>'
+            f'<h3>Connect your dashboard</h3><p class="muted small">Each step ticks itself on the '
+            f'next build. Names go in the gitignored .env. The page never shows their values.'
+            f'</p></div><span class="unit">{done} of {len(steps)} done</span></div>'
+            f'<ol class="csteps">{"".join(items)}</ol></div>')
+
+
+def needs_line(src: Source) -> str:
+    """An unconnected source with a step on the card, as one muted line."""
+    n = CONNECT_SOURCE_STEP.get(src.key)
+    if src.status != "off" or n is None:
+        return ""
+    step = CONNECT_STEPS[n - 1]
+    if step.optional:
+        # The card can be hidden with this step still open, so the line
+        # carries its own how-to rather than pointing at the card.
+        return (f'<p class="needs">{icon("plug", "ic")} <span>{h(src.label)} isn\'t connected. '
+                f'Optional: {h(step.how)}</span></p>')
+    return (f'<p class="needs">{icon("plug", "ic")} <span>{h(src.label)} isn\'t connected. '
+            f'<a href="#connect">Needs step {n}: {h(step.short)}</a></span></p>')
+
+
+def needs_word(src: Source) -> str:
+    """The same, in the few words a KPI tile has room for."""
+    n = CONNECT_SOURCE_STEP.get(src.key)
+    if src.status != "off" or n is None:
+        return ""
+    return f"Needs step {n}: {CONNECT_STEPS[n - 1].short}"
+
+
+def sources_read_line(S: Mapping[str, Source]) -> str:
+    """What the Issues all-clear may honestly say: how many sources it read
+    and how many it couldn't, never "healthy" over a blind spot."""
+    ok = sum(S[k].ok for k in FRESHNESS_KEYS)
+    off_n = sum(S[k].status == "off" for k in FRESHNESS_KEYS)
+    err = sum(S[k].status == "error" for k in FRESHNESS_KEYS)
+    text = f"Nothing to fix in the {ok} sources read"
+    if not off_n and not err:
+        return text + "."
+    tail = []
+    if off_n:
+        tail.append(f"{off_n} {'isn’t' if off_n == 1 else 'aren’t'} connected yet")
+    if err:
+        tail.append(f"{err} couldn’t be read")
+    return text + "; " + " and ".join(tail) + "."
+
+
+ONE_DAY_SHARE = 0.8
+ONE_DAY_MIN_VIEWS = 10
+
+
+def one_day_hint(days: list[str], values: list[int]) -> str:
+    """"49 of 53 views are from Nov 3" when one day holds most of a period's
+    views: often the owner's own testing, so it is said, never read as demand."""
+    total = sum(values)
+    if total < ONE_DAY_MIN_VIEWS:
+        return ""
+    peak = max(range(len(values)), key=lambda i: values[i])
+    if values[peak] / total <= ONE_DAY_SHARE:
+        return ""
+    return f"{num(values[peak])} of {num(total)} views are from {short_day(days[peak])}"
+
+
+# site/count.js quiet(): no line for GPC, Do Not Track, ?nocount=1 or an
+# automated browser (navigator.webdriver). The join page counts a "roster"
+# event on each press of Check my roster, whatever the check found.
+COUNTER_SKIPS = ("The counter skips browsers that send Global Privacy Control or Do Not Track, "
+                 "any page opened with ?nocount=1, and automated browsers. Rosters checked counts "
+                 "presses of Check my roster only.")
+
+DASHBOARD_REGISTRY = "`make dashboard-registry`"
+
+
+def for_dashboard(text: str) -> str:
+    """make stats' words, pointed at the dashboard's own registry command:
+    `make stats-registry` builds the summary, never this page."""
+    return text.replace("`make stats-registry`", DASHBOARD_REGISTRY)
+
+
+CONNECT_CSS = r"""
+.connect{margin-top:14px;border-left:4px solid var(--warn)}
+.csteps{list-style:none;margin:0;padding:0}
+.cs{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line2)}
+.cs:last-child{border-bottom:0}
+.cs-m{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;
+border:1.5px solid var(--line);color:var(--ink2)}
+.cs.done .cs-m{border-color:var(--good);background:var(--goodbg);color:var(--good)}
+.cs.done .cs-m .ic{width:14px;height:14px}
+.cs-t{font-weight:600;font-size:14.5px}.cs.done .cs-t{color:var(--muted)}
+.cs-u{color:var(--ink2);font-size:14px;margin-top:2px}.cs.done .cs-u{color:var(--muted);font-size:13px}
+.cs-h{color:var(--muted);font-size:13px;margin-top:4px;overflow-wrap:anywhere}
+.cs-n{color:var(--warn);font-size:13px;margin-top:4px}
+.ownchip{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;padding:1px 7px;
+border-radius:999px;background:var(--warnbg);color:var(--warn);vertical-align:1px;white-space:nowrap}
+.ownhint{color:var(--warn);font-size:13px;margin-top:4px}
+.counternote{margin-top:12px}
+"""
+
+
+# --------------------------------------------------------------------- #
 # the page
 # --------------------------------------------------------------------- #
 
@@ -3207,6 +3489,10 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
                 cron: Mapping | None = None) -> str:
     # A source nobody read is an unconnected one, never a crash.
     sources = {**{k: off(k, "Not read this time.") for k in SOURCE_INFO}, **sources}
+    # Which names are set (never their values) tick the Connect card and
+    # label the counts that still hold the owner's own activity.
+    names_env = os.environ if env is None else env
+    own = own_flags(names_env)
     M = {p: metrics_for(sources, p, now) for p, _l, _d in PERIODS}
     sends = sources["sends"].data if sources["sends"].ok else None
     ledger = ledger_view(sources["ledger"], now)
@@ -3239,15 +3525,15 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
         f'{icon("sun", "ic sun")}</button></div>'
         f'<nav class="tabs" aria-label="Sections"><div class="tabsin">{nav}</div></nav></header>'
         f'<main class="wrap">{stale}{AGED_STRIP}'
-        f'{attention(issues)}{launch_status(sources, now)}'
+        f'{attention(issues)}{connect_card(sources, names_env)}{launch_status(sources, now)}'
         f'<div class="filters"><div class="seg" role="group" aria-label="Period">{periods}</div>'
         f'<p class="muted small fnote">Traffic keeps 90 days; money and forms count all time under “All”.</p>'
         f'{freshness(sources, now, cron)}</div>'
-        + overview(sources, M, sends)
-        + traffic_section(sources, M)
+        + overview(sources, M, sends, own=own)
+        + traffic_section(sources, M, own=own)
         + funnel_section(sources, M)
         + money_section(sources, M, now, sends, ledger, ftp)
-        + customers_section(sources, sends, now)
+        + customers_section(sources, sends, now, own=own)
         + issues_section(issues, health, sources, now)
         + record_section(ledger, sources["ledger"])
         + insights_section(insights)
@@ -3257,7 +3543,7 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
     # Everything dynamic lives in the body; the CSS, the script and the
     # inlined fonts are constants of this module.
     body = scrub(body, os.environ if env is None else {**os.environ, **env})
-    css = (font_css(root) if fonts else "") + CSS + FRESH_CSS
+    css = (font_css(root) if fonts else "") + CSS + FRESH_CSS + CONNECT_CSS
     return ('<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             '<meta name="robots" content="noindex, nofollow">'
