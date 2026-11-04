@@ -938,7 +938,7 @@ def test_the_sample_is_not_stale_before_wednesday_evenings_run(monkeypatch) -> N
     hit = [i for i in dash.build_issues(S, late, [], None, dash.metrics_for(S, "7d", late))
            if "sample page" in i.title]
     assert hit and "Wednesday evening's run should have rebuilt it" in hit[0].title
-    assert "git pull" in hit[0].fix[0] and "only before the week's first kickoff" in hit[0].fix[1]
+    assert "build this page again" in hit[0].fix[0] and "only before the week's first kickoff" in hit[0].fix[1]
     # The evening run's own build is fresh, and in a week with a Wednesday
     # game the morning run's build answers for that day.
     assert not dash.site_is_stale("2026-11-04T22:21:00+00:00", late)
@@ -2001,3 +2001,336 @@ def test_the_page_names_the_dashboards_own_registry_command() -> None:
     makefile = (dash.REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     recipe = makefile.split("\ndashboard-registry:", 1)[1].split("\n\n", 1)[0]
     assert "-m run.dashboard --registry" in recipe and "CACHE_KEY" in recipe
+
+
+# --------------------------------------------------------------------- #
+# A6 Today and A7 PLAN §6 pace (branch dash-today)
+# --------------------------------------------------------------------- #
+
+WED = _utc(2026, 11, 4, 15, 0)        # Wed Nov 4 2026, 10 AM ET: D, Week 9's report day
+D_TEXT = "2026-11-04"
+
+
+def _today_sources(now: datetime = WED, *, week: dict | None = None, **extra: Source) -> dict:
+    S = empty_sources(now)
+    S["site"] = dash._source("site", data={"week": week if week is not None else {
+        "season": "2026", "week": 8, "phase": "season", "lands_on": "2026-11-04",
+        "built_at": "2026-10-27T18:04:03+00:00"}, "players_at": None, "switches": {}}, read_at=now)
+    S["plan"] = dash._source("plan", data=dash.parse_plan_gates(plan_text(d=D_TEXT)), read_at=now)
+    S.update(extra)
+    return S
+
+
+def _issue(sev: str, title: str) -> dash.Issue:
+    return dash.Issue(sev, title, ("First step.", "Second step."))
+
+
+def _trial_sends(n: int, at: str = "2026-11-05T15:00:00+00:00") -> Source:
+    entries = [{"key": f"trial-2026-{j:012x}", "sent_at": at, "provider": "resend"} for j in range(n)]
+    return dash._source("sends", data={"entries": entries, "season": "2026", "stopped": 0,
+                                       "summary": stats.send_summary(entries, "2026")}, read_at=WED)
+
+
+def _wf(file: str, *runs: tuple[datetime, str]) -> dict:
+    """One workflow_health entry; ``runs`` are (start, conclusion), "" for one still going."""
+    rows = sorted(({"created_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "status": "completed" if c else "in_progress", "conclusion": c,
+                    "event": "schedule", "url": ""} for at, c in runs),
+                  key=lambda r: r["created_at"], reverse=True)
+    done = [r for r in rows if r["status"] == "completed"]
+    return {"file": file, "label": dict(dash.WORKFLOWS)[file], "last": rows[0] if rows else None,
+            "last_done": done[0] if done else None, "slot": None, "missing": False, "late": None}
+
+
+GITHUB_ON = dash._source("github", data={}, read_at=WED)
+
+
+def _kinds(tasks, kind: str) -> list:
+    return [t for t in tasks if t.kind == kind]
+
+
+def _env(*names: str) -> dict[str, str]:
+    """A shell holding these names, with values the page can parse. The
+    values are never shown; OWNER_EMAILS needs an address to count as set."""
+    vals = {"OWNER_EMAILS": "owner@example.test", "TRAFFIC_FROM": "2026-11-03T23:00Z"}
+    return {n: vals.get(n, "set") for n in names}
+
+
+def test_connect_steps_are_named_in_order_and_carry_no_values() -> None:
+    S = empty_sources()
+    steps = dash.today_connect(S, {})
+    assert [s[0] for s in steps] == ["owner_emails", "stripe", "traffic_from", "costs", "log_secret",
+                                     "resend", "registry"]
+    assert all(len(s) == 5 and isinstance(s[1], bool) and isinstance(s[3], int) for s in steps)
+    assert not any(done for _i, done, *_ in steps)
+    S["stripe"] = dash._source("stripe", data={"sessions": []}, read_at=NOW)
+    names = ("TRAFFIC_FROM", "LOG_SECRET")
+    done = {i: d for i, d, *_ in dash.today_connect(S, _env(*names))}
+    # Stripe read without OWNER_EMAILS would count the owner's test sale.
+    assert done["traffic_from"] and done["log_secret"] and not done["stripe"]
+    stripe_how = next(s[4] for s in dash.today_connect(S, _env(*names)) if s[0] == "stripe")
+    assert "do step 1 first" in stripe_how
+    done = {i: d for i, d, *_ in dash.today_connect(S, _env(*names, "OWNER_EMAILS"))}
+    assert done["owner_emails"] and done["stripe"]
+    S["books"] = dash._source("books", data=books_fixture(), read_at=NOW)
+    S["registry"] = rich_sources()["registry"]
+    done = {i: d for i, d, *_ in dash.today_connect(S, {})}
+    assert done["costs"] and done["registry"]
+
+
+def test_today_and_the_card_read_one_list_of_steps() -> None:
+    """Today's connect row is the card's first open step, done-ness included:
+    two lists of steps once disagreed about when Stripe counted."""
+    S = empty_sources()
+    for env in ({}, _env("OWNER_EMAILS"), _env("OWNER_EMAILS", "TRAFFIC_FROM", "LOG_SECRET")):
+        card = [s["state"] == "done" for s in dash.connect_steps(S, env)]
+        assert card == [d for _i, d, *_ in dash.today_connect(S, env)]
+
+
+def test_the_optional_step_never_reaches_today() -> None:
+    names = _env("OWNER_EMAILS", "TRAFFIC_FROM", "LOG_SECRET")
+    S = _today_sources(stripe=dash._source("stripe", data={"sessions": []}, read_at=WED),
+                       books=dash._source("books", data=books_fixture(), read_at=WED))
+    tasks = dash.today_tasks(S, WED, names, [], [], None, None)
+    assert [t.id for t in _kinds(tasks, "connect")] == ["registry"]
+
+
+def test_today_runs_in_its_fixed_order_and_folds_the_rest_into_later() -> None:
+    issues = [_issue("critical", "Somebody paid and can't be served."),
+              _issue("high", "The last hourly intake run failed."),
+              _issue("high", "Two emails bounced."),
+              _issue("medium", "A medium thing.")]
+    tasks = dash.today_tasks(_today_sources(), WED, {}, issues, [], None, None)
+    assert [t.kind for t in tasks] == ["risk", "risk", "risk", "connect", "rhythm", "selling"]
+    assert tasks[0].title.startswith("Somebody paid") and tasks[0].tone == "bad"
+    assert tasks[0].how == "First step. Then the rest of its steps in Issues."
+    assert not any("medium" in t.title.lower() for t in tasks)
+    assert tasks[3].id == "owner_emails"
+    shown, later = dash.today_split(tasks)
+    assert len(shown) == dash.TODAY_MAX == 5 and [t.kind for t in later] == ["selling"]
+    card = dash.today_html(tasks)
+    assert "Later (1)" in card and card.count('class="task') == 6
+    # 20 + 15 + 15 + 5 + 5 = 60 minutes shown.
+    assert "about 60 min today" in card
+
+
+def test_today_without_github_never_claims_the_report_went_or_was_missed() -> None:
+    tasks = dash.today_tasks(_today_sources(), WED, {}, [], [], None, None)
+    rhythm = _kinds(tasks, "rhythm")[0]
+    assert rhythm.state == "unknown" and "Can't tell until GitHub" in rhythm.how
+    assert rhythm.title == "Read your own Week 9 report once it lands"
+    assert "Can't tell yet" in dash.today_html(tasks)
+    assert "Overdue" not in dash.today_html(tasks)
+
+
+def test_the_wednesday_report_row_follows_github_run_state() -> None:
+    S = _today_sources(github=GITHUB_ON)
+    week_ago = _wf("weekly.yml", (WED - timedelta(days=7), "success"))
+    row = _kinds(dash.today_tasks(S, WED, {}, [], [week_ago], None, None), "rhythm")[0]
+    assert row.state == "open" and "once it lands" in row.title and "5:17 PM ET" in row.how
+    evening = _utc(2026, 11, 4, 23, 0)
+    sent = _wf("weekly.yml", (_utc(2026, 11, 4, 22, 18), "success"))
+    row = _kinds(dash.today_tasks(S, evening, {}, [], [sent], None, None), "rhythm")[0]
+    assert row.title == "Read your own Week 9 report" and "green" in row.how
+    red = _wf("weekly.yml", (_utc(2026, 11, 4, 22, 18), "failure"))
+    assert not _kinds(dash.today_tasks(S, evening, {}, [], [red], None, None), "rhythm")
+    # Once the evening run rebuilt week.json, the week it names is the one sent.
+    S2 = _today_sources(github=GITHUB_ON, week={"season": "2026", "week": 9, "phase": "season",
+                                                "lands_on": "2026-11-11",
+                                                "built_at": "2026-11-04T22:40:00+00:00"})
+    row = _kinds(dash.today_tasks(S2, evening, {}, [], [sent], None, None), "rhythm")[0]
+    assert row.title == "Read your own Week 9 report"
+
+
+def test_saturday_and_monday_rows_and_no_row_on_other_days() -> None:
+    sat = _utc(2026, 11, 7, 14, 0)                     # 9 AM ET, before 11:17
+    S = _today_sources(sat, github=GITHUB_ON)
+    row = _kinds(dash.today_tasks(S, sat, {}, [], [_wf("saturday.yml")], None, None), "rhythm")[0]
+    assert "Saturday" in row.title and "11:17 AM ET" in row.how and "unless it goes red" in row.how
+    later = _utc(2026, 11, 7, 18, 0)
+    green = _wf("saturday.yml", (_utc(2026, 11, 7, 16, 18), "success"))
+    assert not _kinds(dash.today_tasks(S, later, {}, [], [green], None, None), "rhythm")
+    going = _wf("saturday.yml", (_utc(2026, 11, 7, 16, 18), ""))
+    row = _kinds(dash.today_tasks(S, later, {}, [], [going], None, None), "rhythm")[0]
+    assert row.how == "It's running now."
+    row = _kinds(dash.today_tasks(S, later, {}, [], [_wf("saturday.yml")], None, None), "rhythm")[0]
+    assert "hasn't started" in row.how and "missed" not in row.how.lower()
+    mon = _utc(2026, 11, 9, 15, 0)
+    row = _kinds(dash.today_tasks(_today_sources(mon), mon, {}, [], [], None, None), "rhythm")[0]
+    assert "Monday" in row.title and row.state == "unknown"
+    tue = _utc(2026, 11, 10, 15, 0)
+    assert not _kinds(dash.today_tasks(_today_sources(tue, github=GITHUB_ON), tue, {}, [], [],
+                                       None, None), "rhythm")
+
+
+def test_a_missed_monday_grading_leads_only_while_calls_wait() -> None:
+    wf = {**_wf("monday.yml"), "missing": True, "slot": _utc(2026, 11, 3, 13, 17)}
+    tasks = dash.today_tasks(_today_sources(), WED, {}, [], [wf], {"pending": 3, "graded": 0}, None)
+    assert tasks[0].kind == "risk" and "3 calls wait to be graded" in tasks[0].title
+    assert "Tue 8:17 AM ET" in tasks[0].title and "monday-receipts" in tasks[0].how
+    tasks = dash.today_tasks(_today_sources(), WED, {}, [], [wf], {"pending": 0, "graded": 4}, None)
+    assert not _kinds(tasks, "risk")
+
+
+def _secrets_gate(status: str, detail: str) -> Source:
+    return dash._source("launch", data={"gates": [{"area": "Owner", "status": status, "detail": detail,
+                                                   "name": "GitHub Actions secrets are set"}]},
+                        read_at=WED)
+
+
+def test_deadlines_show_inside_14_days_and_never_overdue_when_unknown() -> None:
+    assert not _kinds(dash.today_tasks(_today_sources(), WED, {}, [], [], None, None), "deadline")
+    dec30 = _utc(2026, 12, 30, 15, 0)
+    missing = _secrets_gate("OWNER", "missing: SENDER_POSTAL_ADDRESS — the sender line is off")
+    rows = _kinds(dash.today_tasks(_today_sources(dec30, launch=missing), dec30, {}, [], [],
+                                   None, None), "deadline")
+    assert [t.id for t in rows] == ["owned_list", "sender_address"]
+    assert rows[1].title == "Set SENDER_POSTAL_ADDRESS by Jan 11" and rows[1].state == "open"
+    present = _secrets_gate("PASS", "all 9 present")
+    assert [t.id for t in _kinds(dash.today_tasks(_today_sources(dec30, launch=present), dec30, {},
+                                                  [], [], None, None), "deadline")] == ["owned_list"]
+    other = _secrets_gate("OWNER", "missing: CACHE_KEY — the cache is off")
+    assert [t.id for t in _kinds(dash.today_tasks(_today_sources(dec30, launch=other), dec30, {},
+                                                  [], [], None, None), "deadline")] == ["owned_list"]
+    cant = _secrets_gate("OWNER", "can't read them from this machine (gh not signed in)")
+    row = next(t for t in dash.today_tasks(_today_sources(dec30, launch=cant), dec30, {}, [], [],
+                                           None, None) if t.id == "sender_address")
+    assert row.state == "unknown" and "gh auth login" in row.how
+    jan12 = _utc(2027, 1, 12, 15, 0)
+    over = _kinds(dash.today_tasks(_today_sources(jan12, launch=missing), jan12, {}, [], [],
+                                   None, None), "deadline")
+    assert [t.state for t in over] == ["overdue"] and "it was due Jan 11" in over[0].title
+    # Unknown, or a decision only the owner knows: never overdue.
+    assert not _kinds(dash.today_tasks(_today_sources(jan12), jan12, {}, [], [], None, None),
+                      "deadline")
+
+
+def test_every_deadline_is_still_written_in_launch_md() -> None:
+    launch = (dash.REPO_ROOT / "LAUNCH.md").read_text(encoding="utf-8")
+    for dl in dash.DEADLINES:
+        assert dl["launch_text"] in launch, dl["id"]
+        assert f"{dl['due']:%b} {dl['due'].day}" in dl["launch_text"], dl["id"]
+        year = re.search(r"\b(20\d\d)\b", dl["launch_text"])
+        assert not year or int(year.group(1)) == dl["due"].year
+
+
+def test_the_selling_row_names_the_next_draft_only_when_it_is_this_weeks() -> None:
+    from run.economics import SELLING_MIN_PER_DAY
+    drafts = "# Week 9 posts — drafts, not posted\n\n## 1. The closest call (158/280)\n\ntext\n"
+    week = {"season": "2026", "week": 9, "phase": "season", "lands_on": "2026-11-11",
+            "built_at": "2026-11-04T22:40:00+00:00"}
+    thu = _utc(2026, 11, 5, 15, 0)
+    S = _today_sources(thu, week=week)
+    row = _kinds(dash.today_tasks(S, thu, {}, [], [], None, drafts), "selling")[0]
+    assert row.minutes == SELLING_MIN_PER_DAY and "“The closest call”" in row.how
+    row = _kinds(dash.today_tasks(S, thu, {}, [], [], None, drafts.replace("Week 9", "Week 8")),
+                 "selling")[0]
+    assert "Week 8's" in row.how and "replies" in row.how
+    # On the next report's day the drafts are last week's, whatever they say.
+    wed = _utc(2026, 11, 11, 15, 0)
+    row = _kinds(dash.today_tasks(S, wed, {}, [], [], None, drafts), "selling")[0]
+    assert "Week 9's" in row.how
+    row = _kinds(dash.today_tasks(S, thu, {}, [], [], None, None), "selling")[0]
+    assert "No drafts" in row.how
+    over = _today_sources(thu, week={**week, "phase": "over"})
+    assert not [t for t in dash.today_tasks(over, thu, {}, [], [], None, drafts)
+                if t.kind in ("selling", "rhythm")]
+
+
+def test_the_today_card_sits_above_everything_else_on_the_page() -> None:
+    page = dash.render_page(rich_sources(), NOW, fonts=False)
+    assert page.index('id="today"') < page.index('class="attn') < page.index('id="overview"')
+    assert re.search(r"about \d+ min today", page)
+    card = page.split('id="today"', 1)[1].split('class="attn', 1)[0]
+    for word in ("calibrated", "tested", "proven", "accurate", " just ", "exactly", "—"):
+        assert word not in card.lower(), word
+
+
+def test_today_never_shows_a_secret_or_an_address() -> None:
+    env = {"STRIPE_STATS_KEY": SECRET, "OWNER_EMAILS": LEAK, "LOG_SECRET": "x" * 40}
+    page = dash.render_page(rich_sources(), NOW, fonts=False, env=env)
+    card = page.split('id="today"', 1)[1].split('class="attn', 1)[0]
+    assert SECRET not in page and LEAK not in page and "x" * 40 not in page
+    assert "Add OWNER_EMAILS" not in card       # set, so the step is done
+
+
+def test_gate_read_by_dates() -> None:
+    d, today = date(2026, 11, 4), date(2026, 11, 4)
+    assert dash.gate_read_by("D+14", d, today) == date(2026, 11, 18)
+    assert dash.gate_read_by("D+28", d, today) == date(2026, 12, 2)
+    assert dash.gate_read_by("Dec 22 (Week 16)", d, today) == date(2026, 12, 22)
+    assert dash.gate_read_by("D+14 after each League Pass", d, today) is None
+    assert dash.gate_read_by("D+14", None, today) is None
+    assert dash.gate_read_by("Jan 5", d, today) == date(2027, 1, 5)
+
+
+def _gate(targets: list[dict], word: str) -> dict:
+    return next(t for t in targets if word in t["metric"].lower())
+
+
+def test_a_target_behind_a_straight_line_from_d_is_todays_action() -> None:
+    nov11 = _utc(2026, 11, 11, 15, 0)             # 7 of 14 days gone: 10 of 20 by now
+    S = _today_sources(nov11, sends=_trial_sends(4))
+    t = _gate(dash.plan_targets(S, nov11, S["sends"].data, None, S["registry"]), "free reports")
+    assert t["state"] == "behind_pace" and t["expected"] == 10 and t["days_left"] == 7
+    assert t["pace"] == ("4 of 20 · 7 days left · about 2.3 a day needed · a straight line from D "
+                         "says 10 by now")
+    tasks = dash.today_tasks(S, nov11, {}, [], [], None, None)
+    row = _kinds(tasks, "target")[0]
+    assert row.title.endswith("4 of 20 by Nov 18, behind pace") and row.minutes == 0
+    assert row.how.startswith("About 2.3 a day from here")
+    assert "in selling time" in dash.today_html(tasks)
+    gates = dash.gates_html(S, nov11, S["sends"].data, None, S["registry"])
+    assert "Behind pace" in gates and "a straight line from D says 10 by now" in gates
+    # Under the red line (<10) but before its read-by date: no red action yet.
+    assert not t["red_now"] and "PLAN §6 says:" not in gates
+    # On the line is on pace, and no row.
+    S = _today_sources(nov11, sends=_trial_sends(10))
+    t = _gate(dash.plan_targets(S, nov11, S["sends"].data, None, S["registry"]), "free reports")
+    assert t["state"] == "on_pace"
+    assert not _kinds(dash.today_tasks(S, nov11, {}, [], [], None, None), "target")
+
+
+def test_past_its_date_and_red_shows_plans_own_words() -> None:
+    nov20 = _utc(2026, 11, 20, 15, 0)
+    S = _today_sources(nov20, sends=_trial_sends(5))
+    red = _gate(S["plan"].data["gates"], "free reports")["red"]
+    assert "the selling hours aren't happening" in red      # PLAN.md's own words
+    t = _gate(dash.plan_targets(S, nov20, S["sends"].data, None, S["registry"]), "free reports")
+    assert t["state"] == "missed" and t["red_now"]
+    gates = dash.gates_html(S, nov20, S["sends"].data, None, S["registry"])
+    assert "PLAN §6 says:" in gates and dash.h(red) in gates and "Missed" in gates
+    row = _kinds(dash.today_tasks(S, nov20, {}, [], [], None, None), "target")[0]
+    assert row.how == f"PLAN §6 says: {red}" and "when it was read on Nov 18" in row.title
+    # Short of green but not over the red line: missed, and no red action.
+    S = _today_sources(nov20, sends=_trial_sends(15))
+    t = _gate(dash.plan_targets(S, nov20, S["sends"].data, None, S["registry"]), "free reports")
+    assert t["state"] == "missed" and not t["red_now"]
+    assert "PLAN §6 says:" not in dash.gates_html(S, nov20, S["sends"].data, None, S["registry"])
+
+
+def test_an_unmeasurable_target_names_what_is_missing() -> None:
+    S = _today_sources()
+    gates = dash.gates_html(S, WED, None, None, S["registry"])
+    assert "Not measurable here" not in gates
+    assert "Needs STRIPE_STATS_KEY in .env" in gates and "Needs the send log, which this build couldn&#x27;t read" in gates
+    assert "Needs the registry (make dashboard-registry)" in gates
+    assert "Needs the public record, which this build couldn&#x27;t read" in gates
+    S["stripe"] = dash._source("stripe", status="error", note="boom")
+    assert dash.h("Stripe couldn't be read this time") in dash.gates_html(S, WED, None, None,
+                                                                          S["registry"])
+
+
+def test_a_refund_rate_under_the_floor_is_a_raw_count_never_a_percent() -> None:
+    now = _utc(2026, 11, 6, 15)
+    sessions = stripe_sessions()[:3]
+    for k, s in enumerate(sessions):
+        s.update(created=int(_utc(2026, 11, 5, 12 + k).timestamp()), full_refund=k == 0,
+                 refunded=s["amount"] if k == 0 else 0.0, dispute=None)
+    S = _today_sources(now, stripe=dash._source(
+        "stripe", data={"sessions": sessions, "link_map": True, "dispute_errors": 0}, read_at=now))
+    t = _gate(dash.plan_targets(S, now, None, None, S["registry"]), "refund rate")
+    assert t["state"] == "few" and t["cur_text"] == "1 of 3 refunded"
+    row = next(r for r in dash.gates_html(S, now, None, None, S["registry"]).split("<tr>")
+               if "Refund rate" in r)
+    assert '<td class="num">1 of 3 refunded</td>' in row and "Too few to judge" in row

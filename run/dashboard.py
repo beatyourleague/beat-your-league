@@ -834,10 +834,16 @@ def collect_site(ctx: Context) -> Source:
         github = ctx.cron is not None and ctx.cron.source == "github"
         players_at = _git_time(ctx.root, "site/join/players.json",
                                CRON_REF if github else "HEAD")
+    try:
+        # The week's drafted posts, for Today's selling row: committed by the
+        # Wednesday cron, so read from the same copy as the rest.
+        drafts = cron_file(ctx, "content/this-week.md").read_text(encoding="utf-8")
+    except OSError:
+        drafts = None
     keep = ("season", "week", "last_week", "built_at", "phase", "lands_on", "first_kickoff")
     return _source("site", data={"week": {k: week.get(k) for k in keep}
                                  if isinstance(week, dict) else None,
-                                 "players_at": players_at,
+                                 "players_at": players_at, "drafts": drafts,
                                  "switches": launch_switches(ctx.root)}, read_at=ctx.now)
 
 
@@ -1731,7 +1737,7 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
                                     clip(g["detail"] or ""), "", "Launch check"))
 
     site = sources["site"].data if sources["site"].ok else None
-    rebuild_fix = ("If weekly-report's last evening run is green, git pull and build this page again.",
+    rebuild_fix = ("If weekly-report's last evening run is green, build this page again: it reads GitHub's copy.",
                    "Re-run weekly-report only if that run failed, and only before the week's "
                    "first kickoff: a run in the afternoon sends the week's reports early.")
     if site and site.get("week") and site["week"].get("phase", "season") == "season":
@@ -2585,6 +2591,188 @@ def posts_card(m: Metrics, S: Mapping[str, Source]) -> str:
             f'<tbody>{trs}</tbody></table></div>{more}</div>')
 
 
+# --- PLAN §6 targets, with pace (A7) ---------------------------------- #
+
+# What each PLAN §6 metric is read from, and what to connect when it can't
+# be: (a word of the metric, the source key, what is missing).
+GATE_NEEDS = (
+    ("free reports sent", "sends", "the send log, which this build couldn't read"),
+    ("purchases + league passes", "stripe", "STRIPE_STATS_KEY in .env"),
+    ("paid purchases", "stripe", "STRIPE_STATS_KEY in .env"),
+    ("refund rate", "stripe", "STRIPE_STATS_KEY in .env"),
+    ("graded rows", "ledger", "the public record, which this build couldn't read"),
+    ("seats claimed", "registry", "the registry (make dashboard-registry)"),
+)
+
+
+def gate_needs(metric: str, S: Mapping[str, Source]) -> str:
+    """What a PLAN §6 row needs before it can be measured here, named."""
+    low = metric.lower()
+    for word, key, what in GATE_NEEDS:
+        if word in low:
+            if S[key].status == "error":
+                return f"{S[key].label} couldn't be read this time"
+            return f"Needs {what}"
+    return "Not measurable here"
+
+
+def gate_read_by(read_by: str, d: date | None, today: date) -> date | None:
+    """The calendar day a PLAN §6 row is read on: "D+14" is D plus 14 days,
+    "Dec 22 (Week 16)" is that day in the season D falls in. None when it
+    can't be said (D unwritten, or "after each League Pass", which is a
+    date per pass)."""
+    text = read_by.strip()
+    if "after each" in text.lower():
+        return None
+    plus = re.match(r"D\+(\d+)\b", text)
+    if plus:
+        return d + timedelta(days=int(plus.group(1))) if d else None
+    named = re.match(r"([A-Z][a-z]{2})\w*\.? (\d{1,2})\b", text)
+    if not named:
+        return None
+    base = d or today
+    try:
+        when = datetime.strptime(f"{named.group(1)} {named.group(2)} {base.year}", "%b %d %Y").date()
+    except ValueError:
+        return None
+    return when if when >= base else when.replace(year=when.year + 1)
+
+
+def per_day_text(remaining: float, days_left: int) -> str:
+    """How many a day close the gap by the read-by date, in words."""
+    rate = remaining / max(days_left, 1)
+    if rate >= 1:
+        return f"about {f'{rate:.1f}'.rstrip('0').rstrip('.')} a day"
+    every = round(1 / rate) if rate > 0 else 0
+    return "about 1 a day" if every <= 1 else f"about 1 every {every} days"
+
+
+def red_line_crossed(red: str, current: float | None, target: float | None) -> bool | None:
+    """Is ``current`` over PLAN §6's own red line ("<10", "≥25%", "Fewer")?
+    None when the cell can't be read or nothing was measured."""
+    if current is None:
+        return None
+    head = red.split("→")[0].strip()
+    found = re.match(r"([<>≥≤])\s*(\d+(?:\.\d+)?)", head)
+    if found:
+        n = float(found.group(2))
+        return {"<": current < n, ">": current > n, "≥": current >= n,
+                "≤": current <= n}[found.group(1)]
+    if head.lower().startswith("fewer") and target is not None:
+        return current < target
+    return None
+
+
+def plan_targets(S: Mapping[str, Source], now: datetime, sends: dict | None,
+                 ledger: dict | None, registry: Source) -> list[dict]:
+    """PLAN §6's rows as measured here, each with its pace: current against
+    target, days left, how many a day close the gap, and on or behind a
+    straight line from D to the read-by date. Raw counts below a floor,
+    never a rate. Past the read-by date and over the red line, PLAN's own
+    red-action text rides along, word for word."""
+    plan = S["plan"]
+    if not plan.ok:
+        return []
+    data = plan.data
+    since = plan_start(data)
+    d = since.date() if since else None
+    today = now.astimezone(ET).date()
+    paid = paid_since(S["stripe"], since, now)
+    out = []
+    for g in data["gates"]:
+        metric = g["metric"]
+        low = metric.lower()
+        current, frac, state, extra, cur_text = None, None, "unmeasured", g.get("extra"), None
+        target = re.search(r"([≥≤~])\s*(\d+(?:\.\d+)?)(%?)", g["green"])
+        tnum = float(target.group(2)) if target else None
+        # "~30 + 2" reads as at least about 30 for pace; only "≤" caps.
+        op = "≤" if target and target.group(1) == "≤" else "≥"
+        if "free reports sent" in low and sends is not None:
+            from run.trials import is_owner_trial_key
+            current = sum(1 for e in sends["entries"]
+                          if e["key"].startswith(f"trial-{sends['season']}-")
+                          and not is_owner_trial_key(e["key"])
+                          and (since is None or (_ts(e["sent_at"]) or now) >= since))
+        elif "purchases + league passes" in low and S["stripe"].ok:
+            current = len(paid)
+            lp = sum(1 for s in paid if (s.get("pass") or "").startswith("League"))
+            extra = f"{lp} League Pass{'es' if lp != 1 else ''}"
+        elif "paid purchases" in low and S["stripe"].ok:
+            current = len(paid)
+        elif "refund rate" in low and S["stripe"].ok:
+            refunds = sum(bool(s.get("full_refund")) for s in paid)
+            if len(paid) < MIN_REFUND_SAMPLE:
+                # A rate of one or two purchases is noise: the raw count.
+                state = "few"
+                cur_text = (f"{refunds} of {len(paid)} refunded" if paid else "no purchases yet")
+            else:
+                current = 100 * refunds / len(paid)
+        elif "graded rows" in low and ledger is not None:
+            current = ledger["graded"]
+        elif "seats claimed" in low and registry.ok:
+            seats = registry.data["seats"]
+            current = sum(n for n, _c in seats)
+            extra = ", ".join(f"{n} of {c}" for n, c in seats) or "no pass yet"
+            if seats and "half" in g["green"].lower():
+                # "≥ half its seat_cap", per pass: on track only when every pass is.
+                frac = min(min((n / c) / 0.5 if c else 1 for n, c in seats), 1)
+                state = "met" if frac >= 1 else "behind"
+        when = gate_read_by(g["read_by"], d, today)
+        days_left = (when - today).days if when else None
+        pace, expected, red_now = "", None, None
+        if current is not None and tnum is None and state == "unmeasured":
+            state = "tracking"
+        if current is not None and tnum is not None:
+            if op == "≥":
+                frac = min(current / tnum, 1) if tnum else 1
+                done = current >= tnum
+            else:
+                frac = 1 if current <= tnum else max(0.0, tnum / current)
+                done = current <= tnum
+            if done:
+                state = "met"
+            elif when is not None and days_left < 0:
+                state = "missed"
+            elif op == "≥" and when is not None and d is not None:
+                # A straight line from D to the read-by date, in whole items.
+                span = max((when - d).days, 1)
+                gone = min(max((today - d).days, 0), span)
+                expected = math.floor(tnum * gone / span)
+                state = "on_pace" if current >= expected else "behind_pace"
+            else:
+                state = "behind"
+            if when is not None and days_left < 0 and not done:
+                red_now = red_line_crossed(g["red"], current, tnum)
+            if op == "≥":
+                pace = f"{num(current)} of {tnum:g}"
+                if not done and when is not None and days_left >= 0:
+                    pace += (f" · {_n(days_left, 'day')} left · "
+                             f"{per_day_text(tnum - current, days_left)} needed")
+                    if state == "behind_pace":
+                        pace += f" · a straight line from D says {expected} by now"
+                elif not done and when is not None:
+                    pace += f" · read on {when:%b} {when.day}"
+        if cur_text is None:
+            cur_text = ("—" if current is None else
+                        f"{current:.0f}%" if "refund rate" in low else num(current))
+        read_label = g["read_by"]
+        if d and g["read_by"].startswith("D+") and when:
+            read_label = f"{g['read_by']} · {when:%b} {when.day}"
+        out.append({"metric": metric, "green": g["green"], "red": g["red"],
+                    "read_by": read_label, "when": when, "days_left": days_left,
+                    "current": current, "cur_text": cur_text, "target": tnum, "op": op,
+                    "frac": frac, "state": state, "pace": pace, "extra": extra,
+                    "expected": expected, "red_now": bool(red_now),
+                    "needs": gate_needs(metric, S) if state == "unmeasured" else ""})
+    return out
+
+
+GATE_PILLS = {"met": ("good", "Met"), "on_pace": ("good", "On pace"),
+              "behind_pace": ("warn", "Behind pace"), "behind": ("warn", "Behind"),
+              "missed": ("warn", "Missed"), "tracking": ("", "Tracking"),
+              "few": ("", "Too few to judge")}
+
+
 def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledger: dict | None,
                registry: Source) -> str:
     plan = S["plan"]
@@ -2597,63 +2785,25 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
     # before D (the owner's own test) must not sit in the rate forever.
     paid = paid_since(S["stripe"], since, now)
     rows = []
-    for g in data["gates"]:
-        metric = g["metric"]
-        low = metric.lower()
-        current, frac, state = None, None, "unmeasured"
-        target = re.search(r"([≥≤])\s*(\d+(?:\.\d+)?)(%?)", g["green"])
-        tnum = float(target.group(2)) if target else None
-        if "free reports sent" in low and sends is not None:
-            from run.trials import is_owner_trial_key
-            current = sum(1 for e in sends["entries"]
-                          if e["key"].startswith(f"trial-{sends['season']}-")
-                          and not is_owner_trial_key(e["key"])
-                          and (since is None or (_ts(e["sent_at"]) or now) >= since))
-        elif "paid purchases" in low and S["stripe"].ok:
-            current = len(paid)
-        elif "refund rate" in low and S["stripe"].ok:
-            current = (100 * sum(bool(s.get("full_refund")) for s in paid) / len(paid)
-                       if paid else None)
-        elif "purchases + league passes" in low and S["stripe"].ok:
-            current = len(paid)
-            lp = sum(1 for s in paid if (s.get("pass") or "").startswith("League"))
-            g = {**g, "extra": f"{lp} League Pass{'es' if lp != 1 else ''}"}
-        elif "graded rows" in low and ledger is not None:
-            current = ledger["graded"]
-        elif "seats claimed" in low and registry.ok:
-            seats = registry.data["seats"]
-            current = sum(n for n, _c in seats)
-            g = {**g, "extra": ", ".join(f"{n} of {c}" for n, c in seats) or "no pass yet"}
-            if seats and "half" in g["green"].lower():
-                # "≥ half its seat_cap", per pass: on track only when every pass is.
-                frac = min(min((n / c) / 0.5 if c else 1 for n, c in seats), 1)
-                state = "met" if frac >= 1 else "behind"
-        if current is not None and tnum is None and state == "unmeasured":
-            state = "tracking"
-        if current is not None and tnum is not None:
-            if target.group(1) == "≥":
-                frac = min(current / tnum, 1) if tnum else 1
-                state = "met" if current >= tnum else "behind"
-            else:
-                frac = 1 if current <= tnum else max(0.0, tnum / current)
-                state = "met" if current <= tnum else "behind"
-        read_by = g["read_by"]
-        if d_date and read_by.startswith("D+"):
-            n = re.match(r"D\+(\d+)", read_by)
-            if n:
-                when = date.fromisoformat(d_date) + timedelta(days=int(n.group(1)))
-                read_by = f"{read_by} · {when:%b} {when.day}"
-        cur = ("—" if current is None else
-               f"{current:.0f}%" if "refund rate" in low else num(current))
-        pill = {"met": '<span class="pill good">On track</span>',
-                "behind": '<span class="pill warn">Behind</span>',
-                "tracking": '<span class="pill">Tracking</span>',
-                "unmeasured": '<span class="pill">Not measurable here</span>'}[state]
-        bar = (f'<span class="meter"><i class="{state}" style="width:{frac * 100:.0f}%"></i></span>'
-               if frac is not None else '<span class="meter"></span>')
-        rows.append(f'<tr><td class="nowrap">{h(read_by)}</td><td>{h(metric)}'
-                    f'{"<br><span class=muted>" + h(g["extra"]) + "</span>" if g.get("extra") else ""}</td>'
-                    f'<td class="nowrap">{h(g["green"])}</td><td class="num">{h(cur)}</td>'
+    for t in plan_targets(S, now, sends, ledger, registry):
+        state = t["state"]
+        if state == "met" and t["op"] == "≤":
+            pill = '<span class="pill good">On track</span>'
+        elif state == "unmeasured":
+            pill = f'<span class="pill">{h(t["needs"])}</span>'
+        else:
+            tone, word = GATE_PILLS[state]
+            pill = f'<span class="{"pill " + tone if tone else "pill"}">{h(word)}</span>'
+        klass = "met" if state in ("met", "on_pace") else "behind"
+        bar = (f'<span class="meter"><i class="{klass}" style="width:{t["frac"] * 100:.0f}%"></i></span>'
+               if t["frac"] is not None else '<span class="meter"></span>')
+        lines = [h(t["extra"])] if t.get("extra") else []
+        if t["pace"]:
+            lines.append(h(t["pace"]))
+        red = (f'<p class="redact"><b>PLAN §6 says:</b> {h(t["red"])}</p>' if t["red_now"] else "")
+        under = "".join(f"<br><span class=muted>{line}</span>" for line in lines)
+        rows.append(f'<tr><td class="nowrap">{h(t["read_by"])}</td><td>{h(t["metric"])}{under}{red}</td>'
+                    f'<td class="nowrap">{h(t["green"])}</td><td class="num">{h(t["cur_text"])}</td>'
                     f'<td>{bar}</td><td>{pill}</td></tr>')
     before = (len(paid_since(S["stripe"], None, now)) - len(paid) if since else 0)
     left_out = (f" {_n(before, 'purchase')} before D {'is' if before == 1 else 'are'} left out "
@@ -2663,7 +2813,8 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
     left_out += (f" {_n(mine, 'purchase')} from your own addresses (OWNER_EMAILS) "
                  f"{'is' if mine == 1 else 'are'} not counted anywhere on this page."
                  if mine else "")
-    d_note = (f"D = {d_date} (written in PLAN §6). Sales, refunds and free reports count from D."
+    d_note = (f"D = {d_date} (written in PLAN §6). Sales, refunds and free reports count from D. "
+              f"Pace is a straight line from D to each read-by date."
               + left_out if d_date else
               "D, the day checkout opens, isn't written in PLAN §6 yet. Until it is, sales and "
               "refunds count from the season's start, so a test purchase of your own counts too, "
@@ -2673,6 +2824,354 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
             f'</div></div><div class="tablewrap"><table class="tbl gates"><thead><tr><th>Read by</th>'
             f'<th>Metric</th><th>Green</th><th>Now</th><th></th><th></th></tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table></div></div>')
+
+
+# --- Today (A6) -------------------------------------------------------- #
+
+# Today's rows for the "Connect your dashboard" steps: the same steps and the
+# same done-ness as the card (connect_steps, below), phrased as actions with
+# a time. One list of steps, so the card and Today can never disagree.
+TODAY_CONNECT = {
+    1: ("owner_emails", "Add OWNER_EMAILS to .env", 5),
+    2: ("stripe", "Add the owner-stats key to .env as STRIPE_STATS_KEY", 5),
+    3: ("traffic_from", "Add TRAFFIC_FROM to .env", 2),
+    4: ("costs", "Record your costs", 10),
+    5: ("log_secret", "Add LOG_SECRET to .env", 2),
+    6: ("resend", "Optional: add RESEND_READ_KEY to .env", 5),
+    7: ("registry", "Open a copy of the registry", 3),
+}
+
+
+def today_connect(sources: Mapping[str, Source], env: Mapping[str, str]
+                  ) -> list[tuple[str, bool, str, int, str]]:
+    """(id, done, title, minutes, how) per connect step, in the card's order,
+    read from connect_steps. Names only: a value is never shown. Stripe is
+    never done while OWNER_EMAILS is missing, because then the owner's own
+    test purchase reads as the first sale."""
+    rows = []
+    for s in connect_steps(sources, env):
+        step = s["step"]
+        sid, title, minutes = TODAY_CONNECT[step.n]
+        how = step.how + (f" {s['note']}" if s["note"] else "")
+        if step.n == 2 and not owners_set(env) and not s["note"]:
+            how += " Add OWNER_EMAILS first, or your own test purchase counts as the first sale."
+        rows.append((sid, s["state"] == "done", title, minutes, how))
+    return rows
+
+
+# Steps the owner may decline for good: listed, never put in Today.
+OPTIONAL_CONNECT_STEPS = ("resend",)
+
+
+def _sender_set(sources: Mapping[str, Source]) -> bool | None:
+    """Is SENDER_POSTAL_ADDRESS a GitHub secret? Read off the launch check's
+    secrets gate; None when it couldn't read the secrets (gh signed out)."""
+    launch = sources.get("launch")
+    if not (launch and launch.ok):
+        return None
+    gate = next((g for g in launch.data["gates"]
+                 if g.get("name") == "GitHub Actions secrets are set"), None)
+    if gate is None:
+        return None
+    if gate["status"] == "PASS":
+        return True
+    detail = gate.get("detail") or ""
+    if "missing:" not in detail:
+        return None
+    return "SENDER_POSTAL_ADDRESS" not in detail.split(" — ")[0]
+
+
+# Dated obligations, written down here and held to LAUNCH.md by test
+# (``launch_text`` must still appear there). ``check`` names how the page
+# knows it's done; None means it can't, so the row never says done or overdue.
+DEADLINES = (
+    {"id": "sender_address", "due": date(2027, 1, 11), "check": "sender",
+     "title": "Set SENDER_POSTAL_ADDRESS", "minutes": 15,
+     "how": "A rented mailbox, never a home, as a GitHub secret (LAUNCH.md step 2.6). The season "
+            "review waits for it.",
+     "unknown": "Can't tell until gh is signed in (gh auth login), so the launch check can read "
+                "the secrets.",
+     "launch_text": "Set it before Jan 11, 2027"},
+    {"id": "owned_list", "due": date(2027, 1, 5), "check": None,
+     "title": "Decide on a list you own", "minutes": 5,
+     "how": "LAUNCH.md section 10, “A list you own”: one unticked box for 2027 emails. Say yes or "
+            "no, so it's built before the last report.",
+     "unknown": "", "launch_text": "Build it before the last report (Jan 5)"},
+)
+DEADLINE_WINDOW = timedelta(days=14)
+DEADLINE_CHECKS: dict[str, Callable[[Mapping[str, Source]], bool | None]] = {"sender": _sender_set}
+
+TODAY_MAX = 5
+ISSUE_MINUTES = {"critical": 20, "high": 15}
+GITHUB_UNKNOWN = "Can't tell until GitHub's Actions record can be read (it needs the network)."
+
+
+@dataclass
+class Task:
+    kind: str           # risk | connect | deadline | target | rhythm | selling
+    id: str
+    title: str
+    minutes: int        # 0: done inside another row's time (the selling time)
+    how: str            # one line: how to do it
+    state: str = "open"  # open | unknown (its source is off) | overdue
+    tone: str = "info"   # bad | warn | info
+
+
+def _slot_today(crons: list[str], today: date, skip_hours: tuple[str, ...] = ()) -> datetime | None:
+    """The first time a workflow's crons fire on ``today`` (an Eastern date)."""
+    from run.launch_check import _cron_fires
+    fires = []
+    for back in (-1, 0, 1):
+        day = datetime.combine(today + timedelta(days=back), datetime.min.time(), timezone.utc)
+        for cron in crons:
+            if cron.split()[1] in skip_hours:
+                continue
+            fires += [t for t in _cron_fires(cron, day) if t.astimezone(ET).date() == today]
+    return min(fires) if fires else None
+
+
+def _et_time(when: datetime, day: bool = False) -> str:
+    return f"{when.astimezone(ET):{'%a ' if day else ''}%-I:%M %p} ET"
+
+
+def _since_slot(wf: dict | None, slot: datetime) -> str:
+    """What GitHub shows for a workflow since ``slot``: "green", "red",
+    "running" or "none" (nothing started yet)."""
+    if not wf:
+        return "none"
+    cutoff = slot - timedelta(minutes=10)
+    done = wf.get("last_done")
+    if done and (_gh_when(done["created_at"]) or cutoff) >= cutoff:
+        return "green" if done["conclusion"] == "success" else "red"
+    last = wf.get("last")
+    if last and (_gh_when(last["created_at"]) or cutoff) >= cutoff:
+        return "running"
+    return "none"
+
+
+def drafts_heading(text: str | None) -> tuple[int | None, str | None]:
+    """content/this-week.md's week and its first draft's title."""
+    if not text:
+        return None, None
+    week = re.search(r"^# Week (\d+) posts", text, re.M)
+    first = re.search(r"^## \d+\. (.+?)(?: \(\d+/\d+\))?\s*$", text, re.M)
+    return (int(week.group(1)) if week else None), (first.group(1) if first else None)
+
+
+def read_drafts(sources: Mapping[str, Source]) -> str | None:
+    """content/this-week.md as the site collector read it (GitHub's copy when
+    the fetch worked), or None."""
+    site = sources.get("site")
+    return site.data.get("drafts") if site is not None and site.ok else None
+
+
+def _rhythm(sources: Mapping[str, Source], now: datetime, health: list[dict],
+            root: Path) -> Task | None:
+    """The weekly rhythm item due today (LAUNCH.md §8): Wednesday's report,
+    Saturday's check, Monday's grading. A run counts as missed only where
+    workflow_health says so (and that is an issue, not this row)."""
+    from run.watchdog import REPORT_MORNING_HOUR
+    today = now.astimezone(ET).date()
+    github = sources.get("github")
+    known = bool(github and github.ok)
+    by_file = {w["file"]: w for w in health}
+    week = ((sources["site"].data or {}).get("week") or {}) if sources["site"].ok else {}
+    if today.weekday() == 2:
+        slot = _slot_today(workflow_crons(root, "weekly.yml"), today, (str(REPORT_MORNING_HOUR),))
+        n = None
+        if week.get("week") and week.get("lands_on") == today.isoformat():
+            n = int(week["week"]) + 1
+        elif week.get("week") and _ts(week.get("built_at")) \
+                and _ts(week["built_at"]).astimezone(ET).date() == today:
+            n = int(week["week"])
+        name = f"Week {n} report" if n else "report"
+        when = _et_time(slot) if slot else "this evening"
+        check = "Open it in your inbox and check it reads right."
+        if not known:
+            return Task("rhythm", "read_report", f"Read your own {name} once it lands", 5,
+                        f"It goes out about {when}. {GITHUB_UNKNOWN}", "unknown")
+        seen = _since_slot(by_file.get("weekly.yml"), slot) if slot else "none"
+        if seen == "red":
+            return None          # the failed run is an issue already
+        if seen == "green":
+            return Task("rhythm", "read_report", f"Read your own {name}", 5,
+                        f"Wednesday's run is green. {check}")
+        return Task("rhythm", "read_report", f"Read your own {name} once it lands", 5,
+                    f"It goes out about {when}. {check}")
+    for weekday, file, title in ((5, "saturday.yml", "Check Saturday's final check went green"),
+                                 (0, "monday.yml", "Check Monday's grading went green")):
+        if today.weekday() != weekday:
+            continue
+        slot = _slot_today(workflow_crons(root, file), today)
+        if slot is None:
+            return None
+        if not known:
+            return Task("rhythm", file, title, 2, f"It runs about {_et_time(slot)}. {GITHUB_UNKNOWN}",
+                        "unknown")
+        seen = _since_slot(by_file.get(file), slot)
+        if seen in ("green", "red"):
+            return None          # done, or a failed run, which Issues carries
+        how = ("It's running now." if seen == "running" else
+               f"It runs about {_et_time(slot)}. Nothing to do unless it goes red."
+               if now < slot else
+               f"It was due at {_et_time(slot)} and hasn't started on GitHub yet.")
+        return Task("rhythm", file, title, 2, how)
+    return None
+
+
+def today_tasks(sources: Mapping[str, Source], now: datetime, env: Mapping[str, str],
+                issues: list[Issue] | None = None, health: list[dict] | None = None,
+                ledger: dict | None = None, drafts: str | None = None,
+                root: Path = REPO_ROOT) -> list[Task]:
+    """Everything the owner should do today, most urgent first: (1) money
+    or a customer at risk, (2) the first step that leaves the page blind,
+    (3) dates within 14 days, (4) a PLAN §6 target behind pace, (5) the
+    weekly rhythm item, (6) the selling habit. Later rows (more targets)
+    follow; the page shows TODAY_MAX and folds the rest. A row whose source
+    is off says what it can't tell, and is never done or overdue."""
+    sources = {**{k: off(k, "Not read this time.") for k in SOURCE_INFO}, **sources}
+    if health is None:
+        health = workflow_health(sources["github"], now, root)
+    if ledger is None:
+        ledger = ledger_view(sources["ledger"], now)
+    if issues is None:
+        issues = build_issues(sources, now, health, ledger, metrics_for(sources, "7d", now), root)
+    today = now.astimezone(ET).date()
+    out: list[Task] = []
+
+    # (1) Money or a customer at risk: the urgent issues, as Issues has them.
+    urgent = [i for i in issues if i.severity in ("critical", "high")]
+    for k, i in enumerate(urgent):
+        steps = (i.fix,) if isinstance(i.fix, str) else tuple(i.fix)
+        how = steps[0] + (" Then the rest of its steps in Issues." if len(steps) > 1 else "")
+        out.append(Task("risk", f"issue-{k}", i.title, ISSUE_MINUTES[i.severity], how, tone="bad"))
+    # Monday's grading missed while calls wait is a medium issue, but it
+    # holds the public record back: it leads today.
+    pending = (ledger or {}).get("pending") or 0
+    for wf in health:
+        if wf["file"] == "monday.yml" and wf["missing"] and wf["slot"] and pending:
+            out.append(Task("risk", "grading", f"{wf['label']} didn't run after its "
+                                               f"{_et_time(wf['slot'], day=True)} slot, and "
+                                               f"{_n(pending, 'call')} wait to be graded.", 5,
+                            "Actions → monday-receipts → Run workflow.", tone="bad"))
+
+    # (2) The first step that leaves the page blind to (1).
+    for sid, done, title, minutes, how in today_connect(sources, env):
+        if not done and sid not in OPTIONAL_CONNECT_STEPS:
+            out.append(Task("connect", sid, title, minutes, how, tone="warn"))
+            break
+
+    # (3) Dated deadlines within 14 days.
+    for dl in sorted(DEADLINES, key=lambda x: x["due"]):
+        due = dl["due"]
+        state = DEADLINE_CHECKS[dl["check"]](sources) if dl["check"] else None
+        if state is True:
+            continue
+        if today > due:
+            if state is False:
+                out.append(Task("deadline", dl["id"], f"{dl['title']} (it was due {due:%b} {due.day})",
+                                dl["minutes"], dl["how"], "overdue", "bad"))
+            continue
+        if due - today > DEADLINE_WINDOW:
+            continue
+        unknown = dl["check"] is not None and state is None
+        out.append(Task("deadline", dl["id"], f"{dl['title']} by {due:%b} {due.day}", dl["minutes"],
+                        dl["unknown"] if unknown else dl["how"],
+                        "unknown" if unknown else "open", "warn"))
+
+    # (4) A PLAN §6 target behind pace, or past its date and over the red line.
+    sends = sources["sends"].data if sources["sends"].ok else None
+    targets = plan_targets(sources, now, sends, ledger, sources["registry"])
+    red = [t for t in targets if t["state"] == "missed" and t["red_now"]]
+    behind = [t for t in targets if t["state"] == "behind_pace"]
+    target_rows = []
+    for t in red:
+        target_rows.append(Task("target", f"target-{t['metric']}",
+                                f"{t['metric']}: {t['cur_text']} of {t['target']:g} when it was read "
+                                f"on {t['when']:%b} {t['when'].day}", 10,
+                                f"PLAN §6 says: {t['red']}", tone="bad"))
+    for t in behind:
+        target_rows.append(Task("target", f"target-{t['metric']}",
+                                f"{t['metric']}: {t['cur_text']} of {t['target']:g} by "
+                                f"{t['when']:%b} {t['when'].day}, behind pace", 0,
+                                f"{per_day_text(t['target'] - t['current'], t['days_left']).capitalize()} "
+                                f"from here. Today's selling time goes here first.", tone="warn"))
+    out.extend(target_rows[:1])
+
+    # (5) The weekly rhythm item due today; (6) the selling habit, in season.
+    week = ((sources["site"].data or {}).get("week") or {}) if sources["site"].ok else {}
+    in_season = (week.get("phase") or "season") == "season"
+    if in_season:
+        rhythm = _rhythm(sources, now, health, root)
+        if rhythm:
+            out.append(rhythm)
+        from run.economics import SELLING_MIN_PER_DAY
+        dweek, first = drafts_heading(drafts)
+        fresh = (dweek is not None and dweek == week.get("week")
+                 and (not week.get("lands_on") or today.isoformat() < week["lands_on"]))
+        if fresh and first:
+            note = f" Next draft: “{first}” in content/this-week.md."
+        elif dweek is not None:
+            note = (f" The drafts in content/this-week.md are Week {dweek}'s and refresh after "
+                    f"Wednesday's run, so today it's replies.")
+        else:
+            note = " No drafts were found (content/this-week.md), so today it's replies."
+        out.append(Task("selling", "selling", f"Sell for about {SELLING_MIN_PER_DAY} minutes",
+                        SELLING_MIN_PER_DAY, "Replies beat posts (PLAN §5)." + note))
+    out.extend(target_rows[1:])
+    return out
+
+
+def today_split(tasks: list[Task]) -> tuple[list[Task], list[Task]]:
+    """The rows shown today, and the rest under "Later"."""
+    return tasks[:TODAY_MAX], tasks[TODAY_MAX:]
+
+
+def today_total(tasks: list[Task]) -> str:
+    total = sum(t.minutes for t in tasks)
+    if not total:
+        return ""
+    rounded = max(5, int(5 * round(total / 5)))
+    return f"about {rounded} min today"
+
+
+def _task_li(t: Task) -> str:
+    mins = f"{t.minutes} min" if t.minutes else "in selling time"
+    pill = {"unknown": '<span class="pill">Can\'t tell yet</span>',
+            "overdue": '<span class="pill sev-high">Overdue</span>'}.get(t.state, "")
+    return (f'<li class="task {h(t.tone)}"><span class="tmin">{h(mins)}</span><div>'
+            f'<p class="tt">{pill}{h(t.title)}</p><p class="th">{h(t.how)}</p></div></li>')
+
+
+def today_html(tasks: list[Task]) -> str:
+    shown, later = today_split(tasks)
+    total = today_total(shown)
+    head = ('<div class="cardhead"><div><h3>Today</h3><p class="muted small">Most urgent first: '
+            "what's at risk, then what's due, then selling.</p></div>"
+            + (f'<span class="unit">{h(total)}</span>' if total else "") + '</div>')
+    if not shown:
+        return (f'<div class="card today" id="today">{head}<p class="muted small">Nothing on the list '
+                f'today.</p></div>')
+    body = f'<ol class="todo">{"".join(_task_li(t) for t in shown)}</ol>'
+    if later:
+        body += (f'<details class="later"><summary>Later ({len(later)})</summary>'
+                 f'<ol class="todo">{"".join(_task_li(t) for t in later)}</ol></details>')
+    return f'<div class="card today" id="today">{head}{body}</div>'
+
+
+TODAY_CSS = r"""
+.today{margin-bottom:16px}.todo{list-style:none;margin:0;padding:0}
+.todo .task{display:flex;gap:14px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line2)}
+.todo .task:first-child{border-top:0;padding-top:0}
+.tmin{flex:none;min-width:64px;font-size:12.5px;font-weight:700;color:var(--ink2);font-variant-numeric:tabular-nums;padding-top:2px}
+.task.bad .tmin{color:var(--bad)}.task.warn .tmin{color:var(--warn)}
+.tt{font-weight:600;line-height:1.45;margin:0}.tt .pill{margin-right:8px;vertical-align:1px}
+.th{font-size:13.5px;color:var(--ink2);margin:2px 0 0;line-height:1.45}
+.later{margin-top:10px;padding-top:10px;border-top:1px solid var(--line2)}
+.later summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink2)}.later .todo{margin-top:10px}
+.redact{margin:6px 0 0;font-size:13px;color:var(--warn)}
+@media (max-width:480px){.todo .task{flex-direction:column;gap:2px}.tmin{min-width:0}}
+"""
 
 
 def profit_block(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetime) -> str:
@@ -3053,11 +3552,11 @@ def attention(issues: list[Issue]) -> str:
     urgent = [i for i in issues if i.severity in ("critical", "high")][:3]
     if not urgent:
         rest = len(issues)
-        return (f'<div class="attn clear">{icon("check", "aic")}<div><p class="at">Nothing needs you right now.</p>'
+        return (f'<div class="attn clear">{icon("check", "aic")}<div><p class="at">No urgent issues.</p>'
                 f'<p class="ad">{rest} lower-priority item{"s" if rest != 1 else ""} below in Issues.'
                 f'</p></div></div>' if rest else
-                f'<div class="attn clear">{icon("check", "aic")}<div><p class="at">All clear — nothing '
-                f'needs you right now.</p></div></div>')
+                f'<div class="attn clear">{icon("check", "aic")}<div><p class="at">All clear: no issues '
+                f'at all.</p></div></div>')
     items = "".join(issue_html(i, compact=True) for i in urgent)
     more = len([i for i in issues if i.severity in ("critical", "high")]) - len(urgent)
     tail = f'<a class="more" href="#issues">+ {more} more urgent</a>' if more > 0 else \
@@ -3500,6 +3999,8 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
     issues = build_issues(sources, now, health, ledger, M["7d"], root)
     ftp = free_to_paid(sources["forms"], sources["stripe"], now, sources["sends"])
     insights = {p: build_insights(sources, M[p], now, ftp, ledger) for p, _l, _d in PERIODS}
+    tasks = today_tasks(sources, now, names_env, issues, health,
+                        ledger, read_drafts(sources), root)
     from render.report import mark_svg
     urgent = sum(i.severity in ("critical", "high") for i in issues)
     badge = (f'<span class="badge{" hot" if urgent else ""}">{len(issues)}</span>' if issues else "")
@@ -3525,6 +4026,7 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
         f'{icon("sun", "ic sun")}</button></div>'
         f'<nav class="tabs" aria-label="Sections"><div class="tabsin">{nav}</div></nav></header>'
         f'<main class="wrap">{stale}{AGED_STRIP}'
+        f'{today_html(tasks)}'
         f'{attention(issues)}{connect_card(sources, names_env)}{launch_status(sources, now)}'
         f'<div class="filters"><div class="seg" role="group" aria-label="Period">{periods}</div>'
         f'<p class="muted small fnote">Traffic keeps 90 days; money and forms count all time under “All”.</p>'
@@ -3543,7 +4045,7 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
     # Everything dynamic lives in the body; the CSS, the script and the
     # inlined fonts are constants of this module.
     body = scrub(body, os.environ if env is None else {**os.environ, **env})
-    css = (font_css(root) if fonts else "") + CSS + FRESH_CSS + CONNECT_CSS
+    css = (font_css(root) if fonts else "") + CSS + FRESH_CSS + CONNECT_CSS + TODAY_CSS
     return ('<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             '<meta name="robots" content="noindex, nofollow">'
