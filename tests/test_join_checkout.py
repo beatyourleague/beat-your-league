@@ -189,7 +189,7 @@ def test_the_pages_hold_hours_are_the_free_reports() -> None:
 
 
 def _trial_harness() -> str:
-    names = ("etHourWords", "trialWindow", "trialWhenWords")
+    names = ("etHourWords", "paidMailFirst", "trialWindow", "trialWhenWords")
     consts = "\n".join(re.search(rf"^const {n} = \d+;", JOIN, re.M).group(0)
                        for n in ("TRIAL_HOLD_FROM", "TRIAL_HOLD_UNTIL", "TRIAL_SATURDAY_UNTIL"))
     return consts + "\n" + "\n".join(_js_function(JOIN, n) for n in names)
@@ -197,7 +197,7 @@ def _trial_harness() -> str:
 
 def test_the_free_report_note_names_the_wait_for_the_hour_it_is_asked() -> None:
     """Nov 4 2026 is a Wednesday. 2026-11-11 is the next report day."""
-    w = {"lands_on": "2026-11-11"}
+    w = {"lands_on": "2026-11-11", "first_kickoff": "2026-11-06T01:15:00Z"}
     cases = [
         # (UTC instant, TRIAL.when, expected wait)
         ("2026-11-04T11:59:00Z", None, "hour"),          # Wednesday, before the hold
@@ -211,6 +211,12 @@ def test_the_free_report_note_names_the_wait_for_the_hour_it_is_asked() -> None:
         ("2026-11-10T15:59:00Z", "next", "scored"),      # Monday night's box score
         ("2026-11-10T16:00:00Z", "next", "hour"),        # scored: Tuesday from 16:00 UTC
         ("2026-11-02T15:00:00Z", "this", "hour"),
+        # The last 75 minutes before Thursday night's kickoff: trialTiming is
+        # null there, and the next hourly run may land on either side of it.
+        ("2026-11-05T23:59:00Z", None, "hour"),          # 76 minutes before
+        ("2026-11-06T00:00:00Z", None, "kickoff"),
+        ("2026-11-06T00:50:00Z", None, "kickoff"),
+        ("2026-11-06T01:15:00Z", None, "hour"),          # kicked off, no lands_on reading
     ]
     script = _trial_harness() + "\nconst out = [];\n" + "".join(
         f"out.push(trialWindow({json.dumps({'when': t} if t else None)}, "
@@ -220,10 +226,15 @@ def test_the_free_report_note_names_the_wait_for_the_hour_it_is_asked() -> None:
         "out.push(trialWhenWords('saturday', new Date('2026-11-07T15:00:00Z')));\n" \
         "out.push(trialWhenWords('scored', new Date()));\n" \
         "out.push(trialWhenWords('hour', new Date()));\n" \
+        "out.push(trialWhenWords('kickoff', new Date()));\n" \
         "console.log(JSON.stringify(out));"
     got = _node(script)
     assert got[:len(cases)] == [want for _, _, want in cases]
-    wed, wed_summer, sat, scored, hour = got[len(cases):]
+    wed, wed_summer, sat, scored, hour, kickoff = got[len(cases):]
+    assert kickoff == ("goes out before this week's first game if it can. If not, it waits "
+                       "until this week's games are scored, usually by Tuesday morning, so "
+                       "it's never about games already underway")
+    assert "within the hour" not in kickoff
     assert wed == "arrives this evening: from 7 AM ET on Wednesdays, the weekly reports go out first"
     assert wed_summer.startswith("arrives this evening: from 8 AM ET")      # EDT
     assert sat == "goes out after subscribers' Saturday check, usually by 3 PM ET"
@@ -235,6 +246,54 @@ def test_the_free_report_note_names_the_wait_for_the_hour_it_is_asked() -> None:
     assert '<span id="trial-when">usually lands within the hour</span>' in note
     assert "drawTrialNote(new Date());" in _js_function(JOIN, "drawTrial")
     assert "drawTrialNote(new Date());" in _js_function(JOIN, "submitTrial")
+    # Both waits are named in the line itself, so the static sentence after it goes.
+    assert '$("trial-wait").hidden = window === "scored" || window === "kickoff";' in \
+        _js_function(JOIN, "drawTrialNote")
+
+
+def test_the_trade_checks_note_names_the_same_paid_mail_wait() -> None:
+    """run/trades.py waits on run.trials.held_for_subscribers: the Wednesday
+    run and Saturday's final check go first. The note said "usually lands
+    within the hour" through both (review, Nov 4 2026). It reads the same
+    hold as the free report (paidMailFirst), and never the kickoff rule,
+    which the Trade Check doesn't apply."""
+    harness = _trial_harness() + "\n" + "\n".join(
+        _js_function(JOIN, n) for n in ("etDayEnd", "seasonClosed", "trialTiming",
+                                        "drawTradeNote"))
+    # Wednesday Nov 4: week.json holds Week 8 until the evening run rebuilds it as Week 9.
+    fresh = {"season": "2026", "week": 9, "last_week": 18, "phase": "season",
+             "first_kickoff": "2026-11-06T01:15:00Z", "lands_on": "2026-11-11"}
+    last = dict(fresh, week=8, first_kickoff="2026-10-30T00:15:00Z", lands_on="2026-11-04")
+    cases = [
+        # (UTC instant, week.json, expected words after "the answer ")
+        ("2026-11-04T11:00:00Z", last, "usually lands within the hour"),
+        ("2026-11-04T13:00:00Z", None, "arrives this evening"),      # no week.json: held
+        ("2026-11-04T13:00:00Z", last, "arrives this evening"),
+        ("2026-11-05T00:30:00Z", fresh, "usually lands within the hour"),   # run finished
+        ("2026-11-07T15:00:00Z", fresh, "goes out after subscribers' Saturday check"),
+        ("2026-11-07T15:00:00Z", None, "goes out after subscribers' Saturday check"),
+        ("2026-11-07T20:00:00Z", fresh, "usually lands within the hour"),
+        ("2026-11-06T00:50:00Z", fresh, "usually lands within the hour"),   # no kickoff hold
+    ]
+    script = harness + "\nconst node = { textContent: '' };\nconst $ = () => node;\n" \
+        "const out = [];\n" + "".join(
+            f"drawTradeNote({json.dumps(w)}, new Date({json.dumps(at)})); "
+            "out.push(node.textContent);\n" for at, w, _ in cases) + \
+        "console.log(JSON.stringify(out));"
+    got = _node(script)
+    lead = "If this is the address your reports go to, the answer "
+    for (at, _, want), words in zip(cases, got):
+        assert words.startswith(lead + want), (at, words)
+        assert words.endswith(". Up to three a day."), words
+    # The trade branch draws it, week.json is read in that mode and redraws
+    # it, and a press redraws it for the hour it is made.
+    code = _js_code(JOIN)
+    assert "drawTradeNote(null, new Date());" in code.split("if (TRADE_MODE) {", 1)[1][:400]
+    assert "if ((UPDATE_MODE && !TRADE_MODE) || !window.fetch) return;" in code
+    assert "if (TRADE_MODE) { drawTradeNote(w, now); return; }" in code
+    assert "if (TRADE_MODE) drawTradeNote(state.week, new Date());" in \
+        _js_function(JOIN, "submitUpdate")
+    assert "usually lands within the hour. Up to three a day." not in _flat(code)
 
 
 def test_after_a_free_report_request_the_plan_is_offered_once_quietly() -> None:
@@ -423,12 +482,32 @@ def _mode_steps(roster: str) -> list:
 
 OTHER_MODES = [("?plan=pass", "Cover your whole league"), ("?update=1", "Update your roster"),
                ("?add=1", "Add a team"), ("?trade=1", "Check a trade")]
-RESTORED = [{"until": "typeof state !== 'undefined' && state.ready === true", "ms": 15000},
-            {"sleep": 1500},
+RESTORED_WAIT = [{"until": "typeof state !== 'undefined' && state.ready === true", "ms": 15000},
+                 {"sleep": 1500}]
+RESTORED = RESTORED_WAIT + [
             AT_EMAIL,
             "!document.getElementById('restored-line').hidden",
             "document.getElementById('restored-line').textContent",
             "Math.round(scrollY)"]
+
+
+def _restored_edit_steps() -> list:
+    """A restored roster is never checked, so the re-check a press of the
+    edited way on makes is the panel's FIRST entrance, whose scroll used to
+    pull the page back up to the button (review, Nov 4 2026)."""
+    return RESTORED_WAIT + [
+        """(() => { const box = document.getElementById("roster-text");
+          box.scrollIntoView({ block: "center" });
+          box.value = box.value.trim().split("\\n").slice(0, -1).join("\\n") + "\\n";
+          box.dispatchEvent(new Event("input", { bubbles: true }));
+          const go = document.getElementById("go-checkout");
+          go.scrollIntoView({ block: "center" });
+          return { hidden: go.hidden, stale: go.classList.contains("is-stale") }; })()""",
+        "document.getElementById('go-checkout').click()",
+        {"sleep": 2500},
+        "({ ready: state.ready, stale: state.stale, played: state.payoffPlayed })",
+        AT_EMAIL,
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -457,8 +536,10 @@ def ran(served) -> dict:
         {"path": f"join/index.html?ref={ref}", "width": 390, "steps": RESTORED},
         {"path": f"join/index.html?ref={ref}&try=1", "width": 390, "steps": RESTORED},
         {"path": f"join/index.html?ref={ref}", "width": 1440, "steps": RESTORED},
+        {"path": f"join/index.html?ref={ref}", "width": 390, "steps": _restored_edit_steps()},
     ])
-    got.update({"ref": ref, "back-buy": back[0], "back-try": back[1], "back-1440": back[2]})
+    got.update({"ref": ref, "back-buy": back[0], "back-try": back[1], "back-1440": back[2],
+                "back-edit": back[3]})
     return got
 
 
@@ -521,6 +602,13 @@ def test_a_restored_roster_lands_on_the_email_in_buy_mode_only(ran) -> None:
     assert _landed(wide[2]) and wide[3] is True, wide
     # The free report keeps its own path: nothing scrolls, no line.
     assert free[2]["focus"] != "email" and free[3] is False and free[5] == 0, free
+
+
+def test_a_restored_then_edited_roster_still_lands_on_the_email(ran) -> None:
+    v = ran["back-edit"]["values"]
+    assert v[2] == {"hidden": False, "stale": True}, v[2]
+    assert v[5] == {"ready": True, "stale": False, "played": True}, v[5]
+    assert _landed(v[6]), v[6]
 
 
 def test_a_free_report_request_ends_on_one_quiet_offer(ran) -> None:

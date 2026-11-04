@@ -439,7 +439,10 @@ def test_the_entrance_runs_once_and_finishes_inside_a_second_and_a_half() -> Non
     # Every draw starts at rest, so a redraw never replays anything.
     assert draw.index('panel.classList.remove("play");') < draw.index("const shows")
     # Only the press itself scrolls, and focus is left alone.
-    assert "if (state.freshCheck) setTimeout(() => bringPayoffIntoView(reduced), 400);" in draw
+    assert "if (state.freshCheck) payoffScroll = setTimeout(() => bringPayoffIntoView(reduced), " \
+           "400);" in draw
+    # A press on to the email cancels that scroll (tests/test_join_checkout.py walks it).
+    assert "clearTimeout(payoffScroll);" in _function("bringToEmail")
     assert ".focus(" not in _panel_code()
     press = JOIN.split('$("resolve").addEventListener("click"')[1].split("\n});")[0]
     assert press.index("state.freshCheck = true;") < press.index("draw();") < \

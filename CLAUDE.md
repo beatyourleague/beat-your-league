@@ -1503,6 +1503,41 @@ without `SENDER_POSTAL_ADDRESS`. Rules it left:
 - **The dashboard reads the link map from `.env`**, counts its gates from D, and names a missing
   shell secret "check by hand", never "not done".
 
+**The buy page with checkout open (Nov 4 2026, `tests/test_join_checkout.py`).** Walked at 390px,
+a ready buyer had the email about two screens below the facts panel and a read-back box with a
+second gold button. Rules it left:
+- **One gold way on.** In the default buy mode, once the roster checks out and the plan can take
+  money, a gold "Continue to checkout" sits under the tally (`goCheckoutShows`; never for try,
+  seat, pass, update, add or trade, or once the season is over). One press goes to `#step-email`
+  and focuses it (`bringToEmail`, smooth unless reduced motion). After an edit it turns outlined
+  and the same press re-checks first. The panel's entrance scroll brings that button into view,
+  never the panel over it, and a press on to the email cancels a pending entrance scroll
+  (`payoffScroll`): a restored roster, edited, re-checks as its FIRST entrance, and that scroll
+  once pulled the page ~2,800px back above the email.
+- **A clean `?ref=` restore in buy mode lands on the email** once `byes.json` and `week.json` have
+  loaded (earlier landed short as the panel grew), with "Changed your roster since? Edit it above
+  before you pay." Try mode doesn't move. The address is never in a URL.
+- **The read-back is live and the box is for typos only.** "Reports go to <address>" shows under
+  the field as it is typed (textContent). Unlock goes straight to Stripe unless `typoSuggestion`
+  finds a fix; then the box opens and Unlock is hidden, so one gold button shows, and "Use <fix>"
+  focuses Unlock, whose words still name the amount.
+- **Open, the page says what it is:** h1 "Get your lineups", the title "Get your fantasy football
+  lineups — Beat Your League", the pitch leading with paste then check out, price, stop and refund
+  in its first line; the Menu's gold item reads "Get my lineups". Closed keeps the free-check words.
+- **Every "within the hour" waits for paid mail.** The free report's note and the Trade Check's
+  note name run/trials.py's holds from the page's own clock (`paidMailFirst`: Wednesday from
+  `REPORT_HOLD_FROM` until the evening run rebuilds week.json or `TUESDAY_RELEASE_HOUR`; Saturday
+  until `SATURDAY_RELEASE_HOUR`; the three constants pinned to run/trials.py by test). The free
+  report also names the after-kickoff wait (until Tuesday 16:00 UTC) and, in the last 75 minutes
+  before the week's first game, both outcomes; the Trade Check has no kickoff hold, so its note
+  names none. Trade mode reads week.json for this.
+- **After a free-report request, one quiet offer** of the Monthly plan with that roster
+  (`ownPlanHref`: a Monthly ref with the visit's channel tag, no `try=1`, no `via=`, no address),
+  outlined, with its price, stop and refund, shown for every request so it reveals nothing.
+- Known and left: the launch check serves its join flows from above `site/`, so `/email-check.js`
+  404s there and its flows can't reach the typo box (they never use a typo address); a very fast
+  typist can cut the ~1.2 s smooth scroll to the email short.
+
 **The post-push sweep (Nov 3 2026) — five areas, each fix re-attacked.** Rules it left:
 - **"This week's report" means a week not yet played.** `site/week.json` carries `week_ends` (the
   Eastern date of the week's last regular game, `run.solo.week_end_day`); the hero, footer.js, How
@@ -1784,7 +1819,9 @@ adversarial reviewer per branch, a fix round, and one integration. Rules it left
 - **The email address is read back before Stripe locks it** (join: "Reports go to <address> —
   right?", a "Use <fix>" button for common domain slips, Yes rebuilds the ref from the page as it
   stands). One implementation: the merge once carried two and the second `DOMAIN_FIXES` stopped
-  every script on the page — `node --check` each page script after a merge.
+  every script on the page — `node --check` each page script after a merge. *(Since Nov 4 2026
+  the address is read back under the field as it is typed and the box opens only for a likely
+  typo: see "The buy page with checkout open".)*
 - **Infra:** the registry and plans are cached only sealed (`run/statebox.py`, CACHE_KEY;
   encrypt-then-MAC, 90-day encrypted backup artifacts on a content change and daily, restored on a
   cache miss; a missing copy after anyone was served is a red run unless the repo variable

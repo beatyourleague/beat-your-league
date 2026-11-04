@@ -1904,6 +1904,11 @@ function bringPayoffIntoView(reduced) {
 // scrolls. So a remove, a re-check or a changed setting redraws still, and a
 // roster restored from the address arrives complete.
 let payoffClock = 0;
+// The entrance's pending scroll. A press that goes on to the email cancels it
+// (bringToEmail): "Continue to checkout" on a roster restored from ?ref= and
+// then edited re-checks first, and that check is the panel's first entrance,
+// whose scroll 400ms later carried the page back up ~2,800px above the email.
+let payoffScroll = 0;
 function drawPayoff() {
   const panel = $("payoff");
   clearTimeout(payoffClock);
@@ -1941,7 +1946,7 @@ function drawPayoff() {
       const number = panel.querySelector(".pf-stat b");
       if (number) countUp(number, players.length);
     }
-    if (state.freshCheck) setTimeout(() => bringPayoffIntoView(reduced), 400);
+    if (state.freshCheck) payoffScroll = setTimeout(() => bringPayoffIntoView(reduced), 400);
   }
 }
 
@@ -2533,6 +2538,7 @@ function submitUpdate(email, ref) {
       "tick the box there. An update replaces the ones on file.");
     return;
   }
+  if (TRADE_MODE) drawTradeNote(state.week, new Date());
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(TOKEN_UPDATE
@@ -3143,8 +3149,7 @@ if (TRY_MODE) {
       "to this week's lineup and your byes. It's included in your plan, and nothing on " +
       "your plan changes.";
     $("submit").textContent = "Check this trade";
-    $("update-note").textContent = "If this is the address your reports go to, the answer " +
-      "usually lands within the hour. Up to three a day.";
+    drawTradeNote(null, new Date());
   }
   if (ADD_MODE) {
     $("header-pitch").textContent =
@@ -3281,6 +3286,7 @@ function drawGoCheckout() {
 // Step 3's email field, brought up and focused: smooth unless the visitor
 // asked for less motion. The address is typed here, never carried in a URL.
 function bringToEmail() {
+  clearTimeout(payoffScroll);
   const reduced = window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   $("step-email").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
@@ -3326,19 +3332,36 @@ function etHourWords(utcHour, now) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), utcHour))
     .toLocaleTimeString("en-US", { hour: "numeric", timeZone: "America/New_York" });
 }
-// Which wait run/trials.py puts a request in now, as far as the page can
-// tell: "wednesday" (the subscribers' run goes first; a week.json rebuilt by
-// that run, "this", means it has finished), "saturday" (the final check goes
-// first), "scored" (next week's report, which waits for this week's box
-// scores: the same Monday-night window drawFirst names, ending Tuesday 16:00
-// UTC) or "hour".
-function trialWindow(t, w, now) {
+// run/trials.py held_for_subscribers, as far as the page can tell, shared by
+// the free report and the Trade Check (run/trades.py asks the same function):
+// "wednesday" while the subscribers' run may still be going out (a week.json
+// rebuilt by that run, ``fresh``, means it has finished), "saturday" before
+// the final check's release hour, else null.
+function paidMailFirst(fresh, now) {
   const day = now.getUTCDay(), hour = now.getUTCHours();
-  const fresh = Boolean(t && t.when === "this");
   if (!fresh && ((day === 3 && hour >= TRIAL_HOLD_FROM) || (day === 4 && hour < TRIAL_HOLD_UNTIL))) {
     return "wednesday";
   }
-  if (fresh && day === 6 && hour < TRIAL_SATURDAY_UNTIL) return "saturday";
+  if (day === 6 && hour < TRIAL_SATURDAY_UNTIL) return "saturday";
+  return null;
+}
+// Which wait run/trials.py puts a request in now, as far as the page can
+// tell: "kickoff" (the last 75 minutes before the week's first game: the next
+// hourly run may land on either side of it, so both outcomes are named),
+// "wednesday" and "saturday" (paidMailFirst: paid mail goes first; Saturday
+// only for a week not yet started, since an underway week is "scored"),
+// "scored" (next week's report, which waits for this week's box scores: the
+// same Monday-night window drawFirst names, ending Tuesday 16:00 UTC) or
+// "hour".
+function trialWindow(t, w, now) {
+  const fresh = Boolean(t && t.when === "this");
+  const kickoff = w && typeof w === "object" ? new Date(w.first_kickoff) : NaN;
+  if (!t && !isNaN(kickoff) && now.getTime() >= kickoff.getTime() - 75 * 60 * 1000 &&
+      now < kickoff) {
+    return "kickoff";
+  }
+  const paid = paidMailFirst(fresh, now);
+  if (paid === "wednesday" || (paid === "saturday" && fresh)) return paid;
   if (t && t.when === "next" && /^\d{4}-\d\d-\d\d$/.test((w && w.lands_on) || "")) {
     const [y, m, d] = w.lands_on.split("-").map(Number);
     if (now.getTime() < Date.UTC(y, m - 1, d - 1, 16)) return "scored";
@@ -3358,12 +3381,26 @@ function trialWhenWords(window, now) {
     return "goes out once this week's games are done and scored, usually by Tuesday " +
       "morning, so it's never about games already underway";
   }
+  if (window === "kickoff") {
+    return "goes out before this week's first game if it can. If not, it waits until " +
+      "this week's games are scored, usually by Tuesday morning, so it's never about " +
+      "games already underway";
+  }
   return "usually lands within the hour";
 }
 function drawTrialNote(now) {
   const window = trialWindow(TRIAL, state.week, now);
   $("trial-when").textContent = trialWhenWords(window, now);
-  $("trial-wait").hidden = window === "scored";      // said in the line before it
+  $("trial-wait").hidden = window === "scored" || window === "kickoff";   // said before it
+}
+// The Trade Check's note, from the same hold (run/trades.py waits on
+// held_for_subscribers, never on kickoff): week.json says whether this
+// Wednesday's run has finished, so without it a Wednesday reads as held.
+function drawTradeNote(w, now) {
+  const t = trialTiming(w, now);
+  const paid = paidMailFirst(Boolean(t && t.when === "this"), now);
+  $("update-note").textContent = "If this is the address your reports go to, the answer " +
+    (paid ? trialWhenWords(paid, now) : "usually lands within the hour") + ". Up to three a day.";
 }
 // After a request: the plan, with this roster, once. Shown whatever the
 // intake later decides, so it says nothing about the address. The link is
@@ -3539,13 +3576,14 @@ drawBuyState();
 // free report each say their own timing.
 (function () {
   try {
-    if (UPDATE_MODE || !window.fetch) return;
+    if ((UPDATE_MODE && !TRADE_MODE) || !window.fetch) return;
     fetch("../week.json", { cache: "no-cache",
       signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
       .then((r) => (r.ok ? r.json() : null))
       .then((w) => {
         const now = new Date();
         state.week = w;
+        if (TRADE_MODE) { drawTradeNote(w, now); return; }
         if (TRY_MODE) {
           TRIAL = trialTiming(w, now);
           // The same two rules the purchase reads, for the plan offered after

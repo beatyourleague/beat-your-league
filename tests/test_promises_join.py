@@ -248,7 +248,13 @@ def test_the_season_closes_when_no_weekly_report_is_left() -> None:
     assert 'TRIAL.when === "over" || TRIAL.when === "pre"' in _js_function(JOIN, "submitTrial")
     handler = _js_code(JOIN).split('$("form-email").addEventListener("submit"')[1]
     assert 'const link = seasonOver() ? "" :' in handler
-    assert "if (UPDATE_MODE || !window.fetch) return;" in _js_code(JOIN)
+    # Updates and adds never read the season's clock; the Trade Check reads it
+    # only for its note's wait, and returns before the season can close anything.
+    code = _js_code(JOIN)
+    assert "if ((UPDATE_MODE && !TRADE_MODE) || !window.fetch) return;" in code
+    week = code.split("if ((UPDATE_MODE && !TRADE_MODE) || !window.fetch) return;")[1]
+    assert week.index("if (TRADE_MODE) { drawTradeNote(w, now); return; }") < \
+        week.index("if (TRY_MODE) {") < week.index("FIRST = seasonClosed(w, now)")
 
 
 def test_the_free_report_names_the_report_it_will_send() -> None:
