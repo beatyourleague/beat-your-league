@@ -193,6 +193,7 @@ def test_the_heros_one_link_opens_this_weeks_report_only_on_the_heros_rule() -> 
     iife = clock[clock.index("(function () {"):clock.index("})();") + 5]
     harness = r"""
 const make = (id) => ({ id, hidden: true, textContent: "See a real report", attrs: {},
+  classList: { contains: () => false },
   setAttribute(k, v) { this.attrs[k] = v; }, replaceChildren() {}, appendChild() {} });
 function run(w) {
   const els = { "season-clock": make("season-clock"), "hero-sample": make("hero-sample"),

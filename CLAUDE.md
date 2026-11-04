@@ -1592,6 +1592,23 @@ hand, so the owner could always refund their own purchases. Rules (`tests/test_o
   the only exemption), the stop list, refund and cancel handling, the team limit, the ledger
   and every published probability.
 
+**The free report off the hero (Nov 4 2026, `tests/test_free_link.py`).** Supersedes the
+"every way in says Check my team free" and "the Menu starts with the roster check" lines below.
+Once a purchase can finish (`CHECKOUT_CAN_COMPLETE`), the landing hero is one gold "Get my
+lineups", one link and the risk line; `#try-cta` shows only in the interim state, and there the
+live-week swap keeps the lesser "or read this week's report first". The free report is ONE
+script-built text link under the price card (`#try-price`, outside it), built above the page's
+VIA pass so it carries `?via=`, never in the static page and never a second copy in the closer
+(it added words). App pages carry it under the paid ask (`render.platforms._try`,
+`data-free-try`, only while `render.report.trial_link_open()`). The Menu's gold first item is
+`render.report.ask_label()`: "Get my lineups" while `CHECKOUT_OPEN`, "Check my team free"
+closed; the footer keeps "Check my team". The price line reads " Set up now." when the clock says
+today. **Every footed page closes its Menu for the season through `site/footer.js`**: over, or
+the last week from its first kickoff (how-it-works' rule), the Menu's ask goes to the landing's
+capture as "Tell me when it opens" (tag kept) and `[data-free-try]` hides; the landing
+(`#watch-form`) closes its own Menu. footer.js is digest-versioned, so changing it means
+regenerating or re-pasting every footed page (a test fails on a stale digest).
+
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
 30. You lost by four." and its answer is "Stop making that call five minutes before kickoff. Every
 Wednesday, one email decides your lineup." (owner decision, Nov 1 2026, replacing "Don't make that

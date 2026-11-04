@@ -1442,7 +1442,7 @@
 </main>
 
 <footer>
-  <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a><a href="rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a><a href="dynasty/">Dynasty</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=f6c783f11e" defer></script>
+  <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a><a href="rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a><a href="dynasty/">Dynasty</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=66a684b07d" defer></script>
   <b style="color:var(--dusk2)">Beat Your League</b> — analysis, not betting picks.<br>
   Samples shown are real reports.
   NFL data: nflverse (nflverse-data), CC-BY-4.0. Projections are analysis, not guarantees.
@@ -1856,9 +1856,11 @@ if (CHECKOUT_OPEN) {
         "report every Wednesday evening.";
     }
     // The free report, now that the hero keeps one action: one quiet link
-    // under the price card (outside it: the card never changes) and one in
-    // the closer. Built here, so the static page (the closed state) carries
-    // neither; closeForSeason hides both.
+    // under the price card (outside it: the card never changes). Not in the
+    // closer too: its row already holds the ask, and a second copy put more
+    // words on the open page than the hero's button it replaced. Built here,
+    // so the static page (the closed state) carries none; closeForSeason
+    // hides it.
     if (TRIAL_OPEN) {
       const tryLink = (id) => {
         const line = document.createElement("p");
@@ -1872,8 +1874,6 @@ if (CHECKOUT_OPEN) {
       };
       const plans = document.querySelector("#pricing .plans");
       if (plans) plans.after(tryLink("try-price"));
-      const closerRow = document.querySelector(".closer .cta-row");
-      if (closerRow) closerRow.after(tryLink("try-closer"));
     }
     const finance = document.getElementById("finance-note");
     if (finance) {
@@ -1937,7 +1937,7 @@ function closeForSeason(line) {
   const watchLabel = document.getElementById("watch-label");
   if (watchLabel) watchLabel.textContent = "One email when checkout opens, nothing else.";
   // pass-clock says a new lineup is coming. The 2027 card leaves with checkout.
-  ["try-cta", "risk-line", "closer-cta", "pass-clock", "try-price", "try-closer"].forEach((id) => {
+  ["try-cta", "risk-line", "closer-cta", "pass-clock", "try-price"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
@@ -2361,7 +2361,10 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
           const heroLink = document.getElementById("hero-sample");
           if (heroLink) {
             heroLink.setAttribute("href", carryVia("this-week.html", VIA));
-            heroLink.textContent = "See this week's report";
+            // Beside the free report's button (the interim state) it stays
+            // the lesser "or ..." link, as the sample's link is there.
+            heroLink.textContent = heroLink.classList.contains("stacked")
+              ? "or read this week's report first" : "See this week's report";
           }
           // That report's closest call with odds, one line under the link,
           // in the inbox preview's own words (contract C6). Every figure is

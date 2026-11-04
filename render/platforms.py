@@ -345,12 +345,14 @@ def _try(platform: Platform) -> str:
     paid first, free as a quieter text link, on this app's lineup. Written only
     while the landing offers it beside a checkout that can finish
     (render.report.trial_link_open); otherwise nothing, so a page never
-    points at a free report that is closed."""
+    points at a free report that is closed. It carries ``data-free-try`` so
+    site/footer.js hides it once the season closes (the page has no clock)."""
     if not trial_link_open():
         return ""
     href = join_href(platform)
     href += ("&" if "?" in href else "?") + "try=1"
-    return f'\n    <p class="free"><a href="{esc(href)}">{esc(TRIAL_LINK_LABEL)}</a></p>'
+    return (f'\n    <p class="free" data-free-try><a href="{esc(href)}">'
+            f'{esc(TRIAL_LINK_LABEL)}</a></p>')
 
 
 def _step(platform: Platform, i: int, step: str) -> str:
