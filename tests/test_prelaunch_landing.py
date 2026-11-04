@@ -276,8 +276,10 @@ def test_the_nav_is_the_logo_lockup_and_a_phone_keeps_one_route() -> None:
     assert "font-weight:900" in brand and "font-style:italic" in brand
     assert "letter-spacing:.24em" not in brand
     bar, menu = nav.split('<div class="navlinks">')[1].split('<details class="sitemenu">')
+    # The static page is the closed state; the script relabels the Menu's
+    # first item with the nav button (test_wayfinding).
     assert '<details class="sitemenu">' + menu.split("</details>")[0] + "</details>" == \
-        rr.site_menu().replace('href="index.html#pricing"', 'href="#pricing"')
+        rr.site_menu(label=rr.CHECK_LABEL).replace('href="index.html#pricing"', 'href="#pricing"')
     assert rr.SITE_MENU_CSS in CSS
     links = re.findall(r'<a (?:class="([^"]*)" )?href="([^"]+)"[^>]*>([^<]+)</a>', bar)
     by_label = {label.strip(): (cls, href) for cls, href, label in links}
@@ -621,7 +623,7 @@ def test_the_two_hero_buttons_line_up_once_the_free_report_opens() -> None:
     beside one). Only that state changes: the row is marked as a pair, its
     buttons share one width below 600px, and the link starts flush. A season
     that ends hides the second button and takes both marks off."""
-    trial = LANDING.split("if (TRIAL_OPEN) {")[1].split("\n}\n")[0]
+    trial = LANDING.split("if (TRIAL_OPEN && !CHECKOUT_CAN_COMPLETE) {")[1].split("\n}\n")[0]
     assert 'tryCta.parentNode.classList.add("pair");' in trial
     assert 'sample.classList.add("stacked");' in trial
     assert ".cta-row .textlink.stacked{padding-left:0;}" in CSS

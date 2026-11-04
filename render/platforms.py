@@ -36,8 +36,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from render.report import (FAVICON_LINK, PAGE_META, SITE_BAR_CSS, SITE_FOOTER_CSS, SITE_ORIGIN,
-                           SOCIAL_IMAGE_TAGS, esc, font_preloads, sample_cta, site_bar,
-                           site_footer, with_counter)
+                           SOCIAL_IMAGE_TAGS, TRIAL_LINK_LABEL, esc, font_preloads, sample_cta,
+                           site_bar, site_footer, trial_link_open, with_counter)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SITE = REPO_ROOT / "site"
@@ -340,6 +340,19 @@ def _ask(platform: Platform) -> str:
     return cta.replace('href="../join/index.html"', f'href="{join_href(platform)}"', 1)
 
 
+def _try(platform: Platform) -> str:
+    """The free report, beneath the paid ask, as the bye planner offers it:
+    paid first, free as a quieter text link, on this app's lineup. Written only
+    while the landing offers it beside a checkout that can finish
+    (render.report.trial_link_open); otherwise nothing, so a page never
+    points at a free report that is closed."""
+    if not trial_link_open():
+        return ""
+    href = join_href(platform)
+    href += ("&" if "?" in href else "?") + "try=1"
+    return f'\n    <p class="free"><a href="{esc(href)}">{esc(TRIAL_LINK_LABEL)}</a></p>'
+
+
 def _step(platform: Platform, i: int, step: str) -> str:
     """One how-to step, escaped; step 2's "the roster box" links to it (T4:
     the steps described a box the page never linked, so a reader following
@@ -403,7 +416,7 @@ def page(platform: Platform) -> str:
     <h1>{esc(H1.format(name=name))}</h1>
     <p>Paste the roster you already have on {esc(name)}. No login, nothing to connect.
     Every Wednesday a report built from it decides your lineup for your scoring.</p>
-    <div class="cta">{_ask(platform)}<span class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></span></div>
+    <div class="cta">{_ask(platform)}<span class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></span></div>{_try(platform)}
   </div>
 </header>
 <main id="main">
@@ -487,7 +500,7 @@ def dynasty_page() -> str:
     <p class="kicker">{esc(DYNASTY_KICKER)}</p>
     <h1>{"<br>".join(esc(line) for line in DYNASTY_H1)}</h1>
     <p>{esc(DYNASTY_LEDE)}</p>
-    <div class="cta">{_ask(DYNASTY)}<span class="free"><a href="../sample-report.html">See a real report</a></span></div>
+    <div class="cta">{_ask(DYNASTY)}<span class="free"><a href="../sample-report.html">See a real report</a></span></div>{_try(DYNASTY)}
   </div>
 </header>
 <main id="main">

@@ -998,8 +998,10 @@ SITE_NAV_REAL_REPORT = "Sample report"
 SITE_NAV_LEAGUE_PASS = "League Pass"
 SITE_NAV_PLANNER = "Bye planner"
 # The roster check: the site's main action, closed or open. join/ checks a
-# roster with checkout closed too, so this label is true in every state; the
-# buy label ("Get my lineups") is the landing's and the asks' to set.
+# roster with checkout closed too, so this label is true in every state. Open,
+# the same link is the way to buy, and every ask says so: the landing's
+# buttons, the samples' asks (sample_cta) and the Menu's first item
+# (ask_label) all read "Get my lineups" then.
 CHECK_LABEL = "Check my team free"
 CHECK_FOOT_LABEL = "Check my team"     # under "Free tools", where "free" is said
 SITE_MENU_CSS = (
@@ -1042,13 +1044,17 @@ SITE_BAR_CSS = (
 
 
 def site_menu(prefix: str = "", current: str | None = None, pricing: bool = True,
-              check: bool = True) -> str:
+              check: bool = True, label: str | None = None) -> str:
     """The small "Menu": every route, one tap away, wherever the bar has no
     room for them. A plain <details>: no script, and shown only below the
     width where a route leaves the bar. The roster check comes first, as the
-    one gold fill. The summary carries a class because the FAQ readers (here
+    one gold fill, under today's ask (ask_label: "Get my lineups" while
+    checkout is open, the roster check's own label closed). ``label`` is for
+    the landing, whose static markup is the closed state and whose script
+    relabels it. The summary carries a class because the FAQ readers (here
     and in run/launch_check.py) match a bare <summary>."""
-    routes = (*((("join/index.html", CHECK_LABEL, ' class="go"'),) if check else ()),
+    label = label or ask_label()
+    routes = (*((("join/index.html", label, ' class="go"'),) if check else ()),
               ("how-it-works.html", "How it works", ""),
               ("sample-report.html", SITE_NAV_REAL_REPORT, ""),
               ("byes/", SITE_NAV_PLANNER, ""),
@@ -1185,9 +1191,43 @@ def checkout_open(landing: Path | None = None) -> bool:
     return bool(match and match.group(1) == "true")
 
 
+def ask_label() -> str:
+    """The site's one ask, in today's words: the buy label while the landing's
+    CHECKOUT_OPEN is on, the roster check's label otherwise. One rule for the
+    samples' asks, the league-app pages and every page's Menu."""
+    return SAMPLE_CTA if checkout_open() else CHECK_LABEL
+
+
+_LANDING_FLAG = r"^const {name} = (true|false);"
+
+
+def landing_flag(name: str, landing: Path | None = None) -> bool:
+    """One of the landing's switches (``const NAME = true;``), read when a
+    page is written. Unreadable, absent or said twice reads as off: a link
+    left off costs a click, one that leads to something closed is a dead end."""
+    try:
+        text = Path(landing or LANDING_PAGE).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return re.findall(_LANDING_FLAG.format(name=re.escape(name)), text, re.M) == ["true"]
+
+
+def trial_link_open(landing: Path | None = None) -> bool:
+    """Whether a page offers the free report (join/?try=1) as its quieter
+    second link: only while the landing's TRIAL_OPEN is on AND a purchase can
+    finish (CHECKOUT_OPEN and CHECKOUT_CAN_COMPLETE). Before that the free
+    report is the landing hero's own second button, and nothing else offers it."""
+    return all(landing_flag(flag, landing)
+               for flag in ("TRIAL_OPEN", "CHECKOUT_OPEN", "CHECKOUT_CAN_COMPLETE"))
+
+
+# The free report's link wherever a page offers it beneath the paid ask: the
+# landing's words for it, one folder's prefix away.
+TRIAL_LINK_LABEL = "Try it free on your roster"
+
+
 def sample_cta() -> str:
-    label = SAMPLE_CTA if checkout_open() else CHECK_LABEL
-    return f'<a class="btn gold" href="join/index.html">{esc(label)}</a>'
+    return f'<a class="btn gold" href="join/index.html">{esc(ask_label())}</a>'
 
 
 def header(meta: Mapping[str, Any], team: str | None = None) -> str:

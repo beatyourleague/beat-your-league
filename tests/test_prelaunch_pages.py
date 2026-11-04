@@ -270,7 +270,7 @@ def test_the_nav_is_the_lockup_and_on_a_phone_one_link() -> None:
     shown = [label for attrs, label in links if not any(hide in attrs for hide in phone)]
     assert shown == ["Sample report"], "a phone shows more than the lockup and one link"
     assert [label for _a, label in re.findall(r"<a([^>]*)>([^<]*)</a>", menu)] == [
-        rr.CHECK_LABEL, "How it works", "Sample report", "Bye planner", "League Pass", "Pricing"]
+        rr.ask_label(), "How it works", "Sample report", "Bye planner", "League Pass", "Pricing"]
     assert "<script" not in bar, "the Menu needs no script"
     assert 'href="join/' not in rr.site_bar(check=False), "the retired study sells nothing"
     assert "@media (max-width:719px){.sitenav .hidemd{display:none;}.sitebar .sitemenu{display:block;}}" \
