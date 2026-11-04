@@ -170,6 +170,8 @@ books:
 # The same page with subscribers and League Pass seats, from a sealed-registry
 # copy opened in a temporary folder outside the repo and deleted on exit (the
 # stats-registry recipe). Needs `gh` logged in and CACHE_KEY in the shell.
+# It writes its own page, data/dashboard-registry.html (gitignored), which
+# doesn't reload itself, so the background updater never writes over it.
 dashboard-registry:
 	@test -n "$$CACHE_KEY" || { echo "CACHE_KEY is not in this shell: read -s CACHE_KEY && export CACHE_KEY"; exit 2; }
 	@dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \

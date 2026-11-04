@@ -689,11 +689,14 @@ def collect_registry(ctx: Context) -> Source:
     plans = Counter(names.get(s.report_plan, s.report_plan) for s in plan_rows.values())
     payers = {s.pass_key: s for s in rows if s.is_pass_payer and s.pass_key}
     seats = Counter(s.pass_key for s in rows if s.is_league_seat and s.pass_key)
-    filled = sorted(((seats.get(k, 0), max(0, int(p.league_size))) for k, p in payers.items()),
-                    key=lambda t: (-t[0], -t[1]))
+    # The payer row's roster day is the purchase, or a later roster change:
+    # a pass is judged no earlier than 14 days after it was bought.
+    filled = sorted(((seats.get(k, 0), max(0, int(p.league_size)), p.roster_as_of)
+                     for k, p in payers.items()), key=lambda t: (-t[0], -t[1]))
     return _source("registry", data={"total": len(plan_rows), "teams": len(rows),
                                      "plans": dict(plans),
-                                     "seats": filled,
+                                     "seats": [(n, c) for n, c, _b in filled],
+                                     "seats_bought": [b for _n, _c, b in filled],
                                      "setups": dict(Counter(f"{s.scoring}/{s.league_size}"
                                                             for s in rows)),
                                      "owner_left_out": mine},
@@ -807,7 +810,7 @@ def collect_ledger(ctx: Context) -> Source:
         for c in held:
             calls.append({"store": path.parent.name, "week": c.week, "confidence": c.confidence,
                           "status": c.status, "outcome": c.outcome,
-                          "recorded_at": c.recorded_at})
+                          "recorded_at": c.recorded_at, "graded_at": c.graded_at})
     return _source("ledger", data={"season": season, "calls": calls, "unreadable": unreadable},
                    read_at=ctx.now)
 
@@ -1592,6 +1595,13 @@ def site_is_stale(stamp: Any, now: datetime, root: Path = REPO_ROOT) -> bool:
     return not before_schedule(due, schedule_changed(root, "weekly.yml"), now)
 
 
+# The name each workflow carries in the Actions list (its ``name:`` line),
+# held to the files by test.
+ACTIONS_NAMES = {"weekly.yml": "weekly-report", "saturday.yml": "saturday-final-check",
+                 "daily.yml": "daily-intake", "monday.yml": "monday-receipts",
+                 "test.yml": "tests", "pages.yml": "pages"}
+
+
 def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict],
                  ledger: dict | None, metrics: Metrics, root: Path = REPO_ROOT) -> list[Issue]:
     issues: list[Issue] = []
@@ -1658,12 +1668,16 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
         link = (wf["last"] or {}).get("url") or actions
         if wf["missing"] and wf["slot"]:
             slot = wf["slot"].astimezone(ET)
+            # Each workflow by the name Actions lists it under; only
+            # Wednesday's carries the kickoff limit (a report about games
+            # underway must not go out).
+            run_name = ACTIONS_NAMES.get(wf["file"], "the workflow")
+            first = (f"Actions → {run_name} → Run workflow, only before the week's first kickoff."
+                     if wf["file"] == "weekly.yml" else f"Actions → {run_name} → Run workflow.")
             issues.append(Issue(
                 "high" if wf["file"] in ("weekly.yml", "daily.yml", "saturday.yml") else "medium",
                 f"{wf['label']} didn't run after its {slot:%a %-I:%M %p} ET slot.",
-                ("Actions → the workflow → Run workflow (Wednesday's: only before the week's "
-                 "first kickoff).",
-                 "Check the Worker's Cron Trigger."),
+                (first, "Check the Worker's Cron Trigger."),
                 actions, "Crons", "5.8"))
         if last and last["conclusion"] == "failure":
             sev = ("high" if wf["file"] in ("weekly.yml", "daily.yml", "saturday.yml", "pages.yml")
@@ -2357,13 +2371,13 @@ def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | No
                          delta_chip(t["rosters_delta"]) if t else "",
                          spark(t["spark_rosters"]) if t else "",
                          prev_label(m) if p != "all" else span_word, "On the buy page",
-                         missing=None if t else tr))
+                         missing=None if t else tr, flag=visits))
         cards.append(kpi("Buy presses", num(t["presses"]) if t else "",
                          delta_chip(t["presses_delta"]) if t else "",
                          spark(t["spark_presses"]) if t else "",
                          (f"{num(t['presses_open'])} open · {num(t['presses_closed'])} closed"
                           if t else ""), "Checkout open or closed when pressed",
-                         missing=None if t else tr))
+                         missing=None if t else tr, flag=visits))
         cards.append(kpi("Plans sold", num(mo["count"]) if mo else "",
                          delta_chip(mo["count_delta"]) if mo else "", spark(mo["spark"]) if mo else "",
                          prev_label(m), missing=None if mo else st, flag=tests))
@@ -2387,14 +2401,15 @@ def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | No
                          delta_chip(mo["refund_delta"], good_up=False, points=True,
                                     label="no earlier sales" if p != "all" else "all time") if mo else "",
                          "", f"{mo['full_refunds']} of {mo['count']} in full" if mo else "",
-                         missing=None if mo else st))
+                         missing=None if mo else st, flag=tests))
         if fo:
             w = fo["waitlist"]
             cards.append(kpi("Waitlist", num(w["people"]),
                              delta_chip(delta(w["period"], w["prev"])) if p != "all" else
                              delta_chip(None, label="people"),
                              spark(fo["waitlist_spark"]),
-                             f"+{w['period']} {('in ' + span_word) if p != 'all' else 'ever'}"))
+                             f"+{w['period']} {('in ' + span_word) if p != 'all' else 'ever'}",
+                             flag=tests))
         else:
             cards.append(kpi("Waitlist", "", "", "", "", missing=fm))
         return f'<div class="kpis">{"".join(cards)}</div>'
@@ -2669,7 +2684,12 @@ def plan_targets(S: Mapping[str, Source], now: datetime, sends: dict | None,
     target, days left, how many a day close the gap, and on or behind a
     straight line from D to the read-by date. Raw counts below a floor,
     never a rate. Past the read-by date and over the red line, PLAN's own
-    red-action text rides along, word for word."""
+    red-action text rides along, word for word.
+
+    Past its read-by date a row is the count as it stood at the end of that
+    day (ET), never today's: a later sale must not rewrite a reading, or hide
+    a red line it crossed. A green cell with a part the page can't measure
+    ("≥2 from outside the owner's own leagues") is never called met."""
     plan = S["plan"]
     if not plan.ok:
         return []
@@ -2677,7 +2697,7 @@ def plan_targets(S: Mapping[str, Source], now: datetime, sends: dict | None,
     since = plan_start(data)
     d = since.date() if since else None
     today = now.astimezone(ET).date()
-    paid = paid_since(S["stripe"], since, now)
+    paid_now = paid_since(S["stripe"], since, now)
     out = []
     for g in data["gates"]:
         metric = g["metric"]
@@ -2685,20 +2705,57 @@ def plan_targets(S: Mapping[str, Source], now: datetime, sends: dict | None,
         current, frac, state, extra, cur_text = None, None, "unmeasured", g.get("extra"), None
         target = re.search(r"([≥≤~])\s*(\d+(?:\.\d+)?)(%?)", g["green"])
         tnum = float(target.group(2)) if target else None
-        # "~30 + 2" reads as at least about 30 for pace; only "≤" caps.
+        target_text = f"{tnum:g}" if tnum is not None else None
+        # "~30" reads as at least about 30 for pace; only "≤" caps.
         op = "≤" if target and target.group(1) == "≤" else "≥"
+        # What follows the number: "≥2 from outside the owner's own
+        # leagues" is a second part of green this page has no way to count.
+        unmeasured = (g["green"][target.end():].strip(" ,;") if target else "")
+        when = gate_read_by(g["read_by"], d, today)
+        days_left = (when - today).days if when else None
+        frozen = when is not None and days_left < 0
+        cutoff = (datetime.combine(when + timedelta(days=1), datetime.min.time(), ET)
+                  if frozen else None)
+
+        def by_cut(stamp: Any, cutoff: datetime | None = cutoff) -> bool:
+            return cutoff is None or (_ts(stamp) or now) < cutoff
+
+        paid = [s for s in paid_now if by_cut(s.get("created"))]
+        later = []          # "N by today" beside a reading frozen at its date
+        pass_goal, lp, seat_when, seat_red = None, 0, None, False
+        if "purchases + league passes" in low and target:
+            # "~30 + 2": purchases other than League Passes against the
+            # first number, League Passes against the second, each its own.
+            second = re.search(r"\+\s*(\d+)", g["green"][target.end():])
+            if second:
+                pass_goal = float(second.group(1))
+                target_text = f"{tnum:g} + {pass_goal:g}"
+                unmeasured = ""
         if "free reports sent" in low and sends is not None:
             from run.trials import is_owner_trial_key
-            current = sum(1 for e in sends["entries"]
-                          if e["key"].startswith(f"trial-{sends['season']}-")
-                          and not is_owner_trial_key(e["key"])
-                          and (since is None or (_ts(e["sent_at"]) or now) >= since))
+            sent = [e for e in sends["entries"]
+                    if e["key"].startswith(f"trial-{sends['season']}-")
+                    and not is_owner_trial_key(e["key"])
+                    and (since is None or (_ts(e["sent_at"]) or now) >= since)]
+            current = sum(1 for e in sent if by_cut(e["sent_at"]))
+            if frozen and len(sent) != current:
+                later.append(f"{num(len(sent))} by today")
         elif "purchases + league passes" in low and S["stripe"].ok:
-            current = len(paid)
-            lp = sum(1 for s in paid if (s.get("pass") or "").startswith("League"))
-            extra = f"{lp} League Pass{'es' if lp != 1 else ''}"
+            def is_pass(s: Mapping) -> bool:
+                return (s.get("pass") or "").startswith("League")
+            lp = sum(1 for s in paid if is_pass(s))
+            current = len(paid) - lp
+            cur_text = f"{num(current)} + {lp}"
+            extra = (f"{_n(current, 'purchase')} other than League Passes, "
+                     f"{lp} League Pass{'es' if lp != 1 else ''}")
+            if frozen:
+                lp_now = sum(1 for s in paid_now if is_pass(s))
+                if (len(paid_now) - lp_now, lp_now) != (current, lp):
+                    later.append(f"{num(len(paid_now) - lp_now)} + {lp_now} by today")
         elif "paid purchases" in low and S["stripe"].ok:
             current = len(paid)
+            if frozen and len(paid_now) != current:
+                later.append(f"{num(len(paid_now))} by today")
         elif "refund rate" in low and S["stripe"].ok:
             refunds = sum(bool(s.get("full_refund")) for s in paid)
             if len(paid) < MIN_REFUND_SAMPLE:
@@ -2707,60 +2764,121 @@ def plan_targets(S: Mapping[str, Source], now: datetime, sends: dict | None,
                 cur_text = (f"{refunds} of {len(paid)} refunded" if paid else "no purchases yet")
             else:
                 current = 100 * refunds / len(paid)
+            if frozen:
+                # Stripe gives no refund dates here: the purchases stop at the
+                # date, the refunds are as they stand.
+                later.append(f"purchases to {when:%b} {when.day}, refunds as Stripe shows them today")
         elif "graded rows" in low and ledger is not None:
             current = ledger["graded"]
+            calls = S["ledger"].data.get("calls") if S["ledger"].ok else None
+            if frozen and calls is not None:
+                current = sum(1 for c in calls if c.get("status") == "graded"
+                              and by_cut(c.get("graded_at")))
+                if current != ledger["graded"]:
+                    later.append(f"{num(ledger['graded'])} by today")
         elif "seats claimed" in low and registry.ok:
             seats = registry.data["seats"]
+            bought = list(registry.data.get("seats_bought") or [])
+            bought += [None] * (len(seats) - len(bought))
             current = sum(n for n, _c in seats)
-            extra = ", ".join(f"{n} of {c}" for n, c in seats) or "no pass yet"
+            extra = "no pass yet"
             if seats and "half" in g["green"].lower():
-                # "≥ half its seat_cap", per pass: on track only when every pass is.
+                # "≥ half its seat_cap" D+14 after EACH pass: a pass is judged
+                # on its own date, and before it the row is only tracking.
                 frac = min(min((n / c) / 0.5 if c else 1 for n, c in seats), 1)
-                state = "met" if frac >= 1 else "behind"
-        when = gate_read_by(g["read_by"], d, today)
-        days_left = (when - today).days if when else None
-        pace, expected, red_now = "", None, None
+                rows, late, waiting = [], [], False
+                for (n, c), b in zip(seats, bought):
+                    try:
+                        due = date.fromisoformat(b) + timedelta(days=14) if b else None
+                    except (TypeError, ValueError):
+                        due = None
+                    if c and n < c / 2:
+                        if due is not None and today > due:
+                            late.append((due, n, c))
+                        else:
+                            waiting = True
+                    rows.append(f"{n} of {c}" + (f" · read {due:%b} {due.day}" if due else ""))
+                extra = ", ".join(rows)
+                if late:
+                    first = min(late)
+                    seat_when, seat_red = first[0], True
+                    state, cur_text, target_text = "missed", f"{first[1]} of {first[2]} seats", None
+                else:
+                    state = "tracking" if waiting else "met"
+            elif seats:
+                extra = ", ".join(f"{n} of {c}" for n, c in seats)
+        pace, expected, red_now, needed = "", None, None, ""
         if current is not None and tnum is None and state == "unmeasured":
             state = "tracking"
         if current is not None and tnum is not None:
+            span = max((when - d).days, 1) if when is not None and d is not None else None
+            gone = min(max((today - d).days, 0), span) if span is not None else None
             if op == "≥":
                 frac = min(current / tnum, 1) if tnum else 1
                 done = current >= tnum
             else:
                 frac = 1 if current <= tnum else max(0.0, tnum / current)
                 done = current <= tnum
-            if done:
+            pass_short = pass_goal is not None and lp < pass_goal
+            if pass_goal is not None:
+                frac = min(frac, min(lp / pass_goal, 1) if pass_goal else 1)
+            if done and not pass_short:
                 state = "met"
-            elif when is not None and days_left < 0:
+            elif frozen:
                 state = "missed"
-            elif op == "≥" and when is not None and d is not None:
+            elif op == "≥" and span is not None:
                 # A straight line from D to the read-by date, in whole items.
-                span = max((when - d).days, 1)
-                gone = min(max((today - d).days, 0), span)
                 expected = math.floor(tnum * gone / span)
-                state = "on_pace" if current >= expected else "behind_pace"
+                behind = current < expected
+                if pass_goal is not None:
+                    behind = behind or lp < math.floor(pass_goal * gone / span)
+                state = "behind_pace" if behind else "on_pace"
             else:
                 state = "behind"
-            if when is not None and days_left < 0 and not done:
+            if frozen and not (done and not pass_short):
                 red_now = red_line_crossed(g["red"], current, tnum)
+                if pass_short and red_now is not None:
+                    red_now = red_now or g["red"].strip().lower().startswith("fewer")
             if op == "≥":
-                pace = f"{num(current)} of {tnum:g}"
-                if not done and when is not None and days_left >= 0:
-                    pace += (f" · {_n(days_left, 'day')} left · "
-                             f"{per_day_text(tnum - current, days_left)} needed")
-                    if state == "behind_pace":
+                if pass_goal is not None:
+                    pace = (f"{num(current)} of {tnum:g} purchases, {lp} of {pass_goal:g} "
+                            f"League Passes")
+                else:
+                    pace = f"{num(current)} of {tnum:g}"
+                if state not in ("met",) and when is not None and days_left >= 0:
+                    parts = []
+                    if current < tnum:
+                        parts.append(per_day_text(tnum - current, days_left)
+                                     + (" for purchases" if pass_goal is not None else ""))
+                    if pass_short:
+                        parts.append(per_day_text(pass_goal - lp, days_left) + " for League Passes")
+                    needed = " and ".join(parts)
+                    pace += f" · {_n(days_left, 'day')} left" + (f" · {needed} needed" if needed else "")
+                    if state == "behind_pace" and current < (expected or 0):
                         pace += f" · a straight line from D says {expected} by now"
-                elif not done and when is not None:
+                elif state != "met" and when is not None:
                     pace += f" · read on {when:%b} {when.day}"
+        if unmeasured:
+            line = f"Not measured here: {unmeasured}"
+            extra = f"{extra} · {line}" if extra else line
+            if state == "met":
+                # Green has a part this page can't count: never "Met" on half.
+                state = "tracking"
+        if seat_red:
+            when, red_now = seat_when, True
+            days_left = (when - today).days
+        if later:
+            extra = (f"{extra} · " if extra else "") + "; ".join(later)
         if cur_text is None:
             cur_text = ("—" if current is None else
                         f"{current:.0f}%" if "refund rate" in low else num(current))
         read_label = g["read_by"]
-        if d and g["read_by"].startswith("D+") and when:
+        if d and g["read_by"].startswith("D+") and when and not seat_red:
             read_label = f"{g['read_by']} · {when:%b} {when.day}"
         out.append({"metric": metric, "green": g["green"], "red": g["red"],
                     "read_by": read_label, "when": when, "days_left": days_left,
-                    "current": current, "cur_text": cur_text, "target": tnum, "op": op,
+                    "current": current, "cur_text": cur_text, "target": tnum,
+                    "target_text": target_text, "op": op, "needed": needed,
                     "frac": frac, "state": state, "pace": pace, "extra": extra,
                     "expected": expected, "red_now": bool(red_now),
                     "needs": gate_needs(metric, S) if state == "unmeasured" else ""})
@@ -2837,7 +2955,7 @@ TODAY_CONNECT = {
     3: ("traffic_from", "Add TRAFFIC_FROM to .env", 2),
     4: ("costs", "Record your costs", 10),
     5: ("log_secret", "Add LOG_SECRET to .env", 2),
-    6: ("resend", "Optional: add RESEND_READ_KEY to .env", 5),
+    6: ("resend", "Optional: save RESEND_READ_KEY as a GitHub secret", 5),
     7: ("registry", "Open a copy of the registry", 3),
 }
 
@@ -2859,8 +2977,10 @@ def today_connect(sources: Mapping[str, Source], env: Mapping[str, str]
     return rows
 
 
-# Steps the owner may decline for good: listed, never put in Today.
-OPTIONAL_CONNECT_STEPS = ("resend",)
+# Steps the owner may decline for good, or does only now and then: listed,
+# never put in Today, never keeping the card up. The registry step is done
+# only on the separate page make dashboard-registry writes.
+OPTIONAL_CONNECT_STEPS = ("resend", "registry")
 
 
 def _sender_set(sources: Mapping[str, Source]) -> bool | None:
@@ -2965,8 +3085,26 @@ def read_drafts(sources: Mapping[str, Source]) -> str | None:
     return site.data.get("drafts") if site is not None and site.ok else None
 
 
+def wednesday_game(today: date, week: Mapping, games: Path) -> bool:
+    """Is a regular-season game on ``today``'s schedule? The check
+    run/report_slot.py makes before weekly.yml's morning slot sends the
+    report, read from the cached schedule; once the morning run has rebuilt
+    week.json, its first kickoff on ``today`` says the same. A schedule this
+    Mac can't read, and no such kickoff, is the evening slot."""
+    import csv
+    from run.report_slot import game_today
+    try:
+        with games.open(encoding="utf-8", newline="") as handle:
+            if game_today(csv.DictReader(handle), today.isoformat()):
+                return True
+    except (OSError, csv.Error, UnicodeDecodeError):
+        pass
+    kickoff = _ts(week.get("first_kickoff"))
+    return kickoff is not None and kickoff.astimezone(ET).date() == today
+
+
 def _rhythm(sources: Mapping[str, Source], now: datetime, health: list[dict],
-            root: Path) -> Task | None:
+            root: Path, games: Path | None = None) -> Task | None:
     """The weekly rhythm item due today (LAUNCH.md §8): Wednesday's report,
     Saturday's check, Monday's grading. A run counts as missed only where
     workflow_health says so (and that is an issue, not this row)."""
@@ -2977,7 +3115,12 @@ def _rhythm(sources: Mapping[str, Source], now: datetime, health: list[dict],
     by_file = {w["file"]: w for w in health}
     week = ((sources["site"].data or {}).get("week") or {}) if sources["site"].ok else {}
     if today.weekday() == 2:
-        slot = _slot_today(workflow_crons(root, "weekly.yml"), today, (str(REPORT_MORNING_HOUR),))
+        # A week with a game this Wednesday sends its report from the morning
+        # slot (run/report_slot.py); every other week from the evening one.
+        morning = wednesday_game(today, week, games or root / "data" / "raw" / "nflverse"
+                                 / "games.csv")
+        slot = _slot_today(workflow_crons(root, "weekly.yml"), today,
+                           () if morning else (str(REPORT_MORNING_HOUR),))
         n = None
         if week.get("week") and week.get("lands_on") == today.isoformat():
             n = int(week["week"]) + 1
@@ -3019,6 +3162,29 @@ def _rhythm(sources: Mapping[str, Source], now: datetime, health: list[dict],
     return None
 
 
+def _gradeable_pending(sources: Mapping[str, Source], slot: datetime) -> int:
+    """Pending calls a missed grading slot was there to settle: recorded
+    before it. A call recorded after it is about games not played yet, and
+    running the workflow settles none of those. A call with no recorded
+    time counts only when its week is before the one week.json names."""
+    led = sources.get("ledger")
+    if not (led and led.ok):
+        return 0
+    site = sources.get("site")
+    week = ((site.data or {}).get("week") or {}) if site is not None and site.ok else {}
+    current = week.get("week")
+    n = 0
+    for c in led.data.get("calls") or []:
+        if c.get("status") != "pending":
+            continue
+        at = _ts(c.get("recorded_at"))
+        if at is not None:
+            n += at < slot
+        elif isinstance(current, int) and isinstance(c.get("week"), int):
+            n += c["week"] < current
+    return n
+
+
 def today_tasks(sources: Mapping[str, Source], now: datetime, env: Mapping[str, str],
                 issues: list[Issue] | None = None, health: list[dict] | None = None,
                 ledger: dict | None = None, drafts: str | None = None,
@@ -3045,15 +3211,18 @@ def today_tasks(sources: Mapping[str, Source], now: datetime, env: Mapping[str, 
         steps = (i.fix,) if isinstance(i.fix, str) else tuple(i.fix)
         how = steps[0] + (" Then the rest of its steps in Issues." if len(steps) > 1 else "")
         out.append(Task("risk", f"issue-{k}", i.title, ISSUE_MINUTES[i.severity], how, tone="bad"))
-    # Monday's grading missed while calls wait is a medium issue, but it
-    # holds the public record back: it leads today.
-    pending = (ledger or {}).get("pending") or 0
+    # Monday's grading missed while calls it could have settled wait is a
+    # medium issue, but it holds the public record back: it leads today.
     for wf in health:
-        if wf["file"] == "monday.yml" and wf["missing"] and wf["slot"] and pending:
+        if not (wf["file"] == "monday.yml" and wf["missing"] and wf["slot"]):
+            continue
+        waiting = _gradeable_pending(sources, wf["slot"])
+        if waiting:
             out.append(Task("risk", "grading", f"{wf['label']} didn't run after its "
                                                f"{_et_time(wf['slot'], day=True)} slot, and "
-                                               f"{_n(pending, 'call')} wait to be graded.", 5,
-                            "Actions → monday-receipts → Run workflow.", tone="bad"))
+                                               f"{_n(waiting, 'call')} from before it "
+                                               f"{'waits' if waiting == 1 else 'wait'} to be graded.",
+                            5, "Actions → monday-receipts → Run workflow.", tone="bad"))
 
     # (2) The first step that leaves the page blind to (1).
     for sid, done, title, minutes, how in today_connect(sources, env):
@@ -3087,14 +3256,15 @@ def today_tasks(sources: Mapping[str, Source], now: datetime, env: Mapping[str, 
     target_rows = []
     for t in red:
         target_rows.append(Task("target", f"target-{t['metric']}",
-                                f"{t['metric']}: {t['cur_text']} of {t['target']:g} when it was read "
-                                f"on {t['when']:%b} {t['when'].day}", 10,
+                                f"{t['metric']}: {t['cur_text']}"
+                                + (f" of {t['target_text']}" if t["target_text"] else "")
+                                + f" when it was read on {t['when']:%b} {t['when'].day}", 10,
                                 f"PLAN §6 says: {t['red']}", tone="bad"))
     for t in behind:
         target_rows.append(Task("target", f"target-{t['metric']}",
-                                f"{t['metric']}: {t['cur_text']} of {t['target']:g} by "
+                                f"{t['metric']}: {t['cur_text']} of {t['target_text']} by "
                                 f"{t['when']:%b} {t['when'].day}, behind pace", 0,
-                                f"{per_day_text(t['target'] - t['current'], t['days_left']).capitalize()} "
+                                f"{t['needed'][:1].upper()}{t['needed'][1:]} "
                                 f"from here. Today's selling time goes here first.", tone="warn"))
     out.extend(target_rows[:1])
 
@@ -3548,13 +3718,20 @@ def insights_section(I: Mapping[str, list[Insight]]) -> str:
                    by_period(one))
 
 
-def attention(issues: list[Issue]) -> str:
+def attention(issues: list[Issue], today_risk: bool = False) -> str:
+    """The urgent issues. ``today_risk``: Today leads with a risk row that
+    isn't one of them (a missed grading run), so this card never says "No
+    urgent issues" right under it."""
     urgent = [i for i in issues if i.severity in ("critical", "high")][:3]
     if not urgent:
         rest = len(issues)
-        return (f'<div class="attn clear">{icon("check", "aic")}<div><p class="at">No urgent issues.</p>'
-                f'<p class="ad">{rest} lower-priority item{"s" if rest != 1 else ""} below in Issues.'
-                f'</p></div></div>' if rest else
+        head = "No other urgent issues." if today_risk else "No urgent issues."
+        lead = "The urgent one is first in Today. " if today_risk else ""
+        return (f'<div class="attn clear">{icon("check", "aic")}<div><p class="at">{head}</p>'
+                f'<p class="ad">{lead}{rest} lower-priority item{"s" if rest != 1 else ""} below in '
+                f'Issues.</p></div></div>' if rest else
+                f'<div class="attn clear">{icon("check", "aic")}<div><p class="at">{head}</p>'
+                f'<p class="ad">{lead.strip()}</p></div></div>' if today_risk else
                 f'<div class="attn clear">{icon("check", "aic")}<div><p class="at">All clear: no issues '
                 f'at all.</p></div></div>')
     items = "".join(issue_html(i, compact=True) for i in urgent)
@@ -3718,7 +3895,7 @@ CONNECT_STEPS = (
                 "Money, the revenue half of Profit, the Intake check and the PLAN §6 targets "
                 "that count sales.",
                 "Add STRIPE_STATS_KEY= to .env with the read-only owner-stats key from your "
-                "password manager (LAUNCH.md step 3, item 2)."),
+                "password manager (LAUNCH.md section 8, The dashboard)."),
     ConnectStep(3, "Your own visits", "TRAFFIC_FROM",
                 "Page views start after your own checks, so the traffic is visitors.",
                 "Add TRAFFIC_FROM= to .env with the UTC time your checks ended, such as "
@@ -3732,16 +3909,23 @@ CONNECT_STEPS = (
                 "Add LOG_SECRET= to .env, the same value as the GitHub secret, from your "
                 "password manager (LAUNCH.md step 5, item 6)."),
     ConnectStep(6, "Bounce key", "RESEND_READ_KEY",
-                "Bounces: emails of the last 48 hours that bounced or were marked spam.",
-                "Add RESEND_READ_KEY= to .env with a Full access Resend key (LAUNCH.md step 2, "
-                "item 3). Optional: the hourly run checks bounces without it.",
+                "The hourly run's bounce check: a buyer whose email bounced is found before "
+                "their next report.",
+                "Save a Full access Resend key only as the GitHub secret RESEND_READ_KEY, never "
+                "in .env (LAUNCH.md step 2, item 3). With that secret set, the hourly run checks "
+                "bounces and goes red when an email somebody paid for bounced. Without it, "
+                "nothing checks them. This page can't see GitHub secrets, so Bounces stays "
+                "empty here.",
                 optional=True),
     ConnectStep(7, "Subscriber list", "make dashboard-registry",
                 "Subscribers by plan, League Pass seats, and which emails went to your own "
                 "subscriptions.",
-                "Run read -s CACHE_KEY && export CACHE_KEY, then make dashboard-registry, with "
-                "gh signed in (CACHE_KEY is in your password manager, LAUNCH.md step 3). It "
-                "builds one page with the list and deletes its copy, so run it when you want them."),
+                "When you want the list: run read -s CACHE_KEY && export CACHE_KEY, then make "
+                "dashboard-registry, with gh signed in (CACHE_KEY is in your password manager, "
+                "LAUNCH.md step 3). It writes a separate page, data/dashboard-registry.html, "
+                "that doesn't update itself, so the background updater never overwrites it. "
+                "Its copy of the list is deleted when it's done.",
+                optional=True),
 )
 # The source each step brings in: an unconnected one shrinks to one line
 # naming its step. The intake check has no panel of its own.
@@ -3853,7 +4037,8 @@ def connect_card(S: Mapping[str, Source], env: Mapping[str, str]) -> str:
                      f'{body}</div></li>')
     return (f'<div class="card connect" id="connect"><div class="cardhead"><div>'
             f'<h3>Connect your dashboard</h3><p class="muted small">Each step ticks itself on the '
-            f'next build. Names go in the gitignored .env. The page never shows their values.'
+            f'next build, and the optional ones can stay open. Names go in the gitignored .env '
+            f'unless a step says otherwise. The page never shows their values.'
             f'</p></div><span class="unit">{done} of {len(steps)} done</span></div>'
             f'<ol class="csteps">{"".join(items)}</ol></div>')
 
@@ -4027,7 +4212,7 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
         f'<nav class="tabs" aria-label="Sections"><div class="tabsin">{nav}</div></nav></header>'
         f'<main class="wrap">{stale}{AGED_STRIP}'
         f'{today_html(tasks)}'
-        f'{attention(issues)}{connect_card(sources, names_env)}{launch_status(sources, now)}'
+        f'{attention(issues, any(t.kind == "risk" for t in tasks))}{connect_card(sources, names_env)}{launch_status(sources, now)}'
         f'<div class="filters"><div class="seg" role="group" aria-label="Period">{periods}</div>'
         f'<p class="muted small fnote">Traffic keeps 90 days; money and forms count all time under “All”.</p>'
         f'{freshness(sources, now, cron)}</div>'
@@ -4468,6 +4653,12 @@ def write_dashboard(sources: Mapping[str, Source], out: Path, now: datetime,
     return out
 
 
+# make dashboard-registry's page: a one-off snapshot beside the main page, so
+# the background updater (which builds without the registry) never writes
+# over it, and it never reloads itself into a page without the list.
+REGISTRY_OUT = REPO_ROOT / "data" / "dashboard-registry.html"
+
+
 def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
         env_file: Path | None = None,
         collectors: Mapping[str, Callable[[Context], Source]] | None = None,
@@ -4481,8 +4672,9 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
         return 2
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT,
-                        help="where to write the page (must be gitignored; default data/dashboard.html)")
+    parser.add_argument("--out", type=Path, default=None,
+                        help="where to write the page (must be gitignored; default "
+                             "data/dashboard.html, or data/dashboard-registry.html with --registry)")
     parser.add_argument("--registry", type=Path, default=None,
                         help="a registry copy to count subscribers and seats from")
     parser.add_argument("--no-open", action="store_true", help="write the page, don't open it")
@@ -4495,6 +4687,8 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
                              "keeps reloading itself and no browser opens")
     parser.add_argument("--rounds", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.out is None:
+        args.out = REGISTRY_OUT if args.registry is not None else DEFAULT_OUT
     if args.every is not None and args.every < LIVE_MIN_MINUTES:
         print(f"--every must be at least {LIVE_MIN_MINUTES} minutes: GitHub allows 60 unsigned "
               f"requests an hour and each build makes one per workflow.", file=sys.stderr)
