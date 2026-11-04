@@ -478,6 +478,48 @@ def test_a_copy_is_marked_done_and_nothing_else_is(page: str, name: str) -> None
     assert got["shared"]["ok"] == "" and got["shared"]["text"] == ""
 
 
+_SHARE_DATA_HARNESS = r"""
+const fn = __FN__;
+const name = __NAME__;
+async function run(text, nav) {
+  const status = { textContent: "", dataset: {} };
+  Object.defineProperty(globalThis, "navigator", { value: nav, configurable: true, writable: true });
+  globalThis.window = { getSelection: () => ({ selectAllChildren() {} }) };
+  globalThis[name](text, {}, status);
+  await new Promise((r) => setTimeout(r, 10));
+}
+(async () => {
+  eval(fn + "\nglobalThis[name] = " + name + ";");
+  const out = {};
+  const withLink = "One email every Wednesday decides your lineup: https://beatyourleague.com/?via=friend";
+  await run(withLink, { share: (d) => { out.shared = d; return Promise.resolve(); } });
+  await run(withLink, { clipboard: { writeText: (t) => { out.copied = t; return Promise.resolve(); } } });
+  await run("No link in this one.", { share: (d) => { out.plain = d; return Promise.resolve(); } });
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+@pytest.mark.parametrize("page,name", [("thanks.html", "shareWithFriend"),
+                                       ("league-pass.html", "shareLine"),
+                                       ("byes/index.html", "shareLine")])
+def test_the_share_sheet_gets_the_link_as_a_link(page: str, name: str) -> None:
+    """Owner report (Nov 4 2026): "Send it to them" shared the whole message,
+    link included, as one block of text, so Messages showed no preview card
+    and Mail no real link. The share sheet now gets the message as text and
+    the trailing link as its url (the Web Share standard's own split); a copy
+    still takes the whole message, and a line with no link shares as text.
+    Run under node against the page's own function."""
+    fn = _js_function(_page(page), name)
+    got = _node(_SHARE_DATA_HARNESS.replace("__FN__", json.dumps(fn)).replace(
+        "__NAME__", json.dumps(name)))
+    assert got["shared"] == {"text": "One email every Wednesday decides your lineup:",
+                             "url": "https://beatyourleague.com/?via=friend"}, got
+    assert got["copied"] == ("One email every Wednesday decides your lineup: "
+                             "https://beatyourleague.com/?via=friend"), got
+    assert got["plain"] == {"text": "No link in this one."}, got
+
+
 def test_the_404_fumbles_in_its_own_sheet_only() -> None:
     """The wobble lives in 404's own style, not the shared block, so the
     brand mark never wobbles anywhere else."""

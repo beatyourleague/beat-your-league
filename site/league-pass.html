@@ -635,7 +635,10 @@ function shareLine(text, line, status) {
       byHand);
   };
   if (!navigator.share) return copyIt();
-  navigator.share({ text: text }).then(
+  // A link at the end goes to the share sheet as a link (a preview card in
+  // Messages, a real link in Mail); a copy keeps the whole message.
+  const link = /\s(https:\/\/\S+)$/.exec(text);
+  navigator.share(link ? { text: text.slice(0, link.index), url: link[1] } : { text: text }).then(
     () => { status.dataset.ok = ""; status.textContent = ""; },
     (err) => { if (!err || err.name !== "AbortError") copyIt(); });
 }
