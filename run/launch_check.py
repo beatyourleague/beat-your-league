@@ -1827,12 +1827,20 @@ def check_instant_delivery() -> list[Gate]:
 def check_resend_read_key() -> list[Gate]:
     """The bounce check (run/delivery.check_bounces) reads each sent email
     back from Resend, which the sending key cannot do: without a Full access
-    RESEND_READ_KEY it says so once per run and checks nothing."""
+    RESEND_READ_KEY it says so once per run and checks nothing. LAUNCH.md
+    step 2 puts that key in the GitHub secret and nowhere else, so the secret's
+    NAME (never its value) is what passes here; a key in this shell or .env
+    passes too."""
     name = "The bounce check has a Resend key that can read sent email"
     if os.environ.get("RESEND_READ_KEY", "").strip():
         return [Gate("Email", name, "PASS", "RESEND_READ_KEY is set in this shell or .env")]
+    names = gh_secret_names()
+    if names is not None and "RESEND_READ_KEY" in names:
+        return [Gate("Email", name, "PASS", "RESEND_READ_KEY is a GitHub secret")]
+    where = ("isn't a GitHub secret" if names is not None
+             else "can't be checked from this machine (gh not signed in)")
     return [Gate("Email", name, "OWNER",
-                 "RESEND_READ_KEY is not in this shell or .env — Resend's Sending access key can only "
+                 f"RESEND_READ_KEY {where}. Resend's Sending access key can only "
                  "send, so a bounced buyer address goes unseen. Create a Full access key and "
                  "save it as the GitHub secret RESEND_READ_KEY (LAUNCH.md step 2)")]
 
@@ -1924,14 +1932,25 @@ def check_live() -> list[Gate]:
     return gates
 
 
-def check_secrets() -> list[Gate]:
+def gh_secret_names() -> set[str] | None:
+    """The repository's Actions secret NAMES (gh never returns values), or
+    None when gh is missing or not signed in."""
     if not shutil.which("gh"):
-        names = None
-    else:
+        return None
+    try:
         r = subprocess.run(["gh", "secret", "list", "--json", "name"], cwd=REPO,
-                           capture_output=True, text=True)
-        names = ({s["name"] for s in json.loads(r.stdout)} if r.returncode == 0 and r.stdout
-                 else None)
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    try:
+        return ({s["name"] for s in json.loads(r.stdout)} if r.returncode == 0 and r.stdout
+                else None)
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def check_secrets() -> list[Gate]:
+    names = gh_secret_names()
     if names is None:
         return [Gate("Owner", "GitHub Actions secrets are set", "OWNER",
                      "can't read them from this machine (gh not signed in) — confirm these "

@@ -486,7 +486,16 @@ def test_the_launch_check_holds_the_three_trial_switches_together(monkeypatch) -
         monkeypatch.setattr(lc, "worker_status", lambda e, k, w=worker: {"trial_open": w})
         assert lc.check_worker_switches()[0].status == want, (site, worker)
     monkeypatch.delenv("RESEND_READ_KEY", raising=False)
+    monkeypatch.setattr(lc, "gh_secret_names", lambda: {"RESEND_API_KEY"})
     assert lc.check_resend_read_key()[0].status == "OWNER"
+    monkeypatch.setattr(lc, "gh_secret_names", lambda: None)
+    assert lc.check_resend_read_key()[0].status == "OWNER"
+    # LAUNCH.md step 2 keeps the Full access key only in the GitHub secret:
+    # its name there passes, so following LAUNCH never leaves this open.
+    monkeypatch.setattr(lc, "gh_secret_names", lambda: {"RESEND_API_KEY", "RESEND_READ_KEY"})
+    gate = lc.check_resend_read_key()[0]
+    assert gate.status == "PASS" and "GitHub secret" in gate.detail
+    monkeypatch.setattr(lc, "gh_secret_names", lambda: None)
     monkeypatch.setenv("RESEND_READ_KEY", "re_full")
     assert lc.check_resend_read_key()[0].status == "PASS"
 

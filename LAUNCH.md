@@ -57,9 +57,10 @@ remaining item shows as OWNER (yours) or FAIL (code), and it says READY when not
 It reads more when you give it more, all read-only:
 - `gh auth login` once: secrets, cron timing, the fork-PR setting.
 - `RESEND_API_KEY` in the shell: whether Resend says the domain is verified.
-- `FORM_ENDPOINT`, `FORM_API_KEY`, `STRIPE_PAYMENT_LINKS` and `RESEND_READ_KEY` in this shell or
-  `.env` (the dashboard's): the Worker's free-report switch against the site's, the link map,
-  the bounce key.
+- `FORM_ENDPOINT`, `FORM_API_KEY` and `STRIPE_PAYMENT_LINKS` in this shell or `.env` (the
+  dashboard's): the Worker's free-report switch against the site's, the link map. The bounce
+  key is checked by its GitHub secret's name (with `gh` signed in), never its value: it lives
+  only in that secret (step 2).
 - `STRIPE_API_KEY` = the read-only `owner-stats` key from step 3
   (`read -s STRIPE_API_KEY && export STRIPE_API_KEY`): public details, refund and dispute
   rates, sales against the tax threshold.
@@ -919,7 +920,8 @@ opens in your browser: what needs you now at the top, then traffic, the funnel, 
 PLAN §6's gates, customers, issues (each with the step that fixes it), the record and plain
 insights, switchable between 7 days, 30 days and all. It reads the same `.env` and shell
 (`STRIPE_STATS_KEY` if you keep the read-only key under its own name, else `STRIPE_API_KEY`;
-`RESEND_READ_KEY` adds bounces), changes nothing anywhere, and writes only
+the Full access Resend key stays in its GitHub secret, so the hourly run checks bounces and the
+page's Bounces panel stays empty), changes nothing anywhere, and writes only
 `data/dashboard.html`, which is gitignored: don't commit it, share it or post a screenshot of
 it in public. A source you haven't connected shows its LAUNCH step instead of numbers.
 `make dashboard-registry` adds subscribers and seats the way `make stats-registry` does, on a

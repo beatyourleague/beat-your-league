@@ -3061,3 +3061,24 @@ def test_each_league_pass_is_judged_on_its_own_fourteen_days(tmp_path) -> None:
     assert seats(late, full)["state"] == "met"
     undated = dash._source("registry", data={**reg.data, "seats_bought": [None]}, read_at=late)
     assert seats(late, undated)["state"] == "tracking"
+
+
+def test_the_bounce_step_ticks_from_the_github_secrets_name() -> None:
+    """LAUNCH.md step 2 keeps the Full access Resend key in its GitHub secret
+    only, so following it must tick the step: the launch check reads that
+    secret's name (never its value). The gate's name is held to the check's."""
+    import run.launch_check as lc
+    from unittest import mock
+    with mock.patch.object(lc, "gh_secret_names", lambda: {"RESEND_READ_KEY"}), \
+            mock.patch.dict("os.environ", {"RESEND_READ_KEY": ""}):
+        gate = lc.check_resend_read_key()[0]
+    assert gate.name == dash.BOUNCE_GATE and gate.status == "PASS"
+    S = empty_sources()
+    def step6(S):
+        return next(s["state"] for s in dash.connect_steps(S, {}) if s["step"].n == 6)
+    assert step6(S) == "open"
+    S["launch"] = dash._source("launch", data={"gates": [gate.__dict__.copy()]}, read_at=NOW)
+    assert step6(S) == "done"
+    S["launch"] = dash._source("launch", data={"gates": [{**gate.__dict__, "status": "OWNER"}]},
+                               read_at=NOW)
+    assert step6(S) == "open"

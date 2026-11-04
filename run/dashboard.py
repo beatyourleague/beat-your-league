@@ -3067,6 +3067,19 @@ def today_connect(sources: Mapping[str, Source], env: Mapping[str, str]
 OPTIONAL_CONNECT_STEPS = ("resend", "registry")
 
 
+# run.launch_check.check_resend_read_key's gate, by its own name.
+BOUNCE_GATE = "The bounce check has a Resend key that can read sent email"
+
+
+def _gate_passes(sources: Mapping[str, Source], name: str) -> bool:
+    """A launch-check gate read this build and PASS."""
+    launch = sources.get("launch")
+    if not (launch and launch.ok):
+        return False
+    return any(g.get("name") == name and g.get("status") == "PASS"
+               for g in launch.data.get("gates") or [])
+
+
 def _sender_set(sources: Mapping[str, Source]) -> bool | None:
     """Is SENDER_POSTAL_ADDRESS a GitHub secret? Read off the launch check's
     secrets gate; None when it couldn't read the secrets (gh signed out)."""
@@ -4001,8 +4014,8 @@ CONNECT_STEPS = (
                 "Save a Full access Resend key only as the GitHub secret RESEND_READ_KEY, never "
                 "in .env (LAUNCH.md step 2, item 3). With that secret set, the hourly run checks "
                 "bounces and goes red when an email somebody paid for bounced. Without it, "
-                "nothing checks them. This page can't see GitHub secrets, so Bounces stays "
-                "empty here.",
+                "nothing checks them. This step ticks once the secret's name is there (gh "
+                "signed in); Bounces on this page stays empty, since the key isn't on this Mac.",
                 optional=True),
     ConnectStep(7, "Subscriber list", "make dashboard-registry",
                 "Subscribers by plan, League Pass seats, and which emails went to your own "
@@ -4089,7 +4102,9 @@ def connect_steps(S: Mapping[str, Source], env: Mapping[str, str]) -> list[dict]
         elif step.n == 5:
             done = "LOG_SECRET" in names
         elif step.n == 6:
-            done = S["bounces"].ok
+            # The key lives only in its GitHub secret (LAUNCH.md step 2): the
+            # launch check sees that secret's name, never its value.
+            done = S["bounces"].ok or _gate_passes(S, BOUNCE_GATE)
             if S["bounces"].status == "error":
                 note = "That Resend key couldn't read sent email. It needs Full access."
         else:
