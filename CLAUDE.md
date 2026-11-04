@@ -2108,6 +2108,30 @@ post tag uses the site's own `?via=` rule, counts under its channel (the part be
 hyphen) and on its own row, and is pinned on the traffic chart. A line the books can't read is
 a low issue, never a guess.
 
+**The dashboard keeps itself fresh and says what to do (Nov 4 2026).** The owner opened
+`data/dashboard.html`, refreshed, and read Nov 3's numbers as today's: a one-off page never said
+its age. Every page now carries `data-generated`, shows "built N h ago" and turns amber after an
+hour (a live page only at its own stopped threshold); `make dashboard-auto` / `-off` / `-status`
+install a per-user LaunchAgent (`run/dashboard_auto.py`, plist generated at install, PATH only,
+log in gitignored `data/dashboard-updater.log`) that rebuilds every 15 min, and "on" is read
+from launchd, never from the plist file. Cron outputs (send log, ledger, week.json, drafts,
+this-week.html, the workflows' schedules) are read from `origin/main` through `cron_file()`
+after a `git fetch` into a temp copy, never pull or checkout; a schedule is owed only a day after
+its change reached main (a Tuesday grading slot pushed after its time read as missed). Rules:
+- **Today** (`today_tasks`): at most 5 rows with minutes, in order: risk (critical/high issues,
+  a missed grading run only with calls recorded before its slot), the first open Connect step,
+  deadlines within 14 days (`DEADLINES`, held to LAUNCH.md), a PLAN §6 target behind pace, the
+  day's rhythm (Wednesday's report from the morning slot in a Wednesday-game week), selling.
+  A row whose source is off is never done or overdue.
+- **Connect your dashboard** (`CONNECT_STEPS`, one list for the card and Today): Stripe isn't
+  done while OWNER_EMAILS is missing (the owner's test sale would count); the bounce key and the
+  registry are optional and never in Today; the bounce key ticks from its GitHub secret's NAME
+  (`launch_check.gh_secret_names`), because LAUNCH step 2 keeps it nowhere else. `make
+  dashboard-registry` writes its own snapshot, `data/dashboard-registry.html`.
+- Counts holding the owner's own activity carry "includes your own visits/tests" until
+  TRAFFIC_FROM / OWNER_EMAILS are set. PLAN §6 rows show pace from D, freeze at their read-by
+  date, and never read Met on a clause the page can't count.
+
 **The push token never shares a job with installed code (SEC-1, Oct 25–26 2026).**
 Every step of a job shares one runner and one checkout, so a step that runs pip packages or
 Chrome reaches a later step through what it leaves behind: a git hook or config key (filter
