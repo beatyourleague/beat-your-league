@@ -1574,10 +1574,20 @@ hand, so the owner could always refund their own purchases. Rules (`tests/test_o
 - **Left out of the numbers**, as test domains are (`run.owner.not_counted`): form rows,
   channels, conversions, free report → paid in `make stats` and the dashboard; Stripe objects
   by the buyer address they carry (`run.owner.stripe_email`: a session's, an invoice's, a
-  charge's, a refund's charge and a subscription's customer, those two expanded only when owner
-  addresses are set); registry teams and seats; owner free reports in the send-log counts and
-  the PLAN §6 gates; the launch check's refund and dispute rate; the launch email's list.
+  charge's and a refund's charge, expanded only when owner addresses are set; a subscription
+  by its customer id); registry teams and seats; owner free reports in the send-log counts and
+  the PLAN §6 gates; the launch check's refund rate; the launch email's list.
   Each says how many ("owner/test rows not counted"). `make signups` marks `[owner]`.
+- **The fix round (same day).** A DISPUTED payment is never the owner's
+  (`run.owner.is_owner_purchase`): the address is buyer-typed, so a stranger can pay with it,
+  and leaving it out hid the dashboard's chargeback alarm and the dispute rate. Subscriptions
+  match on the customer behind an owner purchase (`owner_customers`), never by expanding the
+  customer, which the owner-stats key can't read (no Customers: Read). Seats on a pass the
+  owner bought are owner rows (`owner_rows`). Mail to the owner's subscriptions leaves the
+  send counts by registry slug and keyed code (`send_marks`); with no registry copy it stays
+  in and the page says so. The launch card follows the owner's own purchase to the next step
+  without calling it a sale. The page counter keeps no address, so owner visits still count:
+  make stats and the dashboard say so (GPC/DNT or `TRAFFIC_FROM`).
 - **Unchanged on purpose:** entitlement (a weekly report needs a paid plan; the free report is
   the only exemption), the stop list, refund and cancel handling, the team limit, the ledger
   and every published probability.

@@ -471,10 +471,19 @@ address):
 - **Daily limits are higher, not gone:** 20 a day instead of 3 for roster-update and
   extra-team confirmations and Trade Check answers, and 20 free reports a day. The forms are
   public, so anyone can type your address; a limit keeps a stranger from filling your inbox.
-- **Left out of the numbers:** `make stats`, the dashboard (sales, refunds, disputes,
-  subscribers, seats, conversions and the PLAN §6 gates), the launch check's refund and
-  dispute rate, and the launch email's recipient list. Each says how many it left out.
-  `make signups` marks them `[owner]`.
+- **Left out of the numbers:** `make stats`, the dashboard (sales, refunds, subscribers,
+  the seats on a League Pass you bought, emails to your own subscriptions, conversions and
+  the PLAN §6 gates), the launch check's refund rate, and the launch email's recipient list.
+  Each says how many it left out. `make signups` marks them `[owner]`.
+- **A chargeback is never left out**, even on your address. The address on a payment is
+  whatever the buyer typed, so a stranger can pay with yours, and every dispute counts against
+  the account. The dashboard still raises it and the dispute rate still counts it.
+- **Your page visits still count.** The page counter keeps no address, so it can't tell
+  you apart. Test in a browser with Global Privacy Control or Do Not Track turned on (the
+  counter then sends nothing), or set `TRAFFIC_FROM` (step 5b, item 11).
+- **Emails to your own subscriptions** are told apart only when `make stats` or the
+  dashboard has a registry copy (`make stats-registry`); without one they're counted, and
+  the page says so.
 
 What it doesn't change: a weekly report still needs a paid plan, the stop list still stops,
 a refund or cancel still ends the plan, and the three-team limit still holds. Nothing prints

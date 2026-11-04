@@ -318,6 +318,7 @@ def _session(i, email, ref, refunded=False):
             "payment_status": "paid", "client_reference_id": ref,
             "created": int(NOW.timestamp()) - 3600 * (i + 1), "amount_total": 1499,
             "amount_subtotal": 1499, "currency": "usd", "customer_details": {"email": email},
+            "customer": f"cus_{i}",
             "invoice": {"charge": {"id": f"ch_{i}", "refunded": refunded,
                                    "amount_refunded": 1499 if refunded else 0}}}
 
@@ -330,8 +331,10 @@ def _fake_stripe(monkeypatch, ref):
         "checkout/sessions": [_session(0, BUYER, ref), _session(1, OWNER, ref, refunded=True)],
         "refunds": [{"id": "re_1", "status": "succeeded",
                      "charge": {"billing_details": {"email": OWNER}}}],
-        "subscriptions": [{"id": "sub_1", "customer": {"email": BUYER}},
-                          {"id": "sub_2", "customer": {"email": OWNER_GMAIL}}],
+        # A subscription carries only its customer's id; cus_1 bought from
+        # the owner's address in the sessions above.
+        "subscriptions": [{"id": "sub_1", "customer": "cus_0"},
+                          {"id": "sub_2", "customer": "cus_1"}],
         "invoices": [{"billing_reason": "subscription_cycle", "amount_paid": 1499,
                       "currency": "usd", "customer_email": e} for e in (BUYER, OWNER)],
     }
@@ -355,8 +358,10 @@ def test_make_stats_leaves_the_owners_purchases_out(monkeypatch) -> None:
     assert f"{stats.SUBSCRIPTIONS_LABEL}: 1" in text
     assert "Monthly renewals paid: 1," in text
     assert "@" not in text
-    # The customer and the refund's charge are expanded so they can be matched.
-    assert ("subscriptions", (("status", "active"), ("expand[]", "data.customer"))) in seen
+    # The refund's charge is expanded so it can be matched (Charges: Read is
+    # on the owner-stats key); the customer never is (no Customers: Read).
+    assert ("subscriptions", (("status", "active"),)) in seen
+    assert not any(("expand[]", "data.customer") in q for _p, q in seen)
     assert any(p == "refunds" and ("expand[]", "data.charge") in q for p, q in seen)
     # Mutation of the guard: with no owner addresses everything counts again,
     # and no extra expansion is asked for.
@@ -400,7 +405,7 @@ def test_make_stats_leaves_the_owners_teams_out_and_prints_no_address(
                       owners=OWNERS) == 0
     out = capsys.readouterr().out
     assert "1 on the registry" in out
-    assert "1 team on your own addresses (OWNER_EMAILS) not counted." in out
+    assert "1 team on your own addresses or your own League Pass (OWNER_EMAILS) not counted." in out
     assert "@" not in out
     # The command line reads OWNER_EMAILS from .env like the rest.
     env = tmp_path / ".env"
@@ -557,3 +562,217 @@ def test_every_step_running_affected_code_maps_the_secret() -> None:
                     assert (step.get("env") or {}).get("OWNER_EMAILS") == \
                         "${{ secrets.OWNER_EMAILS }}", f"{name}: {step.get('name')!r}"
     assert found == 4
+
+
+# --------------------------------------------------------------------- #
+# the fix round: what the owner exclusion must never hide or miss
+# --------------------------------------------------------------------- #
+
+def _disputed_session(email):
+    from test_dashboard import _a_roster_ref
+    session = _session(5, email, _a_roster_ref())
+    session["invoice"]["charge"]["disputed"] = True
+    return session
+
+
+def test_a_disputed_payment_is_never_the_owners() -> None:
+    """The address on a payment is whatever the buyer typed, so a stranger
+    (or a stolen card) can pay with the owner's. A chargeback on it is money
+    at risk that card networks count across the account: never a test."""
+    from test_dashboard import _a_roster_ref
+    assert is_owner_purchase(_session(5, OWNER, _a_roster_ref()), OWNERS)
+    assert not is_owner_purchase(_disputed_session(OWNER), OWNERS)
+    assert not is_owner_purchase({"billing_details": {"email": OWNER}, "disputed": True}, OWNERS)
+    assert not is_owner_purchase({"customer_details": {"email": OWNER},
+                                  "payment_intent": {"latest_charge": {"disputed": True}}}, OWNERS)
+    assert owner.disputed({"charge": {"disputed": True}})
+    assert not owner.disputed({"charge": {"disputed": False}, "disputed": "yes"})
+
+
+def test_the_launch_checks_dispute_rate_counts_a_dispute_on_the_owners_address(
+        monkeypatch) -> None:
+    import run.launch_check as lc
+
+    def charge(i, email, disputed=False):
+        return {"id": f"ch_{i}", "paid": True, "status": "succeeded", "refunded": False,
+                "amount_refunded": 0, "disputed": disputed,
+                "billing_details": {"email": email}}
+    charges = [charge(i, f"fan{i}@fans.mail") for i in range(60)]
+    charges.append(charge(99, "Boss+x@owner-inbox.mail", disputed=True))
+    assert lc.audit_charge_rates(charges, OWNERS) == (61, 0.0, 1 / 61)
+    monkeypatch.setenv("STRIPE_API_KEY", "rk_test")
+    monkeypatch.setattr(lc, "_stripe_charges", lambda key, days: charges)
+    monkeypatch.setenv("OWNER_EMAILS", OWNER)
+    [gate] = lc.check_refund_rates()
+    assert gate.status == "WARN" and "disputes" in gate.detail
+    assert "your own charges" not in gate.detail and "@" not in gate.detail
+
+
+def test_the_dashboard_raises_a_chargeback_on_the_owners_address(monkeypatch) -> None:
+    import run.dashboard as dash
+    import run.subscriptions as subscriptions
+    from run.dashboard import Context
+    from test_dashboard import rich_sources
+
+    def fake(path, params, key):
+        return [_disputed_session(OWNER)] if path == "checkout/sessions" else []
+    monkeypatch.setattr(stats, "_stripe_list", fake)
+    monkeypatch.setattr(subscriptions.DisputeLookup, "__call__",
+                        lambda self, charge: "needs_response")
+    money = dash.collect_stripe(Context(env={**ENV, "STRIPE_API_KEY": "rk_test"}, now=NOW))
+    assert [s["dispute"] for s in money.data["sessions"]] == ["needs_response"]
+    assert money.data["owner_left_out"] == 0
+    S = rich_sources(NOW)
+    S["stripe"] = money
+    issues = dash.build_issues(S, NOW, [], None, dash.metrics_for(S, "7d", NOW))
+    assert any(i.severity == "critical" and "chargeback" in i.title for i in issues)
+
+
+def test_subscriptions_are_matched_without_reading_the_customer(monkeypatch) -> None:
+    """The owner-stats key has no Customers: Read, so expanding the customer
+    403s. The subscription is matched on the customer behind an owner
+    purchase instead."""
+    from test_dashboard import _a_roster_ref
+
+    def strict(path, params, key):
+        if ("expand[]", "data.customer") in params:
+            raise RuntimeError("Stripe HTTP 403: rak_customer_read")
+        return {"checkout/sessions": [_session(0, BUYER, _a_roster_ref()),
+                                      _session(1, OWNER_GMAIL, _a_roster_ref())],
+                "subscriptions": [{"id": "sub_1", "customer": "cus_0"},
+                                  {"id": "sub_2", "customer": "cus_1"}]}.get(path, [])
+    monkeypatch.setattr(stats, "_stripe_list", strict)
+    text = "\n".join(stats.stripe_summary("rk_test", NOW, owners=OWNERS, one_time=False))
+    assert f"{stats.SUBSCRIPTIONS_LABEL}: 1" in text and "403" not in text
+    assert owner.owner_customers([_session(1, OWNER_GMAIL, "x"), _session(0, BUYER, "x")],
+                                 OWNERS) == frozenset({"cus_1"})
+    text = "\n".join(stats.stripe_summary("rk_test", NOW, owners=frozenset(), one_time=False))
+    assert f"{stats.SUBSCRIPTIONS_LABEL}: 2" in text
+
+
+def _pass_registry(tmp_path):
+    from test_trials import _fixture_ref
+    from run.refs import LEAGUE_PASS, decode_roster
+    from run.rosters import RosterSubscriber, to_json
+    ref = _fixture_ref()
+    spec = decode_roster(ref)
+
+    def sub(email, **kw):
+        return RosterSubscriber(email=email, ref=ref, player_ids=tuple(spec.player_ids),
+                                slots=tuple(spec.slots), scoring=spec.scoring, **kw)
+    rows = [sub(OWNER, billing="pass", pass_id="sub_PPPP1", stripe_customer_id="cus_PPPP1",
+                subscription_ids=("sub_PPPP1",), origin="aaaaaaaaaa"),
+            sub("pal@fans.mail", plan=LEAGUE_PASS, covered_by=OWNER, pass_id="sub_PPPP1",
+                origin="bbbbbbbbbb"),
+            sub(BUYER, plan="monthly", stripe_customer_id="cus_BBBB1",
+                subscription_ids=("sub_BBBB1",), origin="cccccccccc")]
+    path = tmp_path / "rosters.json"
+    path.write_text(json.dumps(to_json(rows)), encoding="utf-8")
+    return path
+
+
+def test_seats_on_the_owners_own_pass_are_owner_rows(tmp_path, monkeypatch, capsys) -> None:
+    import run.dashboard as dash
+    import run.delivery as delivery
+    from run.dashboard import Context
+    from run.rosters import load_rosters
+    path = _pass_registry(tmp_path)
+    rows = load_rosters(path)
+    assert [s.email for s in owner.owner_rows(rows, OWNERS)] == [OWNER, "pal@fans.mail"]
+    assert owner.owner_rows(rows, frozenset()) == []
+    kept, mine = owner.without_owner_rows(rows, OWNERS)
+    assert [s.email for s in kept] == [BUYER] and mine == 2
+    assert stats.seat_lines(kept) == []
+    reg = dash.collect_registry(Context(env=ENV, now=NOW, registry=path))
+    assert reg.data["total"] == 1 and reg.data["owner_left_out"] == 2
+    assert "League Pass seats" not in reg.data["plans"]
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    monkeypatch.delenv("FORM_ENDPOINT", raising=False)
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    assert stats.main(["--registry", str(path), "--now", NOW.isoformat()], owners=OWNERS) == 0
+    out = capsys.readouterr().out
+    assert "isn't here" not in out and "@" not in out
+    assert "2 teams on your own addresses or your own League Pass" in out
+
+
+def test_mail_to_the_owners_subscriptions_leaves_the_send_counts(tmp_path, monkeypatch) -> None:
+    from run.rosters import load_rosters
+    monkeypatch.setenv("LOG_SECRET", "test-secret")
+    from run.digest import address
+    rows = load_rosters(_pass_registry(tmp_path))
+    marks = owner.send_marks(rows, OWNERS)
+    at = "2026-11-04T22:20:00+00:00"
+    entries = [{"key": k, "sent_at": at} for k in (
+        "welcome-2026-11-03-aaaaaaaaaa", "preseason-2026-11-03-aaaaaaaaaa",
+        "2026-w10-aaaaaaaaaa", "2026-w10-bbbbbbbbbb", "2026-w10-early-aaaaaaaaaa",
+        f"trade-{address(OWNER, 8)}-0123456789", f"confirm-{address(OWNER_GMAIL, 8)}-0123456789",
+        f"team-confirm-{address(OWNER, 8)}-0123456789",
+        "welcome-2026-11-03-cccccccccc", "2026-w10-cccccccccc")]
+    got = stats.send_summary(entries, "2026", marks)
+    assert got["weekly"] == {10: 1}
+    assert got["other"]["welcome emails (new subscribers)"] == 1
+    assert got["other"][stats.OWNER_MAIL] == 8
+    assert got["note"] == ""
+    # Mutation of the guard: with no owner addresses all of it counts.
+    bare = stats.send_summary(entries, "2026")
+    assert bare["weekly"] == {10: 3} and stats.OWNER_MAIL not in bare["other"]
+    # No registry copy: they can't be told apart, and the summary says so.
+    assert owner.send_marks(None, OWNERS) is None
+    unknown = stats.send_summary(entries, "2026", None)
+    assert unknown["weekly"] == {10: 3} and unknown["note"] == stats.OWNER_MAIL_UNKNOWN
+    assert owner.send_marks(None, frozenset())["slugs"] == frozenset()
+    assert "@" not in json.dumps(got) + json.dumps(unknown)
+
+
+def test_the_launch_card_moves_on_after_the_owners_own_purchase(monkeypatch) -> None:
+    import run.dashboard as dash
+    import run.subscriptions as subscriptions
+    from run.dashboard import Context
+    from test_dashboard import _a_roster_ref
+    session = _session(0, OWNER, _a_roster_ref())
+
+    def fake(path, params, key):
+        return [session] if path == "checkout/sessions" else []
+    monkeypatch.setattr(stats, "_stripe_list", fake)
+    monkeypatch.setattr(subscriptions.DisputeLookup, "__call__", lambda self, charge: None)
+    site = dash._source("site", data={"switches": {"checkout_open": True, "monthly_link": True,
+                                                   "can_complete": False, "trial_open": False}})
+
+    def card(env):
+        S = {"stripe": dash.collect_stripe(Context(env={**env, "STRIPE_API_KEY": "rk"}, now=NOW)),
+             "site": site, "launch": dash.off("launch", "x")}
+        return dash.launch_status(S, NOW)
+    mine = card(ENV)
+    assert "Your own test purchase (not a sale)" in mine and "LAUNCH.md step 6" in mine
+    assert "Your own purchase of the Monthly plan" not in mine
+    sold = card({"OWNER_EMAILS": ""})
+    assert "1 paid purchase so far" in sold and "not a sale" not in sold
+
+
+def test_make_stats_and_the_dashboard_say_the_counter_cant_leave_the_owner_out() -> None:
+    import run.dashboard as dash
+    from test_dashboard import rich_sources
+    assert "OWNER_EMAILS can't leave them out" in stats.COUNTER_OWNER_NOTE
+    text = stats.render(None, "x", {"weekly": {}, "finals": {}, "other": {}}, "2026", None,
+                        "x", None, NOW)
+    assert stats.COUNTER_OWNER_NOTE in text
+    assert stats.COUNTER_OWNER_NOTE.replace("'", "&#x27;") in dash.render_page(
+        rich_sources(NOW), NOW, fonts=False)
+
+
+def test_the_dashboards_send_counts_leave_the_owners_mail_out(tmp_path) -> None:
+    import run.dashboard as dash
+    from run.dashboard import Context
+    registry = _pass_registry(tmp_path)
+    log = tmp_path / "data" / "processed" / "sent.jsonl"
+    log.parent.mkdir(parents=True)
+    log.write_text("".join(json.dumps({"key": k, "sent_at": "2026-11-04T22:20:00+00:00"}) + "\n"
+                           for k in ("2026-w10-aaaaaaaaaa", "2026-w10-cccccccccc")),
+                   encoding="utf-8")
+    got = dash.collect_sends(Context(env=ENV, now=NOW, root=tmp_path, registry=registry))
+    summary = got.data["summary"]
+    assert summary["weekly"] == {10: 1} and summary["other"] == {stats.OWNER_MAIL: 1}
+    # No registry copy here: counted, and the card says why.
+    bare = dash.collect_sends(Context(env=ENV, now=NOW, root=tmp_path))
+    assert bare.data["summary"]["weekly"] == {10: 2}
+    assert bare.data["summary"]["note"] == stats.OWNER_MAIL_UNKNOWN

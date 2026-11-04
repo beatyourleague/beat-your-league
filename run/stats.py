@@ -401,10 +401,14 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
 
     The owner's own purchases (``owners``, run/owner.py) are left out of
     every part, matched on the buyer's address the object carries: a
-    session's, an invoice's, a refund's charge and a subscription's
-    customer (both expanded only when owner addresses are set), and the
-    plans-sold part says how many it left out."""
-    from run.owner import is_owner_purchase
+    session's, an invoice's and a refund's charge (expanded only when owner
+    addresses are set; the owner-stats key has Charges: Read). A
+    subscription carries only a customer id, and expanding the customer
+    needs Customers: Read, which that key doesn't have, so a subscription is
+    matched on the customer behind one of the owner's purchases in the
+    plans-sold read. The plans-sold part says how many it left out. A
+    disputed payment is never left out (run.owner.is_owner_purchase)."""
+    from run.owner import is_owner_purchase, owner_customers
     owners = _owners(owners)
     if one_time is None:
         from render.report import SELLING_ONE_TIME as one_time
@@ -426,7 +430,7 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
           ("expand[]", "data.invoice.charge")], passes),
         ("monthly renewals", "invoices", [("status", "paid")], _renewals_line),
         ("subscriptions", "subscriptions",
-         [("status", "active")] + ([("expand[]", "data.customer")] if owners else []),
+         [("status", "active")],
          lambda subs: _subscriptions_line(subs, label)),
         ("checkout sessions", "checkout/sessions",
          [("created[gte]", str(week_ago))], _checkouts_line),
@@ -446,13 +450,16 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
                    lambda sessions: season_2027_line(season_2027_summary(
                        sessions, links, now.date(), season_2027_end(), lookup))),)
     lines: list[str] = []
+    customers: frozenset[str] = frozenset()
     for what, path, params, summarise in parts:
         try:
             listed = _stripe_list(path, params, api_key)
-            kept = [o for o in listed if not is_owner_purchase(o, owners)]
+            kept = [o for o in listed if not is_owner_purchase(o, owners)
+                    and not (what == "subscriptions" and o.get("customer") in customers)]
             got = summarise(kept)
             lines.extend(got if isinstance(got, list) else [got])
             if what == "plans sold":
+                customers = owner_customers(listed, owners)
                 mine = len(_paid_pass_sessions(listed, since)) - len(_paid_pass_sessions(kept, since))
                 if mine:
                     lines.append(owner_purchases_line(mine))
@@ -842,8 +849,41 @@ def load_send_log(path: Path) -> list[dict]:
     return entries
 
 
-def send_summary(entries: Iterable[Mapping], season: str) -> dict:
-    """What went out this season, from the send log's key shapes."""
+OWNER_MAIL = "emails to your own subscriptions (tests, not counted above)"
+OWNER_MAIL_UNKNOWN = ("Emails to your own subscriptions are counted above: with no registry "
+                      "copy here, they can't be told apart (`make stats-registry`).")
+
+
+def _owner_key(key: str, marks: Mapping | None) -> bool:
+    """Is this send-log key mail to one of the owner's own subscriptions?
+    Slugs end the subscription keys; keyed address codes sit inside the
+    Trade Check, extra-team, confirmation and season review keys."""
+    if not marks:
+        return False
+    parts = key.split("-")
+    if parts[-1] in marks.get("slugs", ()):
+        return True
+    codes = marks.get("codes", ())
+    if parts[0] in ("trade", "confirm") and len(parts) > 1:
+        return parts[1] in codes
+    if parts[0] == "team" and len(parts) > 2:
+        return parts[2] in codes
+    if parts[0] == "review" and len(parts) > 2:
+        return parts[2] in codes
+    return False
+
+
+NO_OWNER_MARKS: Mapping = {"slugs": frozenset(), "codes": frozenset()}
+
+
+def send_summary(entries: Iterable[Mapping], season: str,
+                 owner_marks: Mapping | None = NO_OWNER_MARKS) -> dict:
+    """What went out this season, from the send log's key shapes.
+
+    ``owner_marks`` (run.owner.send_marks) picks out mail to the owner's own
+    subscriptions, which is counted on one line of its own rather than as
+    customer activity; the default is no owner addresses. None means owner addresses are set and there is no
+    registry to tell those emails apart: they stay in, and ``note`` says so."""
     weekly: Counter[int] = Counter()
     finals: Counter[int] = Counter()
     other: Counter[str] = Counter()
@@ -855,6 +895,10 @@ def send_summary(entries: Iterable[Mapping], season: str) -> dict:
         return str(entry.get("sent_at", "")).startswith(season)
     for entry in entries:
         key = str(entry["key"])
+        if _owner_key(key, owner_marks):
+            if this_season(entry) or key.startswith(f"{season}-"):
+                other[OWNER_MAIL] += 1
+            continue
         if m := weekly_re.match(key):
             weekly[int(m.group(1))] += 1
         elif m := final_re.match(key):
@@ -885,7 +929,8 @@ def send_summary(entries: Iterable[Mapping], season: str) -> dict:
         elif key.startswith("launch-"):
             other["launch announcement"] += 1
     return {"weekly": dict(sorted(weekly.items())),
-            "finals": dict(sorted(finals.items())), "other": dict(other)}
+            "finals": dict(sorted(finals.items())), "other": dict(other),
+            "note": OWNER_MAIL_UNKNOWN if owner_marks is None else ""}
 
 
 def conversions(rows: Iterable[Mapping], subscriber_emails: Iterable[str],
@@ -935,6 +980,7 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
     lines.append("TRAFFIC (the site's own page counter, privacy section 3)")
     lines += traffic if traffic is not None else [
         "  The counter's view was not read this time."]
+    lines.append(f"  {COUNTER_OWNER_NOTE}")
     lines += ["", "FORMS (from the site)"]
     if form is None:
         lines.append(f"  {form_note}")
@@ -962,6 +1008,8 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
             f"W{w} {n}" for w, n in sends["finals"].items()))
     for label, n in sorted(sends["other"].items()):
         lines.append(f"  {label[0].upper() + label[1:]}: {n}")
+    if sends.get("note"):
+        lines.append(f"  {sends['note']}")
     lines += ["", "SUBSCRIBERS"]
     if registry is None:
         lines.append(f"  {registry_note}")
@@ -987,7 +1035,7 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
         lines += seat_lines(registry)
         if owner_rows:
             lines.append(f"  {owner_rows} team{'s' if owner_rows != 1 else ''} on your own "
-                         f"addresses (OWNER_EMAILS) not counted.")
+                         f"addresses or your own League Pass (OWNER_EMAILS) not counted.")
     lines += ["", "PAYMENTS (Stripe, read-only)"]
     lines += payments if payments is not None else [
         "  STRIPE_API_KEY is not set in this shell or .env (nor STRIPE_STATS_KEY) "
@@ -1013,6 +1061,10 @@ def _season_start(season: str) -> int | None:
 CF_NAMES = ("CF_ACCOUNT_ID", "CF_ANALYTICS_TOKEN")
 # Where the traffic count starts (parse_traffic_from), from the same places.
 TRAFFIC_NAMES = ("TRAFFIC_FROM",)
+# The page counter records no address, so OWNER_EMAILS can't reach it.
+COUNTER_OWNER_NOTE = ("Your own visits count here: the counter keeps no address, so "
+                      "OWNER_EMAILS can't leave them out. Test with Global Privacy Control "
+                      "or Do Not Track on (the counter then sends nothing), or set TRAFFIC_FROM.")
 # The Stripe key: a dedicated read-only one first (STRIPE_STATS_KEY, LAUNCH.md
 # step 3's owner-stats key), else STRIPE_API_KEY. The dashboard's order too.
 STRIPE_NAMES = ("STRIPE_STATS_KEY", "STRIPE_API_KEY")
@@ -1153,20 +1205,20 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
         season = current_season(CACHE_DIR, today=now.date())
     except Exception:  # noqa: BLE001 — a summary still prints without the cache
         season = str(now.year if now.month >= 3 else now.year - 1)
-    sends = send_summary(load_send_log(SENT_LOG), season)
-
+    from run.owner import send_marks, without_owner_rows
     from run.rosters import RosterRegistryError, load_rosters
     registry, registry_note, conv, owner_rows = None, "", None, 0
     try:
         registry = load_rosters(args.registry)
-        # The owner's own teams are tests: out of every subscriber count.
-        from run.owner import is_owner_address
-        counted = [s for s in registry if not is_owner_address(s.email, owners=owners)]
-        owner_rows, registry = len(registry) - len(counted), counted
     except RosterRegistryError as exc:
         registry_note = (f"No registry on this machine ({exc}). It lives sealed in "
                          f"the CI cache; `make stats-registry` fetches and opens a "
                          f"copy, then pass --registry PATH.")
+    # The owner's own teams, and the seats on a pass they bought, are tests:
+    # out of every subscriber count, and their mail out of the send counts.
+    sends = send_summary(load_send_log(SENT_LOG), season, send_marks(registry, owners))
+    if registry is not None:
+        registry, owner_rows = without_owner_rows(registry, owners)
     if registry is not None and rows is not None:
         conv = conversions(rows, [s.email for s in registry], owners=owners)
     if registry is not None:

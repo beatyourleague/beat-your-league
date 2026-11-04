@@ -361,6 +361,11 @@ def collect_stripe(ctx: Context) -> Source:
     raw = [s for s in listed if not is_owner_purchase(s, owners)]
     owner_paid = (len(stats._paid_pass_sessions(listed, None))
                   - len(stats._paid_pass_sessions(raw, None)))
+    # When the owner's own first purchase was (LAUNCH step 4): the launch
+    # card's next step follows it, though it is never counted as a sale.
+    owner_first = min((s["created"] for s in stats._paid_pass_sessions(listed, None)
+                       if is_owner_purchase(s, owners) and isinstance(s.get("created"), int)),
+                      default=None)
     lookup = DisputeLookup(key)
     paid_ids = {id(s) for s in stats._paid_pass_sessions(raw, None)}
     sessions = []
@@ -399,7 +404,8 @@ def collect_stripe(ctx: Context) -> Source:
     except SubscriptionError:
         renewals = []
     data = {"sessions": sessions, "renewals": renewals, "link_map": bool(plans),
-            "dispute_errors": len(lookup.errors), "owner_left_out": owner_paid}
+            "dispute_errors": len(lookup.errors), "owner_left_out": owner_paid,
+            "owner_first": owner_first}
     from run.checkout import season_2027_links
     links = season_2027_links(ctx.env.get("STRIPE_PAYMENT_LINKS", ""))
     if links:
@@ -487,9 +493,25 @@ def collect_sends(ctx: Context) -> Source:
                 "provider": str(e.get("provider") or "")}
                for e in stats.load_send_log(path)]
     season = _season(ctx)
+    # Mail to the owner's own subscriptions is a test (run/owner.py), told
+    # apart by the registry's slugs when a copy is here.
+    from run.owner import owner_addresses, send_marks
+    marks = send_marks(_registry_rows(ctx), owner_addresses(ctx.env))
     return _source("sends", data={"entries": entries, "season": season, "stopped": stopped,
-                                  "summary": stats.send_summary(entries, season)},
+                                  "summary": stats.send_summary(entries, season, marks)},
                    read_at=ctx.now)
+
+
+def _registry_rows(ctx: Context) -> list | None:
+    """The registry copy's rows, or None when there is none to read."""
+    from run.rosters import RosterRegistryError, load_rosters
+    path = ctx.registry or (ctx.root / "data" / "registry" / "rosters.json")
+    if ctx.registry is None and not path.is_file():
+        return None
+    try:
+        return load_rosters(path)
+    except RosterRegistryError:
+        return None
 
 
 def collect_registry(ctx: Context) -> Source:
@@ -501,11 +523,10 @@ def collect_registry(ctx: Context) -> Source:
         rows = load_rosters(path)
     except RosterRegistryError as exc:
         return _source("registry", status="error", note=redact(exc))
-    # The owner's own teams are tests (run/owner.py): out of every count.
-    from run.owner import is_owner_address, owner_addresses
-    owners = owner_addresses(ctx.env)
-    every = len(rows)
-    rows = [s for s in rows if not is_owner_address(s.email, owners=owners)]
+    # The owner's own teams, and the seats on a pass they bought, are tests
+    # (run/owner.py): out of every count.
+    from run.owner import owner_addresses, without_owner_rows
+    rows, mine = without_owner_rows(rows, owner_addresses(ctx.env))
     names = {"season": "Pass holders", "monthly": "Monthly", "pass": "League Pass buyers",
              "league_pass": "League Pass seats", "season_2027": "2027 Season Pass holders"}
     # One subscription is one plan, however many teams it carries.
@@ -520,7 +541,7 @@ def collect_registry(ctx: Context) -> Source:
                                      "seats": filled,
                                      "setups": dict(Counter(f"{s.scoring}/{s.league_size}"
                                                             for s in rows)),
-                                     "owner_left_out": every - len(rows)},
+                                     "owner_left_out": mine},
                    read_at=ctx.now)
 
 
@@ -2233,7 +2254,8 @@ def traffic_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
     since = stats.counting_from(_ts(src.data.get("since")))
     return section("traffic", "Traffic",
                    "From the site's own cookieless counter: counts of page views, never people."
-                   + (f" {since}: views before it are left out." if since else ""),
+                   + (f" {since}: views before it are left out." if since else "")
+                   + f" {stats.COUNTER_OWNER_NOTE}",
                    by_period(one))
 
 
@@ -2600,7 +2622,7 @@ def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime
             for i, (n, c) in enumerate(d["seats"])) or '<li class="muted">No League Pass yet.</li>'
         mine = int(d.get("owner_left_out") or 0)
         mine_note = (f'<p class="muted small pad">{h(_n(mine, "team"))} on your own addresses '
-                     f'(OWNER_EMAILS) not counted.</p>' if mine else "")
+                     f'or your own League Pass (OWNER_EMAILS) not counted.</p>' if mine else "")
         parts.append(f'<div class="card"><div class="cardhead"><h3>Subscribers</h3>'
                      f'<span class="big">{num(d["total"])}</span></div><ul class="kv">{plans}</ul>'
                      f'<h4>League Pass seats claimed</h4><ul class="kv seats">{seats}</ul>'
@@ -2644,6 +2666,8 @@ def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime
         stopped = sends.get("stopped")
         extras += (f'<li><span>Stop requests on the list</span><b>{num(stopped)}</b></li>'
                    if stopped is not None else "")
+        if sends["summary"].get("note"):
+            extras += f'<li class="muted small">{h(sends["summary"]["note"])}</li>'
         left = (f'<div><div class="cardhead"><div><h3>Weekly reports sent</h3>'
                 f'<p class="muted small">{h(sends["season"])} season · data/processed/sent.jsonl</p>'
                 f'</div><span class="big">{num(sum(weekly.values()))}</span></div>{chart}</div>')
@@ -2869,18 +2893,22 @@ def launch_status(S: Mapping[str, Source], now: datetime) -> str:
               "Link set, seats closed")
     paid = paid_since(S["stripe"], None, now) if S["stripe"].ok else []
     first = min((_ts(s.get("created")) for s in paid if _ts(s.get("created"))), default=None)
+    own = _ts(S["stripe"].data.get("owner_first")) if S["stripe"].ok else None
     if not S["stripe"].ok:
         sale = "Needs Stripe to say"
     elif first:
         at = first.astimezone(ET)
         sale = f"{at:%a %b} {at.day}, {at:%-I:%M %p} ET ({_n(len(paid), 'paid purchase')} so far)"
+    elif own:
+        at = own.astimezone(ET)
+        sale = f"None yet. Your own test purchase (not a sale): {at:%a %b} {at.day}, {at:%-I:%M %p} ET"
     else:
         sale = "None yet"
     if not sw.get("checkout_open") or not sw.get("monthly_link"):
         nxt = ""
     elif not sw.get("can_complete"):
         nxt = ("Check the welcome and first report arrived. Then CHECKOUT_CAN_COMPLETE and "
-               "TRIAL_OPEN go on together (LAUNCH.md step 6)." if first else
+               "TRIAL_OPEN go on together (LAUNCH.md step 6)." if first or own else
                "Your own purchase of the Monthly plan, and watch it through (LAUNCH.md step 4)."
                if S["stripe"].ok else
                "Your own purchase of the Monthly plan, if it hasn't happened (LAUNCH.md step 4).")

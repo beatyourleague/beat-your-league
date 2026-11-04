@@ -120,10 +120,98 @@ def stripe_email(obj: object) -> str:
     return stripe_email(charge) if isinstance(charge, Mapping) else ""
 
 
+def disputed(obj: object) -> bool:
+    """Does this Stripe object carry a chargeback? Read off the charge it
+    holds, where expanded: its own ``disputed``, its charge, its latest
+    charge, its payment intent's latest charge, its invoice's charge."""
+    if not isinstance(obj, Mapping):
+        return False
+    if obj.get("disputed") is True:
+        return True
+    intent = obj.get("payment_intent")
+    invoice = obj.get("invoice")
+    return any(disputed(inner) for inner in (
+        obj.get("charge"), obj.get("latest_charge"),
+        intent.get("latest_charge") if isinstance(intent, Mapping) else None,
+        invoice.get("charge") if isinstance(invoice, Mapping) else None))
+
+
 def is_owner_purchase(obj: object, owners: Iterable[str] | None = None) -> bool:
-    """A Stripe object bought by one of the owner's addresses."""
+    """A Stripe object bought by one of the owner's addresses, and so a test.
+
+    A payment with a chargeback on it is NEVER a test, whatever address is on
+    it. The address is whatever the buyer typed, so a stranger (or a stolen
+    card) can pay with the owner's, and a dispute is money at risk that card
+    networks count across the whole account. Leaving it out would hide the
+    dashboard's chargeback alarm and the launch check's dispute rate."""
     owners = owner_addresses() if owners is None else frozenset(owners)
-    return bool(owners) and is_owner_address(stripe_email(obj), owners=owners)
+    return (bool(owners) and is_owner_address(stripe_email(obj), owners=owners)
+            and not disputed(obj))
+
+
+def owner_customers(objects: Iterable[object],
+                    owners: Iterable[str] | None = None) -> frozenset[str]:
+    """The Stripe customer ids behind the owner's own purchases among
+    ``objects`` (checkout sessions). A subscription carries only its
+    customer's id, so this is how one is matched without expanding the
+    customer, which the owner-stats key (no Customers: Read) can't do."""
+    owners = owner_addresses() if owners is None else frozenset(owners)
+    out = set()
+    for obj in objects:
+        customer = obj.get("customer") if isinstance(obj, Mapping) else None
+        if isinstance(customer, Mapping):
+            customer = customer.get("id")
+        if isinstance(customer, str) and customer and is_owner_purchase(obj, owners):
+            out.add(customer)
+    return frozenset(out)
+
+
+def owner_rows(registry: Iterable, owners: Iterable[str] | None = None) -> list:
+    """The registry rows that are the owner's tests: a team on one of the
+    owner's addresses, and a League Pass seat on a pass one of those
+    addresses bought (the seat holder's address is somebody else's, but the
+    purchase behind the seat is the owner's)."""
+    owners = owner_addresses() if owners is None else frozenset(owners)
+    if not owners:
+        return []
+    rows = list(registry)
+    mine = [s for s in rows if is_owner_address(s.email, owners=owners)]
+    passes = {s.pass_key for s in mine if s.is_pass_payer and s.pass_key}
+    held = {id(s) for s in mine}
+    return mine + [s for s in rows if id(s) not in held and s.is_league_seat
+                   and s.pass_key and s.pass_key in passes]
+
+
+def without_owner_rows(registry: Iterable,
+                       owners: Iterable[str] | None = None) -> tuple[list, int]:
+    """(the registry without :func:`owner_rows`, how many were left out)."""
+    rows = list(registry)
+    mine = {id(s) for s in owner_rows(rows, owners)}
+    return [s for s in rows if id(s) not in mine], len(mine)
+
+
+def send_marks(registry: Iterable | None,
+               owners: Iterable[str] | None = None) -> dict | None:
+    """What marks the owner's own mail in the send log: the slugs of their
+    registry rows (weekly, early-look, Saturday, welcome and roster-report
+    keys end in one) and their keyed address codes (Trade Check, extra-team,
+    roster-update confirmation and season review keys carry one; none
+    without LOG_SECRET). None when owner addresses are set and no registry
+    copy is here to read slugs from: those emails can't be told apart."""
+    owners = owner_addresses() if owners is None else frozenset(owners)
+    if not owners:
+        return {"slugs": frozenset(), "codes": frozenset()}
+    if registry is None:
+        return None
+    from run.digest import DigestError, address
+    codes: set[str] = set()
+    try:
+        for email in owners:
+            codes.update((address(email, 8), address(email, 10)))
+    except DigestError:
+        codes = set()
+    return {"slugs": frozenset(s.slug for s in owner_rows(registry, owners)),
+            "codes": frozenset(codes)}
 
 
 def owners_line(owners: Iterable[str]) -> str:

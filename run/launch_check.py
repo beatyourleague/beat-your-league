@@ -2865,7 +2865,9 @@ def audit_charge_rates(charges: list[dict],
                        owners: frozenset[str] = frozenset()) -> tuple[int, float, float]:
     """(paid charges, refunded share, disputed share) over ``charges``. A
     charge paid from one of the owner's own addresses (run/owner.py) is a
-    test, and a refunded test is not a refund rate."""
+    test, and a refunded test is not a refund rate. A DISPUTED one is never
+    a test (``is_owner_purchase``): it stays in both shares, because card
+    networks count every chargeback on the account."""
     from run.owner import is_owner_purchase
     paid = [c for c in charges if c.get("paid") and c.get("status") == "succeeded"
             and not is_owner_purchase(c, owners)]
