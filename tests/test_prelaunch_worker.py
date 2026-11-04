@@ -28,6 +28,7 @@ The Worker tests need node and skip without it; CI installs it.
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 import shutil
 import subprocess
@@ -333,7 +334,7 @@ def test_the_join_page_says_free_reports_are_closed_instead_of_blaming_the_addre
     them together) and reads the Worker's reason instead of guessing from the
     status. Run here with the page's own functions against a real Response."""
     page = (ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
-    assert "const TRIAL_OPEN = false;" in page
+    assert re.search(r"^const TRIAL_OPEN = (?:true|false);", page, re.M)
     assert "if (!FORM_ENDPOINT || !TRIAL_OPEN) {" in page
     assert '"free reports are not open"' in WORKER.read_text(encoding="utf-8")
     start = page.index("function refusedBy(response)")
@@ -462,18 +463,26 @@ def test_the_launch_check_holds_the_three_trial_switches_together(monkeypatch) -
     assert gates["Landing and join page agree on whether free reports are open"].status == "PASS"
     monkeypatch.delenv("FORM_ENDPOINT", raising=False)
     monkeypatch.delenv("FORM_API_KEY", raising=False)
+    import run.stats as stats
+    monkeypatch.setattr(stats, "ENV_FILE", ROOT / "no-such.env")
+    site_open = lc.js_constants((lc.SITE / "index.html").read_text(
+        encoding="utf-8")).get("TRIAL_OPEN") == "true"
     [skip] = lc.check_worker_switches()
-    assert skip.status == "SKIP"
+    # With nothing to read the Worker with: an open site is the owner's to
+    # confirm, a closed one has nothing to check.
+    assert skip.status == ("OWNER" if site_open else "SKIP")
     monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
     monkeypatch.setenv("FORM_API_KEY", "k")
     real = lc.js_constants
 
-    def site_on(page):
-        found = real(page)
-        return {**found, "TRIAL_OPEN": "true"} if "TRIAL_OPEN" in found else found
+    def site_as(value):
+        def read(page):
+            found = real(page)
+            return {**found, "TRIAL_OPEN": value} if "TRIAL_OPEN" in found else found
+        return read
     for site, worker, want in ((False, False, "PASS"), (True, True, "PASS"),
                                (True, False, "FAIL"), (False, True, "WARN")):
-        monkeypatch.setattr(lc, "js_constants", site_on if site else real)
+        monkeypatch.setattr(lc, "js_constants", site_as("true" if site else "false"))
         monkeypatch.setattr(lc, "worker_status", lambda e, k, w=worker: {"trial_open": w})
         assert lc.check_worker_switches()[0].status == want, (site, worker)
     monkeypatch.delenv("RESEND_READ_KEY", raising=False)

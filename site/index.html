@@ -1528,13 +1528,14 @@ const CHECKOUT_OPEN = true;
 // STRIPE_PAYMENT_LINKS and the email secrets and one real purchase has been
 // watched end to end (LAUNCH.md steps 1-4), even though the Monthly link is
 // already on the join page. While they disagree, the email capture stays up
-// so a visitor who cannot pay yet can still leave an address.
-const CHECKOUT_CAN_COMPLETE = false;
+// so a visitor who cannot pay yet can still leave an address. On since Nov 3
+// 2026, after the owner's purchase arrived end to end (LAUNCH.md step 6).
+const CHECKOUT_CAN_COMPLETE = true;
 // The free first report (join/?try=1 -> run/trials.py). Flip to true only once
 // the form Worker AND email sending are live (LAUNCH.md steps 2 and 5): until
 // then the button would lead to "free reports aren't open", so it stays hidden
 // — the static page is the closed state, as with checkout.
-const TRIAL_OPEN = false;
+const TRIAL_OPEN = true;
 // The League Pass on sale. True only while join's STRIPE_LINK_PASS is set AND
 // league-pass.html's SEATS_OPEN is true (thanks.html's PASS_HELD is its twin,
 // held by test). While the pass is held, the strip under the price says it

@@ -1002,8 +1002,13 @@ def test_a_planner_left_behind_on_launch_morning_fails(site) -> None:
     assert _status(gates, "planner's checkout and free-report flags") == "PASS"
     planner = site / "byes" / "index.html"
     text = planner.read_text()
-    planner.write_text(text.replace("const CHECKOUT_CAN_COMPLETE = false;",
-                                    "const CHECKOUT_CAN_COMPLETE = true;"))
+    # The opposite of whatever the planner says now, closed or open.
+    flipped = re.sub(r"^const CHECKOUT_CAN_COMPLETE = (true|false);",
+                     lambda m: "const CHECKOUT_CAN_COMPLETE = "
+                               + ("false" if m.group(1) == "true" else "true") + ";",
+                     text, count=1, flags=re.M)
+    assert flipped != text
+    planner.write_text(flipped)
     assert _status(lc.check_funnel_config(), "planner's checkout and free-report flags") == "FAIL"
     planner.write_text(re.sub(r'^const NOTIFY_LIST_ENDPOINT = "[^"]*";',
                               'const NOTIFY_LIST_ENDPOINT = "https://elsewhere.example/rows";',

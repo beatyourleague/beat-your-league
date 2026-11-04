@@ -207,7 +207,8 @@ def test_the_try_mode_never_reaches_a_payment_and_the_contract_matches() -> None
     landing = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
     # The button exists but stays hidden until the backend and email are live.
     assert re.search(r'id="try-cta" hidden', landing)
-    assert "const TRIAL_OPEN = false;" in landing
+    # Open or not, the switch is the one constant the launch check reads.
+    assert re.search(r"^const TRIAL_OPEN = (?:true|false);", landing, re.M)
     privacy = (ROOT / "site" / "privacy.html").read_text(encoding="utf-8")
     assert "free report" in privacy
 

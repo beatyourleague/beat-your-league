@@ -926,7 +926,7 @@ adopts them).** The Oct 16 version said "dated from the week checkout actually o
 wrote fixed dates (Nov 10, Dec 22) for an opening that slipped; it also leaned on a Tuesday
 open rate, which the privacy promise ("no tracking of what you read") rules out and
 `run/delivery.py` never measures. So the gates are counted from **D, the day checkout opens**
-(write the date here when it happens: D = ____), written before any buyer exists:
+(write the date here when it happens: D = 2026-11-04), written before any buyer exists:
 
 | Read by | Metric | Green | Red → do this |
 |---|---|---|---|

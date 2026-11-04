@@ -227,8 +227,12 @@ def test_the_launch_check_reads_dotenv_for_config_gates_but_never_for_a_simulati
                    encoding="utf-8")
     monkeypatch.setattr(stats, "ENV_FILE", env)
     asked = []
+    # The stub Worker agrees with the site's own switch, open or closed.
+    site_open = lc.js_constants((lc.SITE / "index.html").read_text(
+        encoding="utf-8")).get("TRIAL_OPEN") == "true"
     monkeypatch.setattr(lc, "worker_status",
-                        lambda endpoint, key: asked.append((endpoint, key)) or {"trial_open": False})
+                        lambda endpoint, key: asked.append((endpoint, key))
+                        or {"trial_open": site_open})
     for name in [n for n in dir(lc) if n.startswith("check_")]:
         if name != "check_worker_switches":
             monkeypatch.setattr(lc, name, lambda: [])

@@ -556,8 +556,8 @@ const NOTIFY_LIST_ENDPOINT = "https://forms.beatyourleague.com/rows";
 // Selling before a purchase is proven to finish is the landing's interim
 // state (LAUNCH.md step 4): the buy link shows and the capture stays.
 const CHECKOUT_OPEN = true;
-const CHECKOUT_CAN_COMPLETE = false;
-const TRIAL_OPEN = false;
+const CHECKOUT_CAN_COMPLETE = true;
+const TRIAL_OPEN = true;
 const INTERIM = CHECKOUT_OPEN && !CHECKOUT_CAN_COMPLETE;
 // The project inbox (Cloudflare Email Routing), never a personal address.
 const CONTACT_EMAIL = "hello@beatyourleague.com";
