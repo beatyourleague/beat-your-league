@@ -183,7 +183,7 @@ def test_make_stats_leaves_test_rows_out_of_every_count_and_says_so(
     assert stats.main(["--registry", str(tmp_path / "none.json"), "--now", NOW.isoformat()],
                       form={"FORM_ENDPOINT": "https://w.test"}) == 0
     out = capsys.readouterr().out
-    assert "4 test rows from our own domain or a reserved test domain, not counted." in out
+    assert "4 owner/test rows not counted (your own addresses, our own domain or a reserved test domain)." in out
     assert "@" not in out
 
 
@@ -198,7 +198,7 @@ def test_the_dashboard_leaves_test_rows_out_and_says_so(monkeypatch) -> None:
     sources = td.rich_sources(NOW)
     sources["forms"] = src
     page = dash.render_page(sources, NOW, fonts=False)
-    assert "4 test rows from our own domain or a reserved test domain, not counted." in page
+    assert "4 owner/test rows not counted (your own addresses, our own domain or a reserved test domain)." in page
 
 
 def test_the_launch_email_never_goes_to_a_test_row(tmp_path, capsys) -> None:
@@ -270,8 +270,8 @@ def test_make_stats_reads_the_stripe_key_from_dotenv_in_the_dashboards_order(
     this shell — no payment view" while the dashboard, the same minute, read
     STRIPE_STATS_KEY from .env."""
     keys = []
-    monkeypatch.setattr(stats, "main", lambda argv=None, cf=None, form=None, stripe_key=None:
-                        keys.append(stripe_key) or 0)
+    monkeypatch.setattr(stats, "main", lambda argv=None, cf=None, form=None, stripe_key=None,
+                        **_kw: keys.append(stripe_key) or 0)
     env = tmp_path / ".env"
     env.write_text("STRIPE_API_KEY=rk_test_api\n", encoding="utf-8")
     stats.cli([], environ={}, env_file=env)

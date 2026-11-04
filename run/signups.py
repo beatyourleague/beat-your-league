@@ -214,7 +214,12 @@ def _ordered_kinds(groups: Mapping[str, Mapping]) -> list[tuple[str, str, str]]:
 
 
 def render(groups: dict[str, dict[str, Entry]], now: datetime, unreadable: int,
-           has_registry: bool, notes: Iterable[str] = ()) -> str:
+           has_registry: bool, notes: Iterable[str] = (),
+           owners: frozenset[str] = frozenset()) -> str:
+    """The terminal view. ``owners`` (run/owner.py) are marked [owner], the
+    way test domains are marked [test]: both views of the numbers leave them
+    out."""
+    from run.owner import is_owner_address
     from run.trials import is_test_address
     stamp = now.astimezone(EASTERN).strftime("%a %b %-d %Y, %-I:%M %p ET")
     lines = [f"WHO SIGNED UP — form Worker rows, as of {stamp}",
@@ -233,6 +238,8 @@ def render(groups: dict[str, dict[str, Entry]], now: datetime, unreadable: int,
         everyone = {box for boxes in groups.values() for box in boxes}
         tests = {box for boxes in groups.values() for box, e in boxes.items()
                  if is_test_address(e.address)}
+        mine = {box for boxes in groups.values() for box, e in boxes.items()
+                if is_owner_address(e.address, owners=owners)}
         lines += [f"{len(everyone)} {'person' if len(everyone) == 1 else 'people'} in all "
                   f"(one mailbox counted once, however it was spelled)."]
         if tests:
@@ -240,6 +247,9 @@ def render(groups: dict[str, dict[str, Entry]], now: datetime, unreadable: int,
             lines += [f"{len(tests)} of them {'is a test' if len(tests) == 1 else 'are test'} "
                       f"address{'es' if len(tests) != 1 else ''} (our own or a reserved "
                       f"domain), marked [test] below."]
+        if mine:
+            lines += [f"{len(mine)} of them {'is' if len(mine) == 1 else 'are'} your own "
+                      f"(OWNER_EMAILS), marked [owner] below."]
         lines.append("")
     for kind, heading, use in shown:
         boxes = groups.get(kind) or {}
@@ -265,6 +275,8 @@ def render(groups: dict[str, dict[str, Entry]], now: datetime, unreadable: int,
             row += f"  {entry.address}"
             if is_test_address(entry.address):
                 row += "   [test]"
+            if is_owner_address(entry.address, owners=owners):
+                row += "   [owner]"
             if entry.stop == "stopped":
                 row += "   [asked us to stop: never email]"
             elif entry.stop == "unknown":
@@ -376,7 +388,7 @@ def _write_rows(handle, groups: dict[str, dict[str, Entry]]) -> tuple[int, int]:
 # the command line
 # --------------------------------------------------------------------- #
 
-ENV_NAMES = ("FORM_ENDPOINT", "FORM_API_KEY", "LOG_SECRET")
+ENV_NAMES = ("FORM_ENDPOINT", "FORM_API_KEY", "LOG_SECRET", "OWNER_EMAILS")
 
 
 def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
@@ -477,7 +489,9 @@ def main(argv: list[str] | None = None, settings: Mapping[str, str] | None = Non
     if args.kind:
         groups = {k: v for k, v in groups.items() if k in args.kind}
     mark(groups, suppressed, secret, subscribers)
-    print(render(groups, now, unreadable, subscribers is not None, notes), end="")
+    from run.owner import owner_addresses
+    print(render(groups, now, unreadable, subscribers is not None, notes,
+                 owners=owner_addresses(settings)), end="")
 
     if args.csv is not None:
         written, left_out = write_csv(args.csv, groups)

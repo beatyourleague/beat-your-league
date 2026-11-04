@@ -251,6 +251,9 @@ jobs:
           # without it, the first privacy deletion made this intake raise on
           # every paid session in the sweep window (launch review OPS-5).
           LOG_SECRET: ${{ secrets.LOG_SECRET }}
+          # The owner's own addresses (run/owner.py): a higher daily cap on
+          # confirmation emails, to test with. Unset = nobody is the owner.
+          OWNER_EMAILS: ${{ secrets.OWNER_EMAILS }}
           # A game postponed or suspended that the schedule still shows at its
           # old kickoff (run/solo.py POSTPONED_GAMES, LAUNCH.md section 8): a repo
           # variable set for one week, AWAY@HOME. Unset excuses nothing.

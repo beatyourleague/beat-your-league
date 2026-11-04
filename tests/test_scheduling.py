@@ -778,7 +778,7 @@ def test_a_marker_is_a_key_no_message_has_and_is_written_once(tmp_path, monkeypa
         ("trial-", "welcome-", "preseason-", "confirm-", "renewal-", "launch-"))
     from run.stats import send_summary
     assert send_summary([json.loads(lines[0])], "2026") == {
-        "weekly": {}, "finals": {}, "other": {}}
+        "weekly": {}, "finals": {}, "other": {}, "note": ""}
 
 
 def test_the_worker_lists_row_keys_and_deletes_one_row_only_with_the_key(tmp_path) -> None:

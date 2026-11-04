@@ -2861,9 +2861,16 @@ REFUND_WARN = 0.10
 DISPUTE_WARN = 0.0075
 
 
-def audit_charge_rates(charges: list[dict]) -> tuple[int, float, float]:
-    """(paid charges, refunded share, disputed share) over ``charges``."""
-    paid = [c for c in charges if c.get("paid") and c.get("status") == "succeeded"]
+def audit_charge_rates(charges: list[dict],
+                       owners: frozenset[str] = frozenset()) -> tuple[int, float, float]:
+    """(paid charges, refunded share, disputed share) over ``charges``. A
+    charge paid from one of the owner's own addresses (run/owner.py) is a
+    test, and a refunded test is not a refund rate. A DISPUTED one is never
+    a test (``is_owner_purchase``): it stays in both shares, because card
+    networks count every chargeback on the account."""
+    from run.owner import is_owner_purchase
+    paid = [c for c in charges if c.get("paid") and c.get("status") == "succeeded"
+            and not is_owner_purchase(c, owners)]
     if not paid:
         return 0, 0.0, 0.0
     refunded = sum(1 for c in paid if c.get("refunded") or (c.get("amount_refunded") or 0) > 0)
@@ -2885,18 +2892,25 @@ def check_refund_rates() -> list[Gate]:
     key = os.environ.get("STRIPE_API_KEY", "")
     if not key:
         return [Gate("Economics", name, "SKIP", "needs STRIPE_API_KEY with Charges read")]
+    from run.owner import is_owner_purchase, owner_addresses
+    owners = owner_addresses()
     try:
-        n, refunds, disputes = audit_charge_rates(_stripe_charges(key, 30))
+        charges = _stripe_charges(key, 30)
+        n, refunds, disputes = audit_charge_rates(charges, owners)
     except Exception as exc:  # noqa: BLE001 — a read failure is a SKIP, never a zero
         from run.stats import _safe
         return [Gate("Economics", name, "SKIP", f"couldn't read charges ({_safe(exc)})")]
+    mine = sum(1 for c in charges if c.get("paid") and c.get("status") == "succeeded"
+               and is_owner_purchase(c, owners))
+    tail = (f" ({mine} of your own charges, from OWNER_EMAILS, not counted)" if mine else "")
     if not n:
-        return [Gate("Economics", name, "SKIP", "no charge yet")]
+        return [Gate("Economics", name, "SKIP", "no charge yet" + tail)]
     bad = ([f"refunds {refunds:.0%} (over {REFUND_WARN:.0%})"] if refunds > REFUND_WARN else []) \
         + ([f"disputes {disputes:.2%} (at or over {DISPUTE_WARN:.2%})"]
            if disputes >= DISPUTE_WARN else [])
-    return [_gate("Economics", name, not bad, "; ".join(bad) + f" of {n} charges",
-                  f"{n} charges: refunds {refunds:.0%}, disputes {disputes:.2%}", fail="WARN")]
+    return [_gate("Economics", name, not bad, "; ".join(bad) + f" of {n} charges" + tail,
+                  f"{n} charges: refunds {refunds:.0%}, disputes {disputes:.2%}" + tail,
+                  fail="WARN")]
 
 
 def count_recipients(registry: Path | None = None) -> tuple[int, int] | str:
