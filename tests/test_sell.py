@@ -177,7 +177,7 @@ console.log(JSON.stringify(out));""")
 
 
 def test_step_three_is_redrawn_once_the_clock_has_read() -> None:
-    assert ".then(() => { drawStep3(); drawPayoff(); })" in JOIN
+    assert ".then(() => { drawStep3(); drawPayoff(); drawBuyState(); })" in JOIN
 
 
 # --------------------------------------------------------------------- #

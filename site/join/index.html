@@ -261,6 +261,24 @@
   #opt-plan{margin-bottom:6px;}
   #lbl-plan{margin-top:0;}
   #resolve,#submit{width:100%;min-height:52px;font-size:17px;}
+  /* The way on from a checked roster to step 3 (default buy mode only): the
+     facts panel sits between them, about a screen and a half tall on a phone. */
+  #go-checkout{width:100%;min-height:52px;font-size:17px;}
+  #go-checkout.is-stale{background:var(--card);color:var(--navy);border:1.5px solid var(--navy);}
+  #go-checkout[hidden],#submit[hidden]{display:none;}
+  #step-email{scroll-margin-top:16px;}
+  /* The address as typed, under the field: Stripe locks it at checkout. */
+  .echo{margin-top:8px;font-size:14px;line-height:1.5;color:var(--ink2);overflow-wrap:anywhere;}
+  .echo b{color:var(--navy);}
+  #restored-line{margin:0 0 10px;}
+  /* After a free-report request: the plan, offered once, quietly. */
+  .plan-offer{margin-top:14px;padding-top:12px;border-top:1px solid #BFDCC8;font-size:14px;
+    line-height:1.5;color:var(--ink2);}
+  .plan-offer a.ghost{display:inline-flex;align-items:center;min-height:44px;margin-bottom:6px;
+    padding:8px 16px;border:1.5px solid var(--navy);border-radius:8px;background:var(--card);
+    color:var(--navy);font-weight:700;text-decoration:none;}
+  .plan-offer a.ghost:hover{text-decoration:underline;}
+  .plan-offer span{display:block;}
   /* The closed state of the checkout button: a real button in the site's
      secondary style (contract C2), still pressable so it can say what to do
      instead — never the dashed box that read as a wireframe (D4). */
@@ -679,6 +697,10 @@ Baltimore Ravens
     <!-- Above the list, so a problem shows under the button that found it
          rather than a screen further down on a phone (launch audit PC-08). -->
     <div class="tally" id="tally" role="status" aria-live="polite" tabindex="-1"></div>
+    <!-- Default buy mode, once the roster checks out: one press to step 3,
+         past the facts panel (drawGoCheckout). The gold, while #resolve is
+         drawn done; a press on a roster edited since checks it again first. -->
+    <button type="button" id="go-checkout" hidden>Continue to checkout</button>
     <button type="button" id="defenses-ok" class="retry" style="display:none"></button>
     <div id="rows"></div>
   </section>
@@ -697,6 +719,7 @@ Baltimore Ravens
     <div class="eyebrow" id="step3-head">3 · Where do reports go?</div>
     <div class="note" id="seat-share" style="display:none"></div>
     <p class="value-line" id="value-line" hidden></p>
+    <p class="note" id="restored-line" hidden>Changed your roster since? Edit it above before you pay.</p>
     <form id="form-email" novalidate>
       <div class="optlabel" id="lbl-plan" style="display:none">Your plan</div>
       <!-- Shown only when there is a choice (PLAN_CHOICE). autocomplete=off: a
@@ -707,6 +730,10 @@ Baltimore Ravens
       </div>
       <label class="optlabel" id="lbl-email" for="email">Where reports go</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+      <!-- The address read back as it is typed (drawEmailEcho), as text: the
+           paid path goes straight to Stripe, which locks it, unless the
+           address looks like a typo. -->
+      <p class="echo" id="email-echo" aria-live="polite" hidden></p>
       <div id="team-name-wrap" style="display:none">
         <label class="optlabel" for="team-name">Team name (optional)</label>
         <input type="text" id="team-name" maxlength="24" placeholder="Work league" autocomplete="off">
@@ -771,9 +798,10 @@ Baltimore Ravens
         report.</li>
         <li id="trial-note" style="display:none">If this address hasn't had a free
         report this season and doesn't already have a plan, it's built from the roster you just
-        entered and usually lands within the hour. From the week's first kickoff
+        entered and <span id="trial-when">usually lands within the hour</span>.
+        <span id="trial-wait">From the week's first kickoff
         until that week's games are done it waits for the next week's report, so it's never about games
-        already underway. One free report per person. Nothing to pay, no card.</li>
+        already underway.</span> One free report per person. Nothing to pay, no card.</li>
         <li id="pay-note">Stripe handles the payment. We never see, transmit or store
         your card details.</li>
         <li id="renew-note">The Monthly plan is <b>$14.99 a month</b> until you cancel, and
@@ -783,6 +811,12 @@ Baltimore Ravens
         <span id="first-tail">Cancel any time from your billing page, or let it
         <a href="../terms.html#cancel">end on its own</a>.</span></li>
       </ol>
+      <!-- Shown after a free-report request only (drawTrialOffer), whatever the
+           intake later decides about that address: it reveals nothing. -->
+      <p class="plan-offer" id="trial-plan" hidden><a class="ghost" id="trial-plan-link"
+        href="index.html">Want it every Wednesday? Start the Monthly plan with this roster.</a>
+        <span>$14.99 a month. It stops on its own after your title game, with a full refund
+        before your first weekly report's first game.</span></p>
     </div>
   </section>
 </main>
@@ -1089,6 +1123,11 @@ const state = { directory: null, matches: [], ready: false, dirFailed: false,
                 dirLoading: false, stale: false, listed: false, defensesOk: null,
                 byes: null, week: null, checked: false, freshCheck: false,
                 payoffPlayed: false };
+// The panel above step 3 grows when byes.json and week.json land, so a jump to
+// the email made before both have settled lands short of it (measured: 465px
+// at 390). A restored roster waits for them (jumpToEmailIfWaiting).
+const SETTLING = { byes: !(window.B && !TRY_MODE && window.fetch),
+                   week: UPDATE_MODE || !window.fetch };
 
 function radio(name) {
   const picked = document.querySelector(`input[name="${name}"]:checked`);
@@ -1320,6 +1359,8 @@ $("roster-text").addEventListener("input", () => {
   const tally = $("tally");
   tally.className = "tally bad";
   tally.textContent = 'Your roster changed — hit "Check my team" again.';
+  drawGoCheckout();
+  drawRestoredLine();
 });
 
 // Why a row is not on the roster yet, in the buyer's words. Part of a name
@@ -1514,6 +1555,8 @@ function draw(focusAt) {
   keepInAddress();
   relistIfChanged();
   redrawPassNote();
+  drawGoCheckout();
+  drawRestoredLine();
   if (Number.isInteger(focusAt)) {
     const rows = list.querySelectorAll(".row");
     const target = rows[Math.min(focusAt, rows.length - 1)];
@@ -1840,6 +1883,17 @@ function countUp(node, to) {
 // Off screen after a real check, the panel is brought up gently, once, after
 // the rows have landed. Focus never moves: the tally keeps role=status.
 function bringPayoffIntoView(reduced) {
+  // A buyer's way on is the gold button under the tally (drawGoCheckout):
+  // scrolling the panel up would carry it off the top of the screen, so it
+  // is that button that comes into view, when it isn't already, and the
+  // panel waits below it.
+  if (goCheckoutShows()) {
+    const box = $("go-checkout").getBoundingClientRect();
+    if (box.top >= 0 && box.bottom <= window.innerHeight) return;
+    window.scrollTo({ top: box.bottom + window.scrollY - window.innerHeight + 24,
+                      behavior: reduced ? "auto" : "smooth" });
+    return;
+  }
   const top = $("payoff").getBoundingClientRect().top;
   if (top >= 0 && top <= window.innerHeight * 0.7) return;
   window.scrollTo({ top: top + window.scrollY - 16, behavior: reduced ? "auto" : "smooth" });
@@ -1903,7 +1957,8 @@ function loadByes() {
       state.byes = byes;
       drawPayoff();
     })
-    .catch(() => {});
+    .catch(() => {})
+    .then(() => settled("byes"));
 }
 loadByes();
 
@@ -1962,6 +2017,27 @@ function restoreRoster() {
     .map((m) => m.player.name).join("\n") + "\n";
   state.stale = false;
   draw();
+  // A roster that comes back whole, to a plan that can take money now: the
+  // email is the next thing to do, about two screens down, so the page goes
+  // there and says the roster can still be edited above. Never otherwise: a
+  // row that needs fixing is the next thing to do then.
+  if (state.ready && buyingNow()) {
+    state.restoredClean = true;
+    drawRestoredLine();
+    state.emailJump = true;
+    jumpToEmailIfWaiting();
+  }
+}
+function settled(what) {
+  SETTLING[what] = true;
+  jumpToEmailIfWaiting();
+}
+// Once, and only while nothing has changed the plan: the roster still checks
+// out, nobody has pressed "Check my team", and the plan can take money.
+function jumpToEmailIfWaiting() {
+  if (!state.emailJump || !SETTLING.byes || !SETTLING.week) return;
+  state.emailJump = false;
+  if (state.ready && !state.stale && !state.checked && buyingNow()) bringToEmail();
 }
 
 // Settings radios from a code that arrived in the address — a restored ref
@@ -2196,12 +2272,14 @@ $("form-email").addEventListener("submit", (event) => {
       "this page's address. Bookmark it and it comes back.", "info");
     return;
   }
-  // Stripe locks the address, so it is read back once before the page leaves:
-  // "Reports go to <address> — right?" (critique #1). Yes goes on from here.
-  // The read-back holds only the ADDRESS: Yes presses this button again, so
-  // the ref and the link are rebuilt from the page as it stands then — a
-  // setting or roster changed while the box was open is what gets bought.
-  if (state.confirmedEmail !== email) {
+  // Stripe locks the address (critique #1). It is read back as it is typed,
+  // under the field (drawEmailEcho), so this press goes straight to Stripe —
+  // unless the address looks like a typo: then "Reports go to <address> —
+  // right?" opens once, with the fix. The read-back holds only the ADDRESS:
+  // its yes presses this button again, so the ref and the link are rebuilt
+  // from the page as it stands then — a setting or roster changed while the
+  // box was open is what gets bought.
+  if (typoSuggestion(email) && state.confirmedEmail !== email) {
     askAboutEmail(email, { email: email });
     return;
   }
@@ -2290,6 +2368,10 @@ function askAboutEmail(email, go) {
   $("check-yes").classList.toggle("alt", Boolean(fix));
   $("check-yes").classList.toggle("addr", !go);
   $("check-email").hidden = false;
+  // The box carries this path's next press, so the button under the field
+  // goes while it is open: one gold on screen (contract C2).
+  $("submit").hidden = true;
+  drawEmailEcho();
   (fix ? $("check-use") : $("check-yes")).focus();
 }
 // The last press before Stripe: it says it leaves for checkout, and for how
@@ -2300,7 +2382,9 @@ function checkoutWords() {
 }
 function closeEmailCheck() {
   $("check-email").hidden = true;
+  $("submit").hidden = false;
   state.pendingCheckout = null;
+  drawEmailEcho();
 }
 $("check-yes").addEventListener("click", () => {
   const email = $("email").value.trim();
@@ -2323,8 +2407,14 @@ $("check-use").addEventListener("click", () => {
   if (!fixed) return;
   $("email").value = fixed;
   const go = state.pendingCheckout;
-  // The corrected address is read back too: Yes is what sends it.
-  if (go) { askAboutEmail(fixed, { email: fixed }); return; }
+  // On the paid path the corrected address goes back in the field, read back
+  // under it, and the button that names the amount is the next press: the
+  // last press before Stripe always says where it goes and for how much.
+  if (go) {
+    closeEmailCheck();
+    $("submit").focus();
+    return;
+  }
   state.keptEmail = fixed;
   closeEmailCheck();
   $("submit").click();
@@ -2337,6 +2427,7 @@ $("check-edit").addEventListener("click", () => {
 // An address typed over after the read-back is another address.
 $("email").addEventListener("input", () => {
   if (!$("check-email").hidden) closeEmailCheck();
+  drawEmailEcho();
 });
 
 // D14: the page, the Worker and the intake accept the same addresses, so a
@@ -2489,6 +2580,8 @@ function submitTrial(email, ref) {
     // subscriber's address — the intake decides, so the page claims no more.
     $("done-head").textContent = "Your request is in.";
     $("done").style.display = "block";
+    drawTrialNote(new Date());
+    drawTrialOffer();
   }).catch((err) => {
     showError("err-email", notSentWords(err));
   });
@@ -2600,6 +2693,13 @@ function seasonClosed(w, now) {
 // after the last week starts there is no report left to build. "this" stops
 // 75 minutes early for the same reason as firstReportTiming.
 let TRIAL = null;        // null | {when: "this"|"next"|"pre"|"over", ...}
+// run/trials.py's holds, in UTC hours, held equal to it by test: from the
+// Wednesday morning slot until that day's subscriber run is done (or this
+// hour on Thursday), and on a Saturday until the final check is done (or
+// this hour). Free reports wait behind paid mail in both.
+const TRIAL_HOLD_FROM = 12;          // REPORT_HOLD_FROM (Wednesday)
+const TRIAL_HOLD_UNTIL = 2;          // TUESDAY_RELEASE_HOUR (Thursday)
+const TRIAL_SATURDAY_UNTIL = 20;     // SATURDAY_RELEASE_HOUR (Saturday)
 function trialTiming(w, now) {
   if (!w || typeof w !== "object") return null;
   if (seasonClosed(w, now)) return { when: "over" };
@@ -2694,6 +2794,13 @@ const MONTHLY_STATE = {};
   MONTHLY_STATE[id] = [...$(id).childNodes].map((n) => n.cloneNode(true));
 });
 const MONTHLY_SUBMIT = $("submit").textContent;
+// The static heading, title and Menu item are the free check's: what the page
+// says when no plan can take money, and what a page whose script never runs
+// says. drawBuyHeading and drawMenuGo put them back when checkout closes.
+const FREE_HEAD = document.querySelector("header h1").textContent;
+const FREE_TITLE = document.title;
+const MENU_GO_LINK = document.querySelector(".sitemenu-list a.go");
+const MENU_GO = MENU_GO_LINK ? MENU_GO_LINK.textContent : "";
 
 // A mode that charges nothing shows no checkout step and no currency line.
 function nothingToPay(stepLabel) {
@@ -2902,6 +3009,7 @@ function monthlyPlan() {
   fillRenewalDates();
   drawFirst();
   noteClosedFor(planLink(), otherPlanLink());
+  drawBuyHeading();
 }
 
 // The 2027 Season Pass, drawn only when SEASON_2027_READY has made it a choice.
@@ -2955,6 +3063,7 @@ function drawTrial() {
   $("header-pitch").textContent =
     "Free: " + what[0] + ". Every slot decided for your roster, every close " +
     "call explained, an if/then for late news. One per person, no card.";
+  drawTrialNote(new Date());
   if (FORM_ENDPOINT && TRIAL_OPEN && TRIAL && (TRIAL.when === "over" || TRIAL.when === "pre")) {
     const note = $("closed-note");
     const a = document.createElement("a");
@@ -3121,6 +3230,151 @@ function passTermsText() {
     "before your first weekly report's first game, one per league.";
 }
 
+// ---- the way to checkout, in the default buy mode -------------------------
+// A purchase of the plan on screen while it can take money: not a free
+// report, a seat, a League Pass, a roster update, an added team or a trade
+// check. Each of those keeps its own words and its own path.
+function buyingNow() {
+  return !SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS &&
+    Boolean(planLink()) && !seasonOver();
+}
+// The heading names what the visit is for once checkout is open; closed, the
+// page is the free check, word for word as the markup has it.
+function drawBuyHeading() {
+  if (HEADING || chose2027 || SEAT_MODE || UPDATE_MODE || TRY_MODE || WANTS_PASS) return;
+  const open = buyingNow();
+  document.querySelector("header h1").textContent = open ? "Get your lineups" : FREE_HEAD;
+  document.title = open ? "Get your fantasy football lineups — Beat Your League" : FREE_TITLE;
+  if (!open) {
+    $("header-pitch").replaceChildren(...MONTHLY_STATE["header-pitch"].map((n) => n.cloneNode(true)));
+    return;
+  }
+  // What happens first, then the price with its stop and refund beside it.
+  const price = document.createElement("b");
+  price.textContent = "$14.99 a month";
+  $("header-pitch").replaceChildren(
+    document.createTextNode("Paste your roster, then check out. The weekly report is "), price,
+    document.createTextNode(": it stops on its own after your title game, with a full " +
+      "refund before your first weekly report's first game."));
+}
+// The Menu's one gold item says what the site's main button says: the buy
+// label while checkout is open, the free check otherwise (the landing's rule).
+function drawMenuGo() {
+  if (!MENU_GO_LINK) return;
+  MENU_GO_LINK.textContent = monthlyLink() && !seasonOver() ? "Get my lineups" : MENU_GO;
+}
+// The gold under the tally. Shown once the roster checks out and the facts
+// panel stands between the tally and step 3; kept while an edit waits to be
+// checked again, drawn as the secondary then (the gold is "Check my team"
+// again), and one press re-checks and goes on.
+function goCheckoutShows() {
+  if (!buyingNow() || !state.matches.length) return false;
+  return state.stale ? state.goShown === true : payoffShows();
+}
+function drawGoCheckout() {
+  const go = $("go-checkout");
+  const shows = goCheckoutShows();
+  go.hidden = !shows;
+  go.classList.toggle("is-stale", shows && state.stale);
+  state.goShown = shows;
+}
+// Step 3's email field, brought up and focused: smooth unless the visitor
+// asked for less motion. The address is typed here, never carried in a URL.
+function bringToEmail() {
+  const reduced = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  $("step-email").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  $("email").focus({ preventScroll: true });
+}
+$("go-checkout").addEventListener("click", () => {
+  if (state.stale || !state.ready) {
+    $("resolve").click();
+    if (!state.ready || state.stale) return;     // the tally says what to fix
+  }
+  bringToEmail();
+});
+// A roster brought back by ?ref=, whole: the page went to the email, so it
+// says the roster above can still change. Gone once they check it again.
+function drawRestoredLine() {
+  $("restored-line").hidden = !(state.restoredClean && state.ready && !state.stale &&
+                                !state.checked && buyingNow());
+}
+// The address as typed, read back under the field on a path that leaves for
+// Stripe, as text. The box below the button opens only for a likely typo.
+function drawEmailEcho() {
+  const echo = $("email-echo");
+  const email = $("email").value.trim();
+  const shows = !SEAT_MODE && !UPDATE_MODE && !TRY_MODE && step3Action === "open" &&
+    Boolean(email) && $("check-email").hidden;
+  echo.hidden = !shows;
+  if (!shows) { echo.replaceChildren(); return; }
+  const address = document.createElement("b");
+  address.textContent = email;
+  echo.replaceChildren(document.createTextNode("Reports go to "), address);
+}
+function drawBuyState() {
+  drawBuyHeading();
+  drawMenuGo();
+  drawGoCheckout();
+  drawRestoredLine();
+  drawEmailEcho();
+}
+
+// ---- the free report's timing, said for the hour it is asked ---------------
+// The hold hours above, in Eastern time for the visitor: "7 AM" in winter.
+function etHourWords(utcHour, now) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), utcHour))
+    .toLocaleTimeString("en-US", { hour: "numeric", timeZone: "America/New_York" });
+}
+// Which wait run/trials.py puts a request in now, as far as the page can
+// tell: "wednesday" (the subscribers' run goes first; a week.json rebuilt by
+// that run, "this", means it has finished), "saturday" (the final check goes
+// first), "scored" (next week's report, which waits for this week's box
+// scores: the same Monday-night window drawFirst names, ending Tuesday 16:00
+// UTC) or "hour".
+function trialWindow(t, w, now) {
+  const day = now.getUTCDay(), hour = now.getUTCHours();
+  const fresh = Boolean(t && t.when === "this");
+  if (!fresh && ((day === 3 && hour >= TRIAL_HOLD_FROM) || (day === 4 && hour < TRIAL_HOLD_UNTIL))) {
+    return "wednesday";
+  }
+  if (fresh && day === 6 && hour < TRIAL_SATURDAY_UNTIL) return "saturday";
+  if (t && t.when === "next" && /^\d{4}-\d\d-\d\d$/.test((w && w.lands_on) || "")) {
+    const [y, m, d] = w.lands_on.split("-").map(Number);
+    if (now.getTime() < Date.UTC(y, m - 1, d - 1, 16)) return "scored";
+  }
+  return "hour";
+}
+function trialWhenWords(window, now) {
+  if (window === "wednesday") {
+    return "arrives this evening: from " + etHourWords(TRIAL_HOLD_FROM, now) +
+      " ET on Wednesdays, the weekly reports go out first";
+  }
+  if (window === "saturday") {
+    return "goes out after subscribers' Saturday check, usually by " +
+      etHourWords(TRIAL_SATURDAY_UNTIL, now) + " ET";
+  }
+  if (window === "scored") {
+    return "goes out once this week's games are done and scored, usually by Tuesday " +
+      "morning, so it's never about games already underway";
+  }
+  return "usually lands within the hour";
+}
+function drawTrialNote(now) {
+  const window = trialWindow(TRIAL, state.week, now);
+  $("trial-when").textContent = trialWhenWords(window, now);
+  $("trial-wait").hidden = window === "scored";      // said in the line before it
+}
+// After a request: the plan, with this roster, once. Shown whatever the
+// intake later decides, so it says nothing about the address. The link is
+// ownPlanHref's: the roster as a Monthly ref carrying this visit's channel
+// tag, and no free-report mode or address in it.
+function drawTrialOffer() {
+  const shows = TRY_MODE && Boolean(monthlyLink()) && !seasonOver();
+  $("trial-plan").hidden = !shows;
+  if (shows) $("trial-plan-link").setAttribute("href", ownPlanHref());
+}
+
 // Every paying mode, from the first paint: the button and the secure line say
 // whether THIS plan can take money yet — and, with the other plan's link, what
 // pressing it does instead (the first paint used to pass no ``other``, so a
@@ -3278,6 +3532,7 @@ drawShapeNote();
 fillRenewalDates();
 drawFirst();
 if (chose2027) draw2027Plan();
+drawBuyState();
 
 // When the first report lands — see firstReportTiming. For a purchase and a
 // seat (whose first email follows the same rules, LP-I4); an update and a
@@ -3291,7 +3546,15 @@ if (chose2027) draw2027Plan();
       .then((w) => {
         const now = new Date();
         state.week = w;
-        if (TRY_MODE) { TRIAL = trialTiming(w, now); drawTrial(); return; }
+        if (TRY_MODE) {
+          TRIAL = trialTiming(w, now);
+          // The same two rules the purchase reads, for the plan offered after
+          // a request (drawTrialOffer): over, and Monthly paused pre-season.
+          if (seasonClosed(w, now)) FIRST = { when: "over" };
+          if (w && w.phase === "preseason") MONTHLY_PAUSED = true;
+          drawTrial();
+          return;
+        }
         FIRST = seasonClosed(w, now) ? { when: "over" } : firstReportTiming(w, now);
         drawFirst();
         if (w && w.phase === "preseason" && STRIPE_LINK_MONTHLY && !SEAT_MODE && !WANTS_PASS) {
@@ -3316,9 +3579,10 @@ if (chose2027) draw2027Plan();
           noteClosedFor("", "");
         }
       })
-      .then(() => { drawStep3(); drawPayoff(); })
-      .catch(() => {});
-  } catch (e) { /* the sentence true either way stays */ }
+      .then(() => { drawStep3(); drawPayoff(); drawBuyState(); })
+      .catch(() => {})
+      .then(() => settled("week"));
+  } catch (e) { settled("week"); /* the sentence true either way stays */ }
 })();
 </script>
 <script src="/count.js" defer></script>

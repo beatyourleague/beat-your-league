@@ -489,13 +489,17 @@ def test_a_common_domain_typo_is_suggested_never_silently_changed() -> None:
 
 
 def test_checkout_waits_for_the_address_to_be_read_back() -> None:
-    """Critique #1: before the page leaves for Stripe it shows "Reports go to
-    <address> — right?" with Edit beside the yes, and the yes is the only way
-    on. The hand-off is one function, reached from the handler only once the
-    address on screen is the one read back, and from the yes; the read-back
-    is filled as text. A seat claim never meets it (the WORKER's path)."""
+    """Critique #1: Stripe locks the address, so the page reads it back. Since
+    Nov 4 2026 it is read back AS IT IS TYPED, under the field ("Reports go
+    to <address>", drawEmailEcho), and the box "Reports go to <address> —
+    right?" with Edit beside the yes opens only for a likely typo, where the
+    yes is the only way on with the address as typed. The hand-off is one
+    function, reached from the handler only for an address with no suggested
+    fix or the one read back; the read-back is filled as text. A seat claim
+    never meets it (the WORKER's path)."""
     handler = JOIN.split('$("form-email").addEventListener("submit"')[1].split("\n});")[0]
-    assert "if (state.confirmedEmail !== email) {\n    askAboutEmail(email, { email: email });" in handler
+    assert ("if (typoSuggestion(email) && state.confirmedEmail !== email) {\n"
+            "    askAboutEmail(email, { email: email });") in handler
     assert handler.index("askAboutEmail(email, {") < handler.index("leaveForCheckout(link, tagged, email)")
     assert handler.index("if (SEAT_MODE) {") < handler.index("typoSettled(email)")
     assert JOIN.count("window.location.assign(") == 1
@@ -537,11 +541,13 @@ def test_the_yes_buys_what_is_on_the_page_not_what_was_there_when_it_asked(
     from run.launch_check import _serving, flow_roster, join_copy, run_browser
     from run.refs import decode_roster
     site = tmp_path / "site"
-    with _serving(tmp_path) as base:
+    # Served from the site's own root: the typo table is /email-check.js.
+    with _serving(site) as base:
         assert join_copy(site, base, links_open=True) == []
         roster, _ids = flow_roster(site / "join" / "players.json")
-        jobs = [{"kind": "flow", "path": "site/join/index.html", "width": 390,
-                 "mode": name, "roster": roster, "email": "pat@example.com",
+        # A likely typo: since Nov 4 2026 the box opens only for one.
+        jobs = [{"kind": "flow", "path": "join/index.html", "width": 390,
+                 "mode": name, "roster": roster, "email": "pat@gmial.com",
                  "whileAsked": js} for name, js in WHILE_ASKED.items()]
         results = run_browser(jobs, base, timeout=300)
     if isinstance(results, str):
