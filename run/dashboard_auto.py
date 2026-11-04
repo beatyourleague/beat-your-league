@@ -62,6 +62,33 @@ def installed(agent_dir: Path | None = None) -> bool:
     return plist_path(agent_dir).is_file()
 
 
+def _marked_disabled(text: str) -> bool:
+    """launchctl print-disabled's line for this job says it is off ("=> disabled",
+    or "=> true" on older macOS)."""
+    for line in text.splitlines():
+        key, sep, value = line.strip().partition("=>")
+        if sep and key.strip().strip('"') == LABEL:
+            return value.strip() in ("disabled", "true")
+    return False
+
+
+def running(agent_dir: Path | None = None, run: Runner | None = None,
+            uid: int | None = None) -> bool:
+    """Is the updater really rebuilding the page? The plist alone doesn't
+    say: a failed install used to leave one, and turning the item off under
+    Login Items leaves it too. So launchd is asked: the job must be loaded
+    and not marked disabled."""
+    if not installed(agent_dir):
+        return False
+    run = run or _launchctl
+    uid = os.getuid() if uid is None else uid
+    code, _out = run(["print", f"gui/{uid}/{LABEL}"])
+    if code != 0:
+        return False
+    code, out = run(["print-disabled", f"gui/{uid}"])
+    return not (code == 0 and _marked_disabled(out))
+
+
 def venv_python(repo: Path = REPO_ROOT) -> Path:
     """The repository's own venv python, as a path (never resolved: the
     venv's symlink is what makes it the venv)."""
@@ -132,6 +159,9 @@ def install(repo: Path, agent_dir: Path | None = None, run: Runner | None = None
             break
         (wait or time.sleep)(1)     # a bootout can take a moment to finish
     if code != 0:
+        # Nothing left behind: a plist launchd never loaded made make
+        # dashboard say the page keeps itself fresh while nothing rebuilt it.
+        target.unlink(missing_ok=True)
         _say(f"launchd wouldn't start the updater ({out.strip()[:200] or code}). "
              f"Run make dashboard-auto-off, then make dashboard-auto again.")
         return 1
@@ -210,11 +240,17 @@ def status(repo: Path, agent_dir: Path | None = None, run: Runner | None = None,
     page = repo / PAGE_REL
     if page.is_file():
         _say(f"The page was written {_ago(now - page.stat().st_mtime)}.")
+    # The rotated log first, then the current one: the build that rotates
+    # writes its own line into .1 (launchd holds the file open across the
+    # rename), and no new log exists until the next build.
     log = repo / LOG_REL
-    try:
-        lines = [ln for ln in log.read_text(encoding="utf-8", errors="replace").splitlines() if ln]
-    except OSError:
-        lines = []
+    lines = []
+    for part in (log.with_name(log.name + ".1"), log):
+        try:
+            lines += [ln for ln in part.read_text(encoding="utf-8", errors="replace").splitlines()
+                      if ln]
+        except OSError:
+            pass
     if lines:
         _say("Last lines of " + LOG_REL + ":")
         for line in lines[-3:]:

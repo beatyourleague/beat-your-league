@@ -508,7 +508,7 @@ def collect_intake(ctx: Context) -> Source:
 # reads one of these goes through cron_file().
 CRON_PATHS = ("data/processed/sent.jsonl", "data/processed/suppressed.txt",
               "data/processed/ledger", "site/week.json", "site/join/players.json",
-              "content/this-week.md")
+              "site/this-week.html", "content/this-week.md")
 CRON_REF = "origin/main"
 CRON_LABEL = "Crons' files"
 FETCH_TIMEOUT = 20       # seconds; a fetch that hangs falls back to this Mac's copy
@@ -540,11 +540,15 @@ class CronCopy:
     fetched_at: datetime | None = None
     local_at: str | None = None         # this checkout's newest commit, when local
     files: int = 0
+    # GitHub's own schedules: per workflow file, the cron lines on main and
+    # when the newest change to them joined main. workflow_health reads these,
+    # never this checkout's copy, which can hold a cron GitHub doesn't have.
+    schedules: dict = field(default_factory=dict)
 
     def view(self) -> dict:
         return {"source": self.source, "reason": self.reason, "behind": self.behind,
                 "fetched_at": self.fetched_at.isoformat() if self.fetched_at else None,
-                "local_at": self.local_at, "files": self.files}
+                "local_at": self.local_at, "files": self.files, "schedules": self.schedules}
 
 
 def cron_file(ctx: Context, rel: str) -> Path:
@@ -561,12 +565,21 @@ def _cron_name_ok(name: str) -> bool:
 
 
 def _github_copy(root: Path, dest: Path, now: datetime, git: GitRun) -> CronCopy | None:
-    code, listing = git(["ls-tree", "-r", "-z", "--name-only", CRON_REF, "--", *CRON_PATHS], root)
+    code, listing = git(["ls-tree", "-r", "-z", "--name-only", CRON_REF, "--", *CRON_PATHS,
+                         *SCHEDULE_FILES], root)
     if code != 0:
         return None
     files = 0
+    schedules: dict = {}
     for raw in listing.split(b"\0"):
         name = raw.decode("utf-8", "replace")
+        if name in SCHEDULE_FILES:
+            code, blob = git(["cat-file", "blob", f"{CRON_REF}:{name}"], root)
+            if code == 0:
+                schedules[PurePosixPath(name).name] = {
+                    "crons": _crons_in(blob.decode("utf-8", "replace")),
+                    "changed": _schedule_change(root, name, CRON_REF, git)}
+            continue
         if not _cron_name_ok(name):
             continue
         code, blob = git(["cat-file", "blob", f"{CRON_REF}:{name}"], root)
@@ -579,7 +592,7 @@ def _github_copy(root: Path, dest: Path, now: datetime, git: GitRun) -> CronCopy
     code, out = git(["rev-list", "--count", f"HEAD..{CRON_REF}"], root)
     text = out.decode("ascii", "replace").strip() if code == 0 else ""
     return CronCopy(root=dest, source="github", behind=int(text) if text.isdigit() else None,
-                    fetched_at=now, files=files)
+                    fetched_at=now, files=files, schedules=schedules)
 
 
 def _local_copy(root: Path, reason: str, git: GitRun) -> CronCopy:
@@ -726,6 +739,7 @@ WORKFLOWS = (
     ("test.yml", "Tests"),
     ("pages.yml", "Site deploy"),
 )
+SCHEDULE_FILES = tuple(f".github/workflows/{name}" for name, _label in WORKFLOWS)
 
 
 def _github_get(path: str) -> Any:
@@ -776,18 +790,36 @@ def gate_env(env: Mapping[str, str]):
         yield
 
 
+def repo_paths(text: str, ctx: Context) -> str:
+    """Paths in a message as the repository names them: the build's
+    temporary copy of GitHub's files (deleted before the page is written)
+    and this checkout's folder both drop out, so no message points at a
+    folder that is gone or carries a path from this Mac."""
+    for base in (ctx.cron.root if ctx.cron is not None else None, ctx.root):
+        if base is not None:
+            text = text.replace(str(base).rstrip("/") + "/", "")
+    return text
+
+
 def collect_launch(ctx: Context) -> Source:
     import run.launch_check as lc
+    # The gates that read the crons' files read the same copy as the site
+    # and record cards (cron_file), never a checkout that hasn't pulled.
+    kwargs: dict[str, dict] = {}
+    if ctx.cron is not None:
+        processed = cron_file(ctx, "data/processed")
+        kwargs = {"check_week_json": {"site": cron_file(ctx, "site"), "processed_dir": processed},
+                  "check_record": {"processed_dir": processed}}
     gates = []
     with gate_env(ctx.env):
         for name in FAST_GATES:
             try:
-                gates.extend(g.__dict__.copy() for g in getattr(lc, name)())
+                gates.extend(g.__dict__.copy() for g in getattr(lc, name)(**kwargs.get(name, {})))
             except Exception as exc:  # noqa: BLE001 — one broken check never hides the rest
                 gates.append({"area": "Check", "name": f"{name} could not run", "status": "FAIL",
                               "detail": f"{type(exc).__name__}: {exc}"})
     for gate in gates:
-        gate["detail"] = redact(gate.get("detail", ""))
+        gate["detail"] = redact(repo_paths(gate.get("detail", ""), ctx))
     return _source("launch", data={"gates": gates}, read_at=ctx.now)
 
 
@@ -802,14 +834,16 @@ def collect_ledger(ctx: Context) -> Source:
         try:
             held = load_ledger(path)
         except (LedgerError, OSError) as exc:
-            unreadable.append(f"{path.parent.name}: {redact(exc)}")
+            unreadable.append(f"{path.parent.name}: {redact(repo_paths(str(exc), ctx))}")
             continue
         for c in held:
             calls.append({"store": path.parent.name, "week": c.week, "confidence": c.confidence,
                           "status": c.status, "outcome": c.outcome,
                           "recorded_at": c.recorded_at})
-    return _source("ledger", data={"season": season, "calls": calls, "unreadable": unreadable},
-                   read_at=ctx.now)
+    # Which copy was read, so a broken store is looked for in the right place.
+    copy = "github" if ctx.cron is not None and ctx.cron.source == "github" else "local"
+    return _source("ledger", data={"season": season, "calls": calls, "unreadable": unreadable,
+                                   "copy": copy}, read_at=ctx.now)
 
 
 def _git_time(root: Path, rel: str, rev: str = "HEAD") -> str | None:
@@ -1383,7 +1417,7 @@ def ledger_view(src: Source, now: datetime) -> dict | None:
             "stated": (sum(c["confidence"] for c in decided) / len(decided)) if decided else None,
             "bands": bands, "weeks": dict(sorted(weeks.items())),
             "stores": sorted({c["store"] for c in calls}), "stale": len(stale),
-            "unreadable": src.data["unreadable"]}
+            "unreadable": src.data["unreadable"], "copy": src.data.get("copy", "local")}
 
 
 # --------------------------------------------------------------------- #
@@ -1446,37 +1480,81 @@ def last_slot(crons: list[str], now: datetime, grace: timedelta) -> datetime | N
     return backed_up[0] if backed_up else slot
 
 
+def _crons_in(text: str) -> list[str]:
+    return re.findall(r'^\s*-\s*cron:\s*"([^"]+)"', text, re.M)
+
+
 def workflow_crons(root: Path, name: str) -> list[str]:
     path = root / ".github" / "workflows" / name
     if not path.is_file():
         return []
-    return re.findall(r'^\s*-\s*cron:\s*"([^"]+)"', path.read_text(encoding="utf-8"), re.M)
+    return _crons_in(path.read_text(encoding="utf-8"))
+
+
+def _change_args(rev: str, path: str) -> list[str]:
+    """git log for the newest change to a workflow's cron lines, along the
+    branch's own line (--first-parent -m): a cron written on a side branch
+    counts from the merge that brought it in, never from its own older date."""
+    return ["log", "-1", "--first-parent", "-m", "--format=%cI", '-G[-] cron: "', rev, "--", path]
+
+
+def _schedule_change(root: Path, path: str, rev: str, git: GitRun) -> str | None:
+    code, out = git(_change_args(rev, path), root)
+    text = out.decode("ascii", "replace").strip() if code == 0 else ""
+    return text if _gh_when(text) else None
 
 
 def schedule_changed(root: Path, name: str) -> datetime | None:
-    """When a workflow's cron lines last changed (its newest commit adding or
-    removing a ``- cron: "…"`` line, never a comment that mentions one), or
-    None when git can't say."""
+    """When a workflow's cron lines last changed on this checkout (its newest
+    commit adding or removing a ``- cron: "…"`` line, never a comment that
+    mentions one), or None when git can't say."""
     try:
-        done = subprocess.run(["git", "log", "-1", "--format=%cI", '-G[-] cron: "', "--",
-                               f".github/workflows/{name}"], cwd=root,
-                              capture_output=True, text=True, timeout=20)
+        done = subprocess.run(["git", *_change_args("HEAD", f".github/workflows/{name}")],
+                              cwd=root, capture_output=True, text=True, timeout=20)
     except (OSError, subprocess.SubprocessError):
         return None
     return _gh_when(done.stdout.strip()) if done.stdout.strip() else None
 
 
+def _github_schedule(cron: Mapping | None, name: str) -> Mapping | None:
+    """GitHub's copy of a workflow's schedule, when this build read one."""
+    schedules = (cron or {}).get("schedules") or {}
+    got = schedules.get(name) if isinstance(schedules, Mapping) else None
+    return got if isinstance(got, Mapping) else None
+
+
+def crons_for(root: Path, name: str, cron: Mapping | None = None) -> list[str]:
+    """A workflow's cron lines as GitHub runs them (main's copy), or this
+    checkout's when GitHub's copy wasn't read."""
+    got = _github_schedule(cron, name)
+    return [str(c) for c in got.get("crons") or []] if got is not None else workflow_crons(root, name)
+
+
+def changed_for(root: Path, name: str, cron: Mapping | None = None) -> datetime | None:
+    got = _github_schedule(cron, name)
+    return _gh_when(str(got.get("changed") or "")) if got is not None else schedule_changed(root, name)
+
+
+# git knows when a cron change joined main's history, not when it was pushed
+# to GitHub. On Nov 3 2026 monday.yml's Tuesday line was committed at 4:44 AM
+# ET and reached GitHub at 7:18 PM ET, after the 8:17 AM slot it names.
+SCHEDULE_SETTLES = timedelta(days=1)
+
+
 def before_schedule(slot: datetime | None, changed: datetime | None, now: datetime) -> bool:
     """A slot the current schedule names but that came before the schedule
     itself did (the move from Tuesday to Wednesday, Oct 31 2026, made Oct 28
-    22:17 a slot that never existed). Nothing was due then, so nothing was
+    22:17 a slot that never existed), or in the day after the change, when
+    GitHub may not have had it yet. Nothing was owed then, so nothing was
     missed."""
-    return bool(slot and changed and slot < changed <= now)
+    return bool(slot and changed and changed <= now and slot < changed + SCHEDULE_SETTLES)
 
 
-def workflow_health(src: Source, now: datetime, root: Path = REPO_ROOT) -> list[dict]:
+def workflow_health(src: Source, now: datetime, root: Path = REPO_ROOT,
+                    cron: Mapping | None = None) -> list[dict]:
     """Per workflow: the last run, its outcome, and whether a scheduled slot
-    passed with no run after it."""
+    passed with no run after it. The schedule is GitHub's (``cron``, the
+    build's copy of main) when it was read, this checkout's otherwise."""
     if not src.ok:
         return []
     from run.launch_check import first_start_delays
@@ -1484,13 +1562,13 @@ def workflow_health(src: Source, now: datetime, root: Path = REPO_ROOT) -> list[
     for name, info in src.data.items():
         runs = sorted(info["runs"], key=lambda r: r["created_at"], reverse=True)
         last = runs[0] if runs else None
-        crons = workflow_crons(root, name)
+        crons = crons_for(root, name, cron)
         grace = timedelta(hours=3) if name == "daily.yml" else timedelta(hours=2)
         slot = last_slot(crons, now, grace) if crons else None
         missing = bool(slot and not any((_gh_when(r["created_at"]) or now) >= slot - timedelta(minutes=10)
                                         for r in runs))
         # Asked only when it would matter: one git call per missed slot.
-        if missing and before_schedule(slot, schedule_changed(root, name), now):
+        if missing and before_schedule(slot, changed_for(root, name, cron), now):
             missing = False
         completed = [r for r in runs if r["status"] == "completed"]
         late = None
@@ -1753,10 +1831,16 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
                             rebuild_fix, actions, "Site"))
 
     if ledger:
+        github = ledger.get("copy") == "github"
         for broken in ledger["unreadable"]:
-            issues.append(Issue("high", f"A ledger store can't be read ({broken}).",
-                                "Look for a merge leftover in data/processed/ledger; the Monday run "
-                                "goes red until it's fixed.", "", "Record"))
+            issues.append(Issue(
+                "high", f"A ledger store can't be read in "
+                        f"{'GitHub' if github else 'this Mac'}'s copy ({broken}).",
+                ("Look for a merge leftover in that file on main: the copy on this Mac can look "
+                 "fine when it hasn't pulled. The Monday run goes red until it's fixed."
+                 if github else
+                 "Look for a merge leftover in data/processed/ledger; the Monday run goes red "
+                 "until it's fixed."), "", "Record"))
         if ledger["stale"]:
             issues.append(Issue("medium", f"{ledger['stale']} recorded call(s) are still pending more "
                                           f"than two weeks on.",
@@ -2966,7 +3050,7 @@ def read_drafts(sources: Mapping[str, Source]) -> str | None:
 
 
 def _rhythm(sources: Mapping[str, Source], now: datetime, health: list[dict],
-            root: Path) -> Task | None:
+            root: Path, cron: Mapping | None = None) -> Task | None:
     """The weekly rhythm item due today (LAUNCH.md §8): Wednesday's report,
     Saturday's check, Monday's grading. A run counts as missed only where
     workflow_health says so (and that is an issue, not this row)."""
@@ -2977,7 +3061,7 @@ def _rhythm(sources: Mapping[str, Source], now: datetime, health: list[dict],
     by_file = {w["file"]: w for w in health}
     week = ((sources["site"].data or {}).get("week") or {}) if sources["site"].ok else {}
     if today.weekday() == 2:
-        slot = _slot_today(workflow_crons(root, "weekly.yml"), today, (str(REPORT_MORNING_HOUR),))
+        slot = _slot_today(crons_for(root, "weekly.yml", cron), today, (str(REPORT_MORNING_HOUR),))
         n = None
         if week.get("week") and week.get("lands_on") == today.isoformat():
             n = int(week["week"]) + 1
@@ -3002,7 +3086,7 @@ def _rhythm(sources: Mapping[str, Source], now: datetime, health: list[dict],
                                  (0, "monday.yml", "Check Monday's grading went green")):
         if today.weekday() != weekday:
             continue
-        slot = _slot_today(workflow_crons(root, file), today)
+        slot = _slot_today(crons_for(root, file, cron), today)
         if slot is None:
             return None
         if not known:
@@ -3022,7 +3106,7 @@ def _rhythm(sources: Mapping[str, Source], now: datetime, health: list[dict],
 def today_tasks(sources: Mapping[str, Source], now: datetime, env: Mapping[str, str],
                 issues: list[Issue] | None = None, health: list[dict] | None = None,
                 ledger: dict | None = None, drafts: str | None = None,
-                root: Path = REPO_ROOT) -> list[Task]:
+                root: Path = REPO_ROOT, cron: Mapping | None = None) -> list[Task]:
     """Everything the owner should do today, most urgent first: (1) money
     or a customer at risk, (2) the first step that leaves the page blind,
     (3) dates within 14 days, (4) a PLAN §6 target behind pace, (5) the
@@ -3031,7 +3115,7 @@ def today_tasks(sources: Mapping[str, Source], now: datetime, env: Mapping[str, 
     is off says what it can't tell, and is never done or overdue."""
     sources = {**{k: off(k, "Not read this time.") for k in SOURCE_INFO}, **sources}
     if health is None:
-        health = workflow_health(sources["github"], now, root)
+        health = workflow_health(sources["github"], now, root, cron)
     if ledger is None:
         ledger = ledger_view(sources["ledger"], now)
     if issues is None:
@@ -3102,7 +3186,7 @@ def today_tasks(sources: Mapping[str, Source], now: datetime, env: Mapping[str, 
     week = ((sources["site"].data or {}).get("week") or {}) if sources["site"].ok else {}
     in_season = (week.get("phase") or "season") == "season"
     if in_season:
-        rhythm = _rhythm(sources, now, health, root)
+        rhythm = _rhythm(sources, now, health, root, cron)
         if rhythm:
             out.append(rhythm)
         from run.economics import SELLING_MIN_PER_DAY
@@ -3466,14 +3550,17 @@ def issue_html(i: Issue, compact: bool = False) -> str:
 
 
 def ago(when: datetime, now: datetime) -> str:
+    """An age in whole units, rounded down: the one rule FRESH_JS's short()
+    and long() also use, so the header and the amber line never state two
+    ages for one page (95 minutes is "1 h" in both)."""
     secs = (now - when).total_seconds()
     if secs < 90:
         return "just now"
     if secs < 3600:
-        return f"{secs / 60:.0f} min ago"
+        return f"{int(secs // 60)} min ago"
     if secs < 48 * 3600:
-        return f"{secs / 3600:.0f} h ago"
-    return f"{secs / 86400:.0f} days ago"
+        return f"{int(secs // 3600)} h ago"
+    return f"{int(secs // 86400)} days ago"
 
 
 def record_section(ledger: dict | None, src: Source) -> str:
@@ -3995,12 +4082,14 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
     M = {p: metrics_for(sources, p, now) for p, _l, _d in PERIODS}
     sends = sources["sends"].data if sources["sends"].ok else None
     ledger = ledger_view(sources["ledger"], now)
-    health = workflow_health(sources["github"], now, root)
+    # One health list, read off GitHub's own schedule, feeds Issues and Today
+    # alike, so the two never disagree about a missed slot.
+    health = workflow_health(sources["github"], now, root, cron)
     issues = build_issues(sources, now, health, ledger, M["7d"], root)
     ftp = free_to_paid(sources["forms"], sources["stripe"], now, sources["sends"])
     insights = {p: build_insights(sources, M[p], now, ftp, ledger) for p, _l, _d in PERIODS}
     tasks = today_tasks(sources, now, names_env, issues, health,
-                        ledger, read_drafts(sources), root)
+                        ledger, read_drafts(sources), root, cron)
     from render.report import mark_svg
     urgent = sum(i.severity in ("critical", "high") for i in issues)
     badge = (f'<span class="badge{" hot" if urgent else ""}">{len(issues)}</span>' if issues else "")
@@ -4420,17 +4509,21 @@ color:var(--ink);font-size:14px;font-weight:600}
 @media (max-width:560px){.gen .when,.live em{display:none}}
 """
 
-# The page's age, counted by the page itself each minute. Its words match
-# ago() above; the amber line waits for the stopped-updating strip, so a live
-# page never shows both.
+# The page's age, counted by the page itself each minute. Its words follow
+# ago() above: whole units, rounded down, in the header and the amber line
+# alike. On a live page the amber line waits as long as the stopped-updating
+# strip does (two rounds and two minutes), so a working loop rebuilt every
+# hour or more never says its numbers are old, and the two never show together.
 FRESH_JS = r"""
 (function(){
 "use strict";
 var gen=+document.body.getAttribute("data-generated")||0;if(!gen)return;
+var refresh=+document.body.getAttribute("data-refresh")||0;
 var OLD=%d*60000,age=document.querySelector("[data-age]"),aged=document.querySelector("[data-aged]"),
  words=document.querySelector("[data-age-words]"),stale=document.querySelector(".stale");
-function short(ms){var s=ms/1000;if(s<90)return "just now";if(s<3600)return Math.round(s/60)+" min ago";
- if(s<48*3600)return Math.round(s/3600)+" h ago";return Math.round(s/86400)+" days ago";}
+if(refresh)OLD=Math.max(OLD,(2*refresh+120)*1000);
+function short(ms){var s=ms/1000;if(s<90)return "just now";if(s<3600)return Math.floor(s/60)+" min ago";
+ if(s<48*3600)return Math.floor(s/3600)+" h ago";return Math.floor(s/86400)+" days ago";}
 function long(ms){var hr=Math.floor(ms/3600000);if(hr<48)return hr===1?"1 hour":hr+" hours";
  return Math.floor(ms/86400000)+" days";}
 function tick(){var ms=Math.max(0,Date.now()-gen);
@@ -4462,10 +4555,37 @@ def write_dashboard(sources: Mapping[str, Source], out: Path, now: datetime,
     # reads half a page. The temp name carries the process id: the background
     # updater and a build by hand can overlap, and must not swap each other's
     # half-written file in.
-    tmp = out.with_name(f".{out.name}.{os.getpid()}.tmp")
-    tmp.write_text(page, encoding="utf-8")
-    os.replace(tmp, out)
+    tmp = temp_page(out)
+    try:
+        tmp.write_text(page, encoding="utf-8")
+        os.replace(tmp, out)
+    finally:
+        tmp.unlink(missing_ok=True)      # gone after the swap; a failed write leaves nothing
     return out
+
+
+def temp_page(out: Path) -> Path:
+    """Where write_dashboard writes the page before swapping it in."""
+    return out.with_name(f".{out.name}.{os.getpid()}.tmp")
+
+
+@contextmanager
+def term_unwinds():
+    """launchd stops a job with SIGTERM (make dashboard-auto's reinstall,
+    turning it off, logging out), and Python's default for SIGTERM ends the
+    process without unwinding: the temporary copy of GitHub's files and a
+    half-written page were left behind. Here SIGTERM exits like Ctrl-C does,
+    so every ``with`` and ``finally`` runs. The old handler is put back."""
+    import signal
+    try:
+        old = signal.signal(signal.SIGTERM, lambda *_a: sys.exit(143))
+    except ValueError:          # not the main thread: nothing to change
+        yield
+        return
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, old)
 
 
 def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
@@ -4473,7 +4593,8 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
         collectors: Mapping[str, Callable[[Context], Source]] | None = None,
         opener: Callable[[Path], None] | None = None,
         sleep: Callable[[float], None] | None = None,
-        git: GitRun | None = None, agent_dir: Path | None = None) -> int:
+        git: GitRun | None = None, agent_dir: Path | None = None,
+        launchd: Callable[[list[str]], tuple[int, str]] | None = None) -> int:
     environ = os.environ if environ is None else environ
     if stats.in_ci(environ):
         print("make dashboard does not run in CI: the repository is public, so the job "
@@ -4500,19 +4621,24 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
               f"requests an hour and each build makes one per workflow.", file=sys.stderr)
         return 2
     now = (stats._when(args.now) if args.now else None) or datetime.now(timezone.utc)
-    if not stats._gitignored(args.out):
+    # The page is first written to a temp file beside it, and that file holds
+    # the same counts: a name pattern that ignores the page can miss it.
+    if not stats._gitignored(args.out) or not stats._gitignored(temp_page(args.out)):
         print(f"{args.out} is not gitignored, so the counts could be committed to a public "
               f"repository — use a path such as data/dashboard.html.", file=sys.stderr)
         return 2
     env = env_from(environ, env_file or stats.ENV_FILE)
     if args.auto:
-        return _auto_build(env, now, args, collectors, git)
+        with term_unwinds():
+            return _auto_build(env, now, args, collectors, git)
     if args.every is None:
-        # With the background updater installed, a build by hand writes the
+        # With the background updater running, a build by hand writes the
         # page the updater writes (it reloads itself), never a snapshot that
-        # would stop the open tab reloading.
+        # would stop the open tab reloading. Running, as launchd says: a
+        # plist left by a failed install, or an updater turned off in Login
+        # Items, rebuilds nothing.
         import run.dashboard_auto as auto
-        if auto.installed(agent_dir) and args.out.resolve() == DEFAULT_OUT.resolve():
+        if auto.running(agent_dir, launchd) and args.out.resolve() == DEFAULT_OUT.resolve():
             out = _build(env, now, args, collectors, live_minutes=auto.AUTO_MINUTES,
                          updater="agent", git=git)
             print("The background updater is on, so this page keeps itself fresh.", file=sys.stderr)
@@ -4526,23 +4652,24 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
     # amber when its numbers are older than two rounds.
     rounds = 0
     try:
-        while True:
-            now = (stats._when(args.now) if args.now else None) or datetime.now(timezone.utc)
-            try:
-                out = _build(env, now, args, collectors, live_minutes=args.every, quiet=rounds > 0,
-                             git=git)
-                print(f"{now.astimezone(ET):%-I:%M %p} ET  updated; next in {args.every} min "
-                      f"(Ctrl-C stops)", file=sys.stderr)
-                if rounds == 0 and not args.no_open:
-                    (opener or _open)(out)
-            except Exception as exc:  # noqa: BLE001 — a bad round must not end the loop
-                print(f"{now.astimezone(ET):%-I:%M %p} ET  this update failed "
-                      f"({scrub(type(exc).__name__ + ': ' + str(exc), env)}); the last page stays up",
-                      file=sys.stderr)
-            rounds += 1
-            if args.rounds and rounds >= args.rounds:
-                return 0
-            (sleep or time.sleep)(args.every * 60)
+        with term_unwinds():
+            while True:
+                now = (stats._when(args.now) if args.now else None) or datetime.now(timezone.utc)
+                try:
+                    out = _build(env, now, args, collectors, live_minutes=args.every,
+                                 quiet=rounds > 0, git=git)
+                    print(f"{now.astimezone(ET):%-I:%M %p} ET  updated; next in {args.every} min "
+                          f"(Ctrl-C stops)", file=sys.stderr)
+                    if rounds == 0 and not args.no_open:
+                        (opener or _open)(out)
+                except Exception as exc:  # noqa: BLE001 — a bad round must not end the loop
+                    print(f"{now.astimezone(ET):%-I:%M %p} ET  this update failed "
+                          f"({scrub(type(exc).__name__ + ': ' + str(exc), env)}); "
+                          f"the last page stays up", file=sys.stderr)
+                rounds += 1
+                if args.rounds and rounds >= args.rounds:
+                    return 0
+                (sleep or time.sleep)(args.every * 60)
     except KeyboardInterrupt:
         print("\nStopped. The page keeps its last numbers and will say they've stopped updating.",
               file=sys.stderr)

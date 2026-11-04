@@ -40,7 +40,7 @@ def test_the_launch_check_fails_a_clock_that_hides_a_missing_total() -> None:
     assert lc.total_gate({"odds": 3}, page).status == "FAIL"
     assert lc.total_gate({"odds": 3, "total": False}, page).status == "PASS"
     assert lc.total_gate({"odds": 3}, "<p>Projected 112.4</p>").status == "PASS"
-    assert "total_gate(w)" in __import__("inspect").getsource(lc.check_week_json)
+    assert "total_gate(w, site=site)" in __import__("inspect").getsource(lc.check_week_json)
 
 
 # --------------------------------------------------------------------- #

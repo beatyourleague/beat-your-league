@@ -608,8 +608,13 @@ def check_funnel_config() -> list[Gate]:
     return gates
 
 
-def check_week_json() -> list[Gate]:
-    path = SITE / "week.json"
+def check_week_json(site: Path | None = None, processed_dir: Path | None = None) -> list[Gate]:
+    """The season clock and the gates that read it. ``site`` and
+    ``processed_dir`` point them at another copy of those files (the
+    dashboard reads GitHub's); left out, this checkout's, as make
+    launch-check reads them."""
+    site = site or SITE
+    path = site / "week.json"
     try:
         w = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -623,10 +628,10 @@ def check_week_json() -> list[Gate]:
                  f"week {w.get('week')}, next report lands {lands or 'unknown'}"
                  + (" — stale until the next Wednesday build (the hero shows its static sentence)"
                     if stale else "")),
-            recorded_odds_gate(w), closest_gate(w), total_gate(w)]
+            recorded_odds_gate(w), closest_gate(w, processed_dir), total_gate(w, site=site)]
 
 
-def total_gate(week: dict, page: str | None = None) -> Gate:
+def total_gate(week: dict, page: str | None = None, site: Path | None = None) -> Gate:
     """SITE-1 / DES-1: a this-week.html whose card 01 opens on "no projected
     total" must not be linked as "this week's report", and every link waits
     for week.json's ``total: false`` to know it. A clock written before that
@@ -635,7 +640,7 @@ def total_gate(week: dict, page: str | None = None) -> Gate:
     name = "This week's sample is linked only when card 01 has a total"
     if page is None:
         try:
-            page = (SITE / "this-week.html").read_text(encoding="utf-8")
+            page = ((site or SITE) / "this-week.html").read_text(encoding="utf-8")
         except OSError:
             return Gate("Site", name, "PASS", "no this-week.html")
     if "no projected total" in page and week.get("total") is not False:

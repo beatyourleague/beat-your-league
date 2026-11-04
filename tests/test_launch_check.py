@@ -1057,4 +1057,4 @@ def test_a_closest_call_the_ledger_does_not_hold_fails() -> None:
            "closest": {"season": "2026", "week": 8, "slot": "WR", "start": "A", "over": "B",
                        "pct": 61, "recorded": True}}
     assert lc.closest_gate(bad).status == "FAIL"
-    assert "closest_gate(w)" in __import__("inspect").getsource(lc.check_week_json)
+    assert "closest_gate(w, processed_dir)" in __import__("inspect").getsource(lc.check_week_json)
