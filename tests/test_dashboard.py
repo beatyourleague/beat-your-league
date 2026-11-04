@@ -147,7 +147,9 @@ def rich_sources(now: datetime = NOW, root: Path = dash.REPO_ROOT) -> dict[str, 
                            "via": _pick(rng, (("reddit", 3), ("x", 2), (None, 5))), "who": f"p{i % 170}"})
     for i in range(38):
         forms_rows.append({"kind": "trial", "at": (now - timedelta(days=rng.uniform(0, 30))).isoformat(),
-                           "via": None, "who": f"w{i:03d}" if i < 5 else f"t{i}"})
+                           "via": None, "who": f"w{i:03d}" if i < 5 else f"t{i}",
+                           # 23 of the 38 were mailed (the send log's trial keys below).
+                           "sent_code": f"{i:012x}"})
     for i, kind in enumerate(["update_request"] * 6 + ["confirm"] * 4 + ["seat"] * 7):
         forms_rows.append({"kind": kind, "at": (now - timedelta(days=rng.uniform(0, 12))).isoformat(),
                            "via": None, "who": f"s{i}"})
@@ -527,8 +529,71 @@ def test_period_windows_and_deltas() -> None:
 
 def test_free_report_to_paid_joins_on_digests_within_14_days() -> None:
     S = rich_sources()
-    got = dash.free_to_paid(S["forms"], S["stripe"], NOW)
-    assert got is not None and got[1] + got[2] == 38
+    # Without the send log there is no denominator to count from.
+    assert dash.free_to_paid(S["forms"], S["stripe"], NOW) is None
+    got = dash.free_to_paid(S["forms"], S["stripe"], NOW, S["sends"])
+    # The denominator is free reports MAILED (23 send keys), never every
+    # request the Worker holds (38 rows: refused, stale and unbuilt ones too).
+    assert got is not None and got[1] + got[2] == 23
+
+
+def test_free_report_to_paid_counts_only_mailed_reports_from_the_day_they_went() -> None:
+    from run.trials import OWNER_KEY_PART
+    forms = dash._source("forms", data={"rows": [
+        {"kind": "trial", "at": (NOW - timedelta(days=40)).isoformat(), "via": None,
+         "who": "a", "sent_code": "aaaa"},
+        {"kind": "trial", "at": (NOW - timedelta(days=40)).isoformat(), "via": None,
+         "who": "b", "sent_code": "bbbb"},           # never mailed: not counted
+        {"kind": "trial", "at": (NOW - timedelta(days=40)).isoformat(), "via": None,
+         "who": "c", "sent_code": "cccc"}]}, read_at=NOW)
+    went = (NOW - timedelta(days=20)).isoformat()
+    sends = dash._source("sends", data={"entries": [
+        {"key": "trial-2026-aaaa", "sent_at": went},
+        # The owner's own test report never counts as a mailing.
+        {"key": f"trial-2026-{OWNER_KEY_PART}-cccc-1234567890", "sent_at": went}]},
+        read_at=NOW)
+    bought = (NOW - timedelta(days=15)).isoformat()   # 25 days after asking, 5 after the mail
+    stripe = dash._source("stripe", data={"sessions": [
+        {"paid": True, "who": "a", "created": bought}]}, read_at=NOW)
+    assert dash.free_to_paid(forms, stripe, NOW, sends) == (1, 1, 0)
+    # Without LOG_SECRET no row carries a code, so no rate: the reason instead.
+    for row in forms.data["rows"]:
+        row["sent_code"] = None
+    assert dash.free_to_paid(forms, stripe, NOW, sends) == dash.FREE_TO_PAID_UNMATCHED
+
+
+def test_log_secret_is_read_from_dot_env_and_a_missing_one_is_said(tmp_path, monkeypatch) -> None:
+    """Review, reproduced: the owner keeps LOG_SECRET in the gitignored .env
+    (make signups reads it there), but the dashboard read only the shell, so
+    free_to_paid() matched nothing and the insight vanished with no reason.
+    It reads .env like the other names, keys the free-report codes with it,
+    never prints its value, and says why when it's missing."""
+    import html as _html
+    import run.intake as intake
+    from run.digest import address
+    monkeypatch.delenv("LOG_SECRET", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text("LOG_SECRET=from-the-dot-env\nFORM_ENDPOINT=https://w.test\n",
+                        encoding="utf-8")
+    env = dash.env_from({}, env_file)
+    assert env["LOG_SECRET"] == "from-the-dot-env"
+    assert "LOG_SECRET" in dash.SECRET_NAMES
+    assert dash.scrub("x from-the-dot-env y", env) == "x *** y"
+    monkeypatch.setattr(intake, "fetch_seats", lambda endpoint, key=None: [
+        {"kind": "trial", "email": "fan@fans.mail", "received_at": NOW.isoformat()}])
+    forms = dash.collect_forms(dash.Context(env=env, now=NOW))
+    code = forms.data["rows"][0]["sent_code"]
+    assert code == address("fan@fans.mail", key="from-the-dot-env")
+    # Mutation: keyed from the shell only, there would be no code at all.
+    assert dash.collect_forms(dash.Context(env={**env, "LOG_SECRET": ""}, now=NOW)
+                              ).data["rows"][0]["sent_code"] is None
+    # No key anywhere: the page names the reason where the rate would be.
+    S = rich_sources()
+    for row in S["forms"].data["rows"]:
+        row["sent_code"] = None
+    page = _html.unescape(dash.render_page(S, NOW, fonts=False))
+    assert dash.FREE_TO_PAID_UNMATCHED in page
+    assert "needs LOG_SECRET" in page
 
 
 def test_plan_gates_are_read_from_plan_md_not_restated() -> None:

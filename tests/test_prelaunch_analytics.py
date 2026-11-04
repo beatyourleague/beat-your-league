@@ -425,6 +425,35 @@ def test_a_restored_league_pass_roster_counts_as_the_pass_page(tmp_path) -> None
     assert join.index("const WANTS_PASS =") < assignment.start()
 
 
+@needs_node
+def test_a_free_report_buy_link_counts_under_the_tag_inside_its_ref(tmp_path) -> None:
+    """Review, reproduced: the free report's buy links became join/?ref=<ref>
+    with the tag only inside the ref, and count.js read only ?via=, so the
+    join view, the roster check and the buy press all counted as "(no tag)".
+    The join page names the tag it read off the restored roster in
+    window.bylVia; count.js takes it on the join page only, after the URL's
+    own ?via=, through the same sanitiser. It never reads the ref itself."""
+    ref = "https://beatyourleague.com/join/?ref=s4-abc_via-reddit-oct28"
+    scenarios = [
+        {"href": ref, "win": {"bylPage": "join", "bylVia": "reddit-oct28"},
+         "events": [["roster", ""], ["checkout", "open"]]},
+        {"href": ref},                                             # an older join page
+        {"href": ref + "&via=x", "win": {"bylPage": "join", "bylVia": "reddit-oct28"}},
+        {"href": "https://beatyourleague.com/how-it-works", "win": {"bylVia": "reddit"}},
+        {"href": ref, "win": {"bylPage": "join", "bylVia": "A@B.CO!"}},
+        {"href": ref, "win": {"bylPage": "join", "bylVia": {"x": 1}}},
+    ]
+    results = _run(tmp_path, scenarios)
+    assert [b["v"] for b in _bodies(results[0])] == ["reddit-oct28"] * 3
+    assert [_bodies(r)[0]["v"] for r in results[1:]] == ["", "x", "", "abco", ""]
+    for result in results:
+        for call in result["calls"]:
+            assert "s4-abc" not in call["body"]
+    join = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+    assignment = join.index('window.bylVia = SOURCE || "";')
+    assert join.index("const SOURCE =") < assignment
+
+
 # --------------------------------------------------------------------- #
 # the Worker contract (live once infra/form-worker.js has its /e route)
 # --------------------------------------------------------------------- #
@@ -684,25 +713,89 @@ def test_passes_are_counted_by_type_with_the_money_and_the_refund_rate() -> None
 
 def test_free_report_to_paid_is_counted_inside_fourteen_days_only() -> None:
     """Joined on the mailbox the way the free report counts people; a buyer
-    after day 14 is not a conversion; a request younger than 14 days is
-    counted apart rather than as a miss."""
+    after day 14 is not a conversion; a report mailed under the window ago is
+    counted apart rather than as a miss. Since Nov 4 2026 the denominator is
+    free reports MAILED, read from the send log: a request that was refused,
+    stale or unbuildable was never a free report anybody received."""
+    from run.trials import trial_key
     asked = NOW - timedelta(days=20)
     rows = [{"kind": "trial", "email": "Fan.One+ff@gmail.com", "received_at": asked.isoformat()},
-            {"kind": "trial", "email": "two@example.com", "received_at": asked.isoformat()},
-            {"kind": "trial", "email": "three@example.com",
+            {"kind": "trial", "email": "two@fans.mail", "received_at": asked.isoformat()},
+            {"kind": "trial", "email": "three@fans.mail",
              "received_at": (NOW - timedelta(days=3)).isoformat()},
-            {"kind": "waitlist", "email": "four@example.com", "received_at": asked.isoformat()}]
+            # Asked and refused (the same roster as another): never mailed.
+            {"kind": "trial", "email": "five@fans.mail", "received_at": asked.isoformat()},
+            # A test address is never a person who asked (run.owner.not_counted).
+            {"kind": "trial", "email": "probe@example.com", "received_at": asked.isoformat()},
+            {"kind": "waitlist", "email": "four@fans.mail", "received_at": asked.isoformat()}]
+    went = asked + timedelta(hours=2)
+    sent = [{"key": trial_key("2026", "fanone@gmail.com"), "sent_at": went.isoformat()},
+            {"key": trial_key("2026", "two@fans.mail"), "sent_at": went.isoformat()},
+            {"key": trial_key("2026", "three@fans.mail"),
+             "sent_at": (NOW - timedelta(days=3)).isoformat()},
+            {"key": trial_key("2026", "probe@example.com"), "sent_at": went.isoformat()},
+            {"key": "2026-w09-abcdef0123", "sent_at": went.isoformat()}]
     sessions = [
         _session(1, 2900, email="fanone@gmail.com",
                  created=int((asked + timedelta(days=4)).timestamp())),
-        _session(2, 2900, email="two@example.com",
+        _session(2, 2900, email="two@fans.mail",
                  created=int((asked + timedelta(days=16)).timestamp())),
-        _session(3, 2900, email="four@example.com",
+        _session(3, 2900, email="four@fans.mail",
                  created=int((asked + timedelta(days=1)).timestamp()))]
-    line = stats.free_to_paid_line(rows, sessions, NOW)
-    assert line == ("  Free report → paid within 14 days: 1 of 2 "
-                    "(1 asked under 14 days ago, not counted yet)")
-    assert "@" not in line
+    lines = stats.free_to_paid_lines(rows, sessions, NOW, sent=sent, owners=frozenset())
+    assert lines == [
+        "  Free reports: 4 requested, 3 mailed, 2 paid after theirs",
+        "  Free report → paid within 7 days of it: 1 of 2 "
+        "(1 mailed under 7 days ago, not counted yet)",
+        "  Free report → paid within 14 days of it: 1 of 2 "
+        "(1 mailed under 14 days ago, not counted yet)"]
+    assert "@" not in "\n".join(lines)
+    # Mutation of the denominator: every request counted as a report mailed
+    # would read 1 of 3 at 14 days (five@ was never mailed).
+    assert not any("of 3" in line for line in lines)
+
+
+def test_free_report_to_paid_needs_the_send_log_and_its_key(monkeypatch) -> None:
+    """Without the send log, or without LOG_SECRET to match a request to its
+    send key, the rate is not printed rather than guessed."""
+    rows = [{"kind": "trial", "email": "two@fans.mail",
+             "received_at": (NOW - timedelta(days=20)).isoformat()}]
+    lines = stats.free_to_paid_lines(rows, [], NOW, owners=frozenset())
+    assert lines[0] == "  Free reports: 1 requested"
+    assert "send log wasn't read" in lines[1] and "rate" in lines[1]
+    monkeypatch.delenv("LOG_SECRET")
+    lines = stats.free_to_paid_lines(rows, [], NOW, owners=frozenset(), sent=[])
+    assert "LOG_SECRET isn't in this shell or .env" in lines[1]
+    assert not any("within" in line for line in lines)
+
+
+def test_free_report_to_paid_reads_log_secret_from_dot_env(tmp_path, monkeypatch) -> None:
+    """Review, reproduced: with LOG_SECRET in the owner's .env and not in the
+    shell, make stats printed "LOG_SECRET isn't set" and no rate, while make
+    signups read the same .env fine. The command line reads it there and hands
+    it down; the send keys it matches are the ones run.trials wrote under it."""
+    from run.trials import trial_key
+    monkeypatch.delenv("LOG_SECRET", raising=False)
+    asked = NOW - timedelta(days=20)
+    rows = [{"kind": "trial", "email": "two@fans.mail", "received_at": asked.isoformat()}]
+    sent = [{"key": trial_key("2026", "two@fans.mail", key="dot-env-key"),
+             "sent_at": (asked + timedelta(hours=1)).isoformat()}]
+    lines = stats.free_to_paid_lines(rows, [], NOW, owners=frozenset(), sent=sent,
+                                     log_secret="dot-env-key")
+    assert lines[0] == "  Free reports: 1 requested, 1 mailed, 0 paid after theirs"
+    # A different key matches nothing: the codes really are keyed by it.
+    other = stats.free_to_paid_lines(rows, [], NOW, owners=frozenset(), sent=sent,
+                                     log_secret="another-key")
+    assert other[0] == "  Free reports: 1 requested, 0 mailed, 0 paid after theirs"
+    # And the command line passes the .env value through to main().
+    seen = {}
+    monkeypatch.setattr(stats, "main", lambda argv=None, **kw: seen.update(kw) or 0)
+    env = tmp_path / ".env"
+    env.write_text("LOG_SECRET=dot-env-key\n", encoding="utf-8")
+    assert stats.cli([], environ={}, env_file=env) == 0
+    assert seen["log_secret"] == "dot-env-key"
+    assert stats.cli([], environ={"LOG_SECRET": "shell-key"}, env_file=env) == 0
+    assert seen["log_secret"] == "shell-key"
 
 
 def test_seats_are_counted_against_each_pass_cap() -> None:
@@ -744,12 +837,22 @@ def test_the_passes_read_asks_stripe_for_the_charge_and_feeds_free_to_paid(monke
     from test_stats import _FakeStripe
     fake = _FakeStripe(shapes={"checkout/sessions": {"data": SESSIONS, "has_more": False}})
     monkeypatch.setattr(subscriptions, "_stripe_get", fake)
-    rows = [{"kind": "trial", "email": "buyer3@example.com",
-             "received_at": (NOW - timedelta(days=14, hours=2)).isoformat()}]
+    from run.trials import trial_key
+    asked = NOW - timedelta(days=14, hours=2)
+    # buyer3 is a test address, so it is the session's buyer and never a
+    # request; the request comes from a real-looking mailbox that bought too.
+    rows = [{"kind": "trial", "email": "buyer3@fans.mail", "received_at": asked.isoformat()}]
+    sent = [{"key": trial_key("2026", "buyer3@fans.mail"),
+             "sent_at": (asked + timedelta(minutes=30)).isoformat()}]
+    fake.shapes["checkout/sessions"]["data"] = [
+        dict(s, customer_details={"email": "buyer3@fans.mail"}) if s["id"] == "cs_3" else s
+        for s in SESSIONS]
     lines = stats.stripe_summary("rk_test_x", NOW, rows=rows, link_plans=LINKS,
-                                 season_label="2026 season", since=SEASON_START)
+                                 season_label="2026 season", since=SEASON_START,
+                                 sent=sent, owners=frozenset())
     assert lines[0].startswith("  Plans sold, 2026 season:")
-    assert "  Free report → paid within 14 days: 1 of 1" in lines
+    assert "  Free reports: 1 requested, 1 mailed, 1 paid after theirs" in lines
+    assert "  Free report → paid within 14 days of it: 1 of 1" in lines
     expands = [parse_qs(urlsplit(u).query).get("expand[]") for u in fake.urls]
     assert any(e and "data.payment_intent.latest_charge" in e for e in expands)
     assert "@" not in "\n".join(lines)

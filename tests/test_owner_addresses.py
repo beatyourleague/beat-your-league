@@ -380,10 +380,19 @@ def test_free_report_to_paid_leaves_the_owners_requests_out() -> None:
             for e in (OWNER_GMAIL, BUYER)]
     bought = [dict(_session(0, BUYER, _a_roster_ref()),
                    created=int((asked + timedelta(days=2)).timestamp()))]
-    assert stats.free_to_paid_line(rows, bought, NOW, owners=OWNERS) == \
-        "  Free report → paid within 14 days: 1 of 1"
-    assert stats.free_to_paid_line(rows, bought, NOW, owners=frozenset()) == \
-        "  Free report → paid within 14 days: 1 of 2"
+    from run.trials import owner_trial_key, trial_key
+    went = (asked + timedelta(hours=1)).isoformat()
+    # The owner's free reports go out under owner keys; a buyer's under theirs.
+    sent = [{"key": trial_key("2026", BUYER), "sent_at": went},
+            {"key": owner_trial_key("2026", OWNER_GMAIL, rows[0]), "sent_at": went}]
+    assert stats.free_to_paid_lines(rows, bought, NOW, owners=OWNERS, sent=sent)[:3] == [
+        "  Free reports: 1 requested, 1 mailed, 1 paid after theirs",
+        "  Free report → paid within 7 days of it: 1 of 1",
+        "  Free report → paid within 14 days of it: 1 of 1"]
+    # With no owner addresses the owner's request counts as asked, but an
+    # owner key is never a mailing.
+    assert stats.free_to_paid_lines(rows, bought, NOW, owners=frozenset(), sent=sent)[0] == \
+        "  Free reports: 2 requested, 1 mailed, 1 paid after theirs"
 
 
 def test_make_stats_leaves_the_owners_teams_out_and_prints_no_address(

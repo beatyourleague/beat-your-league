@@ -379,7 +379,10 @@ def plan(report: Mapping[str, Any]) -> dict[str, Any]:
     items = [item(i, early) for i in report.get("checklist") or []
              if not is_set_lineup(i) and not is_certain_zero(i)]
     return {"title": TITLES["plan"], "items": items,
-            "saturday": rr.SATURDAY_LINE if rr.saturday_line(report.get("meta")) else None}
+            "saturday": rr.SATURDAY_LINE if rr.saturday_line(report.get("meta")) else None,
+            # A free report's general Saturday sentence (render.report.
+            # trial_saturday_note), built off without a sender address.
+            "trial_saturday": rr.trial_saturday_note(report)}
 
 
 def ifthen(report: Mapping[str, Any]) -> dict[str, Any]:
@@ -496,7 +499,8 @@ def sections(report: Mapping[str, Any]) -> list[str]:
     for key in SECTION_ORDER:
         if key == "plan":
             model = plan(report)
-            if not model["items"] and not model["saturday"]:
+            if not model["items"] and not model["saturday"] \
+                    and not model["trial_saturday"]:
                 continue
         elif key in ("rising", "receipts") and MODELS[key](report) is None:
             continue

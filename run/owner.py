@@ -191,13 +191,16 @@ def without_owner_rows(registry: Iterable,
 
 
 def send_marks(registry: Iterable | None,
-               owners: Iterable[str] | None = None) -> dict | None:
+               owners: Iterable[str] | None = None,
+               log_secret: str | None = None) -> dict | None:
     """What marks the owner's own mail in the send log: the slugs of their
     registry rows (weekly, early-look, Saturday, welcome and roster-report
     keys end in one) and their keyed address codes (Trade Check, extra-team,
     roster-update confirmation and season review keys carry one; none
     without LOG_SECRET). None when owner addresses are set and no registry
-    copy is here to read slugs from: those emails can't be told apart."""
+    copy is here to read slugs from: those emails can't be told apart.
+    ``log_secret`` is LOG_SECRET as read from the owner's .env; None reads
+    this process's environment."""
     owners = owner_addresses() if owners is None else frozenset(owners)
     if not owners:
         return {"slugs": frozenset(), "codes": frozenset()}
@@ -207,7 +210,8 @@ def send_marks(registry: Iterable | None,
     codes: set[str] = set()
     try:
         for email in owners:
-            codes.update((address(email, 8), address(email, 10)))
+            codes.update((address(email, 8, log_secret or None),
+                          address(email, 10, log_secret or None)))
     except DigestError:
         codes = set()
     return {"slugs": frozenset(s.slug for s in owner_rows(registry, owners)),

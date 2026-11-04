@@ -942,6 +942,12 @@ def is_subscriber_report(meta: Mapping[str, Any]) -> bool:
         meta.get("historical_demo") or meta.get("live_demo") or meta.get("trial"))
 
 
+def _is_trial_report(meta: Mapping[str, Any]) -> bool:
+    """A free report (run/trials.py): solo, marked trial, never a sample."""
+    return bool(meta.get("solo") and meta.get("trial")) and not (
+        meta.get("historical_demo") or meta.get("live_demo"))
+
+
 # Slots that make a poor name for a team: "the Denver Broncos's team".
 _UNNAMED_SLOTS = ("K", "DEF")
 
@@ -956,10 +962,13 @@ def team_name(report: Mapping[str, Any]) -> str | None:
     team: its best player. Facts only: he is on the roster and he leads its
     projections. Week 1 has no projections, so the first starter named in
     lineup order stands in (the quarterback, on every template). Kickers and
-    defenses never name a team. Subscriber reports only: a sample or a free
-    report goes to nobody with two teams.
+    defenses never name a team. Subscriber reports, and a free report by its
+    lead alone (Nov 4 2026: its masthead read "Your league · 12 teams" and its
+    subject named no team, so it could not be found again). Never a sample.
     """
     meta = report.get("meta") or {}
+    if _is_trial_report(meta):
+        return f"{meta['team_lead']}'s team" if meta.get("team_lead") else None
     if not is_subscriber_report(meta):
         return None
     if meta.get("team_given"):
@@ -1800,6 +1809,32 @@ def saturday_line(meta: Mapping[str, Any] | None) -> str | None:
     return f"{SATURDAY_LINE_HEAD}: {SATURDAY_LINE}"
 
 
+# A free report's one Saturday sentence, said in general under its game plan
+# when one of its plans waits on Sunday news (``plan["saturday"]``), where a
+# subscriber's report says SATURDAY_FOLLOWUP. About the plan, never about this
+# reader's row, and never "we'll email you": nothing follows a free report.
+# Built OFF until the owner sets SENDER_POSTAL_ADDRESS (render/sender.py).
+# Never "every lineup": the check reads only plans stored when a weekly report
+# went out, and refuses a week whose injury reports aren't in. The landing
+# FAQ's own promise, in the same words.
+TRIAL_SATURDAY_NOTE = ("On the plan, the Saturday check reads Friday's final injury "
+                       "reports and tells you if they change your lineup.")
+
+
+def trial_saturday_note(report: Mapping[str, Any] | None) -> str | None:
+    """TRIAL_SATURDAY_NOTE on a free report whose if/then holds a plan the
+    Saturday check would follow up on, else None."""
+    from render.sender import sender_line
+    report = report or {}
+    meta = report.get("meta") or {}
+    if not _is_trial_report(meta) or not sender_line():
+        return None
+    if not any(isinstance(p, Mapping) and p.get("saturday")
+               for p in report.get("pivots") or []):
+        return None
+    return TRIAL_SATURDAY_NOTE
+
+
 def pivot_action(plan: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> str:
     """One plan's "then", as every surface states it."""
     action = str(plan["action"])
@@ -2374,13 +2409,13 @@ def seats_line(meta: Mapping[str, Any], link_style: str = "") -> str:
 def read_line(meta: Mapping[str, Any], link_style: str = "") -> str:
     """A subscriber's first report can be a lot of new words at once ("proj",
     "touches", "if/then"). The glossary lives on the How it works page; this
-    puts it one tap from the report, for subscribers only — never the samples,
-    where the reader is not yet a subscriber and the page itself explains. Gated
-    on SITE_URL like the forward line: a link with nowhere to go is worse than
-    none."""
+    puts it one tap from the report, for subscribers and on a free report
+    (Nov 4 2026: the report most likely to be a reader's first) — never the
+    samples, where the page itself explains. Gated on SITE_URL like the
+    forward line: a link with nowhere to go is worse than none."""
     site = os.environ.get("SITE_URL", "").rstrip("/")
     if not site or not meta.get("solo") or meta.get("historical_demo") \
-            or meta.get("live_demo") or meta.get("trial"):
+            or meta.get("live_demo"):
         return ""
     return (f'<b>New to this report?</b> '
             f'{_anchor(f"{site}/how-it-works.html#read", READ_LINK_TEXT, link_style)}.<br>')
@@ -2390,7 +2425,7 @@ def read_lines(meta: Mapping[str, Any]) -> list[str]:
     """The plain-text twin."""
     site = os.environ.get("SITE_URL", "").rstrip("/")
     if not site or not meta.get("solo") or meta.get("historical_demo") \
-            or meta.get("live_demo") or meta.get("trial"):
+            or meta.get("live_demo"):
         return []
     return ["", f"NEW TO THIS REPORT? What each part means: {site}/how-it-works.html#read"]
 
@@ -2895,6 +2930,8 @@ def _plan_body(model: Mapping[str, Any], interactive: bool) -> str:
     if model.get("saturday"):
         out.append(f'<p class="standing"><b>{esc(SATURDAY_LINE_HEAD)}:</b> '
                    f'{esc(model["saturday"])}</p>')
+    if model.get("trial_saturday"):
+        out.append(f'<p class="standing">{esc(model["trial_saturday"])}</p>')
     return "".join(out)
 
 

@@ -310,8 +310,14 @@ def test_a_kicker_or_defense_never_names_a_team_and_week_one_still_does() -> Non
     assert rr.team_name(report) == named
     assert subject_for(report) == (f"Week {report['meta']['week']} — "
                                    f"{named}: your opening lineup")
-    for demo in ({"historical_demo": True}, {"live_demo": True}, {"trial": True}):
+    for demo in ({"historical_demo": True}, {"live_demo": True}):
         assert rr.team_name(_as(report, **demo)) is None, demo
+    # A free report names its team by the roster's lead and nothing else
+    # (Nov 4 2026); without a lead it names none.
+    trial = _as(report, trial=True)
+    assert rr.team_name(trial) == f"{trial['meta']['team_lead']}'s team"
+    trial["meta"].pop("team_lead")
+    assert rr.team_name(trial) is None
 
 
 def test_a_subscribers_report_is_stamped_on_the_buyers_clock() -> None:
@@ -546,9 +552,9 @@ def test_the_free_report_asks_with_a_button_above_the_footer(monkeypatch) -> Non
     assert page.count(f'href="{url}"') == 2
     assert page.index(url) < page.index("Projections are analysis"), \
         "the ask sits below the fine print"
-    assert "Get next Wednesday&#x27;s report" in page
+    assert "Start my plan" in page
     text = text_summary(trial)
-    assert f"Get next Wednesday's report: {url}" in text
+    assert f"Start my plan: {url}" in text
     assert text.index(url) < text.index("Projections are analysis")
     for doc in (html.unescape(page), text):
         assert "only email we'll send you unless you sign up" in doc

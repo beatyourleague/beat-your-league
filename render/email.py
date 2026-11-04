@@ -162,9 +162,15 @@ TRIAL_ONLY = ("This is the only email we'll send you unless you sign up. Didn't 
 TRIAL_ASK_HEAD = "Want this every Wednesday?"
 TRIAL_ASK = ("Your lineup decided like this one, every Wednesday, plus the "
              "Saturday check when injury news changes it.")
-TRIAL_BUTTON = "Get next Wednesday's report"
+# "Get next Wednesday's report" was false read on a Wednesday: a buyer before
+# that week's kickoff gets THIS week's report (run/tuesday.py, the early look
+# and the report of record). The button says what pressing it starts.
+TRIAL_BUTTON = "Start my plan"
 # The channel tag the join page reads (^[a-z0-9-]{1,24}$), so a signup that
-# came from a free report is counted as one (`make stats`).
+# came from a free report is counted as one (`make stats`). Since Nov 4 2026
+# it rides INSIDE the ref on the button (run/trials.trial_ref), never on the
+# URL beside it: the join page reads a URL ?via= first, so a URL tag would
+# overwrite the post that brought the reader to the free report.
 TRIAL_VIA = "trial"
 
 
@@ -178,8 +184,23 @@ TRIAL_LAST_BUTTON = "Tell me when it opens"
 # The free report's price line, at the TOP (pre-launch review M5): the one ask
 # sat after the whole report with no price, so a reader who stopped at the
 # lineup never learned what it costs. Worded as the landing's price card words
-# it. Nothing in the season's last week: there is no next one.
+# it. Nothing in the season's last week: there is no next one. Said again
+# under the button (Nov 4 2026), beside the press it is about.
 TRIAL_REFUND = "Full refund before your first weekly report's first game. One per person."
+
+# Built OFF until the owner sets SENDER_POSTAL_ADDRESS (render/sender.py):
+# with no sender address the free report carries today's single ask. Each is
+# a fact the report already holds, hedged where delivery is.
+# (a) While the week has not kicked off, a buyer is usually mailed this
+# week's report too (run/intake.py's first email, the early look).
+TRIAL_THIS_WEEK = ("Join well before the {kickoff} kickoff and this week's report "
+                   "usually comes too.")
+# (c) The reader's own team: a bye ahead that empties a spot is listed on
+# every live weekly report until the roster covers it (run.solo._byes_ahead).
+TRIAL_BYES_ONE = ("The {weeks} bye above stays on every Wednesday report until "
+                  "it's covered.")
+TRIAL_BYES_MANY = ("The {weeks} byes above stay on every Wednesday report until "
+                   "they're covered.")
 
 
 def trial_price_line(meta: Mapping[str, Any] | None) -> str | None:
@@ -199,31 +220,107 @@ def _is_final_week(meta: Mapping[str, Any] | None) -> bool:
     return isinstance(last, int) and meta.get("week") == last
 
 
+_REF_RE = re.compile(r"^[A-Za-z0-9_-]{1,200}$")   # run.refs.STRIPE_REF_RE
+
+
 def trial_join_url(meta: Mapping[str, Any] | None = None) -> str | None:
     """Where the free report's button goes, or None with no site to send
     anyone to — a button with nowhere to go is worse than none. In the
-    season's last week it is the landing's waitlist, never the join page."""
+    season's last week it is the landing's waitlist, never the join page.
+
+    With the request's roster on the report (``meta["trial_ref"]``, a Monthly
+    ref carrying its channel tag, run/trials.trial_ref) the link opens the
+    join page on that roster and its settings, ``join/?ref=<ref>`` and
+    nothing else: no ``?via=`` (the join page reads a URL tag before the
+    ref's own, so it would overwrite the post tag inside the ref), never
+    ``try=1`` (the free-report page) and never an address. A report built
+    without one (run/trial.py, the operator's copy) keeps ``?via=trial``."""
+    meta = meta or {}
     site = os.environ.get("SITE_URL", "").rstrip("/")
     if not site.startswith("https://"):
         return None
     if _is_final_week(meta):
         return f"{site}/?via={TRIAL_VIA}#watch-form"
+    ref = meta.get("trial_ref")
+    if isinstance(ref, str) and _REF_RE.match(ref):
+        return f"{site}/join/?ref={ref}"
     return f"{site}/join/?via={TRIAL_VIA}"
 
 
-def _trial_words(meta: Mapping[str, Any] | None) -> tuple[str, str, str]:
+def _parse_stamp(value: Any):
+    from datetime import datetime, timezone
+    try:
+        stamp = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def trial_this_week_line(meta: Mapping[str, Any] | None) -> str | None:
+    """(a) "Join well before the Thu Nov 5 · 8:15 PM ET kickoff and this
+    week's report usually comes too." Dated on the report's own clock
+    (render.report.eastern), so a reader who opens it after
+    that kickoff can see it has passed. None without a sender address, in the
+    season's last week, without the week's first kickoff on the report
+    (``meta["first_kickoff"]``, run/trials.py), or when the report was built
+    at or after it."""
+    meta = meta or {}
+    if not sender_line() or _is_final_week(meta):
+        return None
+    kickoff = _parse_stamp(meta.get("first_kickoff"))
+    if kickoff is None:
+        return None
+    from datetime import datetime, timezone
+    built = _parse_stamp(meta.get("generated_at")) or datetime.now(timezone.utc)
+    if built >= kickoff:
+        return None
+    from render.report import eastern
+    return TRIAL_THIS_WEEK.format(kickoff=eastern(kickoff))
+
+
+def trial_byes_ask(report: Mapping[str, Any] | None) -> str | None:
+    """(c) The ask, pointed at the reader's own team when the game plan above
+    lists a bye ahead that empties a spot (``report["byes_ahead"]``). None
+    without a sender address, in the season's last week, or with none."""
+    report = report or {}
+    meta = report.get("meta") or {}
+    if not sender_line() or _is_final_week(meta):
+        return None
+    weeks = sorted({hit["week"] for hit in report.get("byes_ahead") or []
+                    if isinstance(hit, Mapping) and isinstance(hit.get("week"), int)})
+    if not weeks:
+        return None
+    named = [f"Week {w}" for w in weeks]
+    joined = named[0] if len(named) == 1 else ", ".join(named[:-1]) + " and " + named[-1]
+    return (TRIAL_BYES_ONE if len(weeks) == 1 else TRIAL_BYES_MANY).format(weeks=joined)
+
+
+def _trial_words(meta: Mapping[str, Any] | None,
+                 report: Mapping[str, Any] | None = None) -> tuple[str, str, str]:
     """(head, ask, button) — the season's last week asks about next season."""
     if _is_final_week(meta):
         return TRIAL_LAST_ASK_HEAD, TRIAL_LAST_ASK, TRIAL_LAST_BUTTON
-    return TRIAL_ASK_HEAD, TRIAL_ASK, TRIAL_BUTTON
+    return TRIAL_ASK_HEAD, trial_byes_ask(report) or TRIAL_ASK, TRIAL_BUTTON
 
 
-def _trial_cta(meta: Mapping[str, Any] | None = None) -> str:
+def _trial_refund(meta: Mapping[str, Any] | None) -> str | None:
+    """The refund sentence under the button; none in the season's last week,
+    whose button is the waitlist and buys nothing."""
+    return None if _is_final_week(meta) else TRIAL_REFUND
+
+
+def _trial_cta(meta: Mapping[str, Any] | None = None,
+               report: Mapping[str, Any] | None = None) -> str:
     """The free report's call to action: one line and a bulletproof button
     (a padded table cell, the one button every mail client draws, Outlook
-    included), with the only-email promise beneath it."""
+    included), the refund beneath it, then the only-email promise as its own
+    block inside the box, word for word: with no List-Unsubscribe on a free
+    report it is the reader's one way out."""
     url = trial_join_url(meta)
-    head, ask, label = _trial_words(meta)
+    head, ask, label = _trial_words(meta, report)
+    this_week = trial_this_week_line(meta)
+    refund = _trial_refund(meta)
+    small = f'font-family:{FONT};font-size:12px;line-height:1.5;color:{ON_NAVY};'
     button = ""
     if url:
         button = (
@@ -244,19 +341,36 @@ def _trial_cta(meta: Mapping[str, Any] | None = None) -> str:
         f'{esc(head)}</div>'
         f'<div style="font-family:{FONT};font-size:14px;line-height:1.5;'
         f'color:#C9D4E2;padding-top:6px;">{esc(ask)}</div>'
-        f'{button}'
-        f'<div style="font-family:{FONT};font-size:12px;line-height:1.5;'
-        f'color:#B9C2D0;padding-top:14px;">{esc(TRIAL_ONLY)}</div>'
-        f'</td></tr></table></td></tr>')
+        + (f'<div style="font-family:{FONT};font-size:14px;line-height:1.5;'
+           f'color:#C9D4E2;padding-top:6px;">{esc(this_week)}</div>' if this_week else "")
+        + button
+        + (f'<div style="{small}padding-top:12px;">{esc(refund)}</div>' if refund else "")
+        + f'<div style="{small}padding-top:{8 if refund else 14}px;">{esc(TRIAL_ONLY)}</div>'
+        + '</td></tr></table></td></tr>')
 
 
-def _trial_cta_lines(meta: Mapping[str, Any] | None = None) -> list[str]:
+def _trial_cta_lines(meta: Mapping[str, Any] | None = None,
+                     report: Mapping[str, Any] | None = None) -> list[str]:
     """The plain-text twin: the URL spelled out, since text has no button."""
     url = trial_join_url(meta)
-    head, ask, label = _trial_words(meta)
+    head, ask, label = _trial_words(meta, report)
+    this_week = trial_this_week_line(meta)
+    refund = _trial_refund(meta)
     return (["", head.upper(), ask]
+            + ([this_week] if this_week else [])
             + ([f"{label}: {url}"] if url else [])
+            + ([refund] if refund else [])
             + [TRIAL_ONLY])
+
+
+def trial_subject(report: Mapping[str, Any]) -> str:
+    """The free report's subject: "Your free report: Week 9, Josh Allen's
+    team", the team named as the masthead names it (render.report.team_name:
+    its roster's lead), so a free report can be found again in an inbox.
+    Without a lead, the week alone."""
+    meta = report.get("meta") or {}
+    team = team_name(report)
+    return f"Your free report: Week {meta.get('week')}" + (f", {team}" if team else "")
 
 
 def tick_box() -> str:
@@ -490,6 +604,10 @@ def _plan_body(model: Mapping[str, Any]) -> str:
                  f'cellspacing="0" border="0">{_rule()}<tr><td style="{FACT}'
                  f'padding:10px 0 0 0;"><b style="color:{NAVY};">'
                  f'{esc(SATURDAY_LINE_HEAD)}:</b> {esc(model["saturday"])}</td></tr></table>')
+    if model.get("trial_saturday"):
+        body += (f'<table role="presentation" width="100%" cellpadding="0" '
+                 f'cellspacing="0" border="0">{_rule()}<tr><td style="{FACT}'
+                 f'padding:10px 0 0 0;">{esc(model["trial_saturday"])}</td></tr></table>')
     return body
 
 
@@ -1104,7 +1222,7 @@ def _solo_text(report: Mapping[str, Any]) -> str:
     plan = anatomy.plan(report)
     plan_items = [i for i in report.get("checklist") or []
                   if not anatomy.is_set_lineup(i) and not anatomy.is_certain_zero(i)]
-    if plan_items or plan["saturday"]:
+    if plan_items or plan["saturday"] or plan["trial_saturday"]:
         lines += ["", "YOUR GAME PLAN"]
         for item, model in zip(plan_items, plan["items"]):
             lines.append(f"  {'[ ]' if model['box'] else ' - '} {item['action']}  "
@@ -1113,6 +1231,8 @@ def _solo_text(report: Mapping[str, Any]) -> str:
                 lines.append(f"      {item['detail']}")
         if saturday_line(meta):
             lines.append(f"  {saturday_line(meta)}")
+        if plan["trial_saturday"]:
+            lines.append(f"  {plan['trial_saturday']}")
     # 04 — the if/then. The game plan's late-news line says "your if/then
     # below already has the answer" — so it is always here, plans or not.
     lines += ["", "IF/THEN FOR GAMEDAY"]
@@ -1151,10 +1271,13 @@ def _solo_text(report: Mapping[str, Any]) -> str:
         # commercial email (CAN-SPAM, CASL; launch audit C14). The ask comes
         # BEFORE the fine print (panel review I2), and the data-age sentence
         # (principle 3) rides the text half too (final review PIPE-7).
-        lines += [*_trial_cta_lines(meta),
+        lines += [*_trial_cta_lines(meta, report),
                   "", NO_BETTING_LINE,
                   source_line(meta),
                   availability_basis(meta),
+                  # The glossary, on the report most likely to be somebody's
+                  # first (Nov 4 2026).
+                  *read_lines(meta),
                   *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
     # 07 — the receipts.
@@ -1362,10 +1485,13 @@ def _league_text(report: Mapping[str, Any]) -> str:
         # HTML footer has always printed it and this half never did, so the
         # version `run.trial --print` pastes into a group chat carried no
         # "as of" and no box-score line (final review PIPE-7).
-        lines += [*_trial_cta_lines(meta),
+        lines += [*_trial_cta_lines(meta, report),
                   "", NO_BETTING_LINE,
                   source_line(meta),
                   availability_basis(meta),
+                  # The glossary, on the report most likely to be somebody's
+                  # first (Nov 4 2026).
+                  *read_lines(meta),
                   *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
     receipts = anatomy.receipts_data(report)
@@ -1521,6 +1647,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
             f'<tr><td style="background:{PAPER};padding:20px 4px 8px 4px;">'
             f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — '
             f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
+            f'{read_line(meta, LINK)}'
             f'{esc(NO_BETTING_LINE)}<br>{esc(source_line(meta))}'
             + (f'<br>{esc(sender_line())}' if sender_line() else "")
             + '</p></td></tr>')
@@ -1786,7 +1913,7 @@ def render_email(report: Mapping[str, Any]) -> str:
     preheader = preheader_for(report)
     sections = "".join(_compose(report) + [
         # The free report's ask sits ABOVE the footer, never in it.
-        _trial_cta(meta) if meta.get("trial") else "",
+        _trial_cta(meta, report) if meta.get("trial") else "",
         _footer(meta),
     ])
     sections = number_sections(sections)

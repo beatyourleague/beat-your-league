@@ -137,7 +137,11 @@ def test_the_operators_free_report_carries_no_subscriber_only_lines(
     report["meta"]["plan"] = "season"           # a stray plan must not survive
     plain, message = trial.trial_message(report, "prospect@example.com", ids,
                                          SEASON, WEEK)
-    assert message.subject.startswith("Your free report — ")
+    # One function owns the free report's subject: the operator copy and the
+    # hourly run (run/trials.py) write the same one (review: two shapes).
+    from render.email import trial_subject
+    assert message.subject == trial_subject(report)
+    assert message.subject.startswith(f"Your free report: Week {WEEK}")
     assert "file" not in message.subject.lower()
     for text in (plain, message.html):
         assert CANCEL_TEXT.split(" —")[0] not in text, "a prospect was told to cancel"

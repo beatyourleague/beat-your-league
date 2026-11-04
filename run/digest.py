@@ -44,8 +44,11 @@ class DigestError(RuntimeError):
     """LOG_SECRET is not set, so no keyed code can be made. No address in it."""
 
 
-def secret() -> str:
-    value = os.environ.get(ENV, "").strip()
+def secret(key: str | None = None) -> str:
+    """LOG_SECRET: ``key`` when a caller read it from somewhere else (the
+    owner's .env, for make stats and the dashboard), else this process's
+    environment."""
+    value = (key if key is not None else os.environ.get(ENV, "")).strip()
     if not value:
         raise DigestError(
             f"{ENV} is not set, so no address can be turned into the keyed code "
@@ -54,17 +57,17 @@ def secret() -> str:
     return value
 
 
-def available() -> bool:
-    return bool(os.environ.get(ENV, "").strip())
+def available(key: str | None = None) -> bool:
+    return bool((key if key is not None else os.environ.get(ENV, "")).strip())
 
 
-def keyed(value: str, length: int = LENGTH) -> str:
+def keyed(value: str, length: int = LENGTH, key: str | None = None) -> str:
     """HMAC-SHA256(LOG_SECRET, value), hex, truncated."""
-    return hmac.new(secret().encode("utf-8"), value.encode("utf-8"),
+    return hmac.new(secret(key).encode("utf-8"), value.encode("utf-8"),
                     hashlib.sha256).hexdigest()[:length]
 
 
-def address(email: str, length: int = LENGTH) -> str:
+def address(email: str, length: int = LENGTH, key: str | None = None) -> str:
     """The keyed code for one MAILBOX (canonicalised first)."""
     from run.trials import canonical_email
-    return keyed(canonical_email(email), length)
+    return keyed(canonical_email(email), length, key)

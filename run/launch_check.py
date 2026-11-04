@@ -479,12 +479,12 @@ def check_funnel_config() -> list[Gate]:
     gates.append(_gate("Funnel", "The free-report button only shows when requests can be received",
                        not (trial and not form),
                        "TRIAL_OPEN is on but FORM_ENDPOINT is empty: the button posts nowhere"))
-    # EMAILS-69: every free report ends "Get next Tuesday's report" → join/,
+    # EMAILS-69: every free report ends on its "Start my plan" button → join/,
     # which must then be able to sell it.
     gates.append(_gate("Funnel", "The free report's sign-up button lands on an open checkout",
                        not (trial and not open_),
                        "TRIAL_OPEN is on while CHECKOUT_OPEN is off: each free report's "
-                       "'Get next Wednesday's report' button would land on a closed page"))
+                       "'Start my plan' button would land on a closed page"))
     # Owner decision, Oct 31 2026: the price rests on a free door. With no record
     # to read and FantasyPros' free trial a tab away, a buyer gets one report on
     # their own roster first. The two switches flip together on opening morning.
