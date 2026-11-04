@@ -543,7 +543,8 @@ def test_mid_week_the_clock_and_the_button_name_the_week_a_buyer_gets() -> None:
     mid = {**WEEK7, "week": 8, "lands_on": "2026-11-04", "first_kickoff": "2026-10-30T00:15:00Z"}
     got = _clock(mid, "2026-10-29T16:00:00Z", open_=True)
     assert got["clock"] == "Week 8's report lands today."
-    assert got["open"] == " Set up now and your first report lands today."
+    # The clock says today, so the line beside it doesn't say it again.
+    assert got["open"] == " Set up now."
     assert got["hero"] == got["closer"] == "Get my lineups"
     closed = _clock(mid, "2026-10-29T16:00:00Z", open_=False)
     assert closed["clock"] == "Week 9's report lands Wednesday."
@@ -564,7 +565,7 @@ def test_after_kickoff_the_open_line_names_only_what_the_clock_cannot() -> None:
     assert got["hero"] == "Get my lineups"
     tuesday = _clock(WEEK7, "2026-10-28T11:00:00Z", open_=True)
     assert tuesday["clock"].startswith("Week 8's report lands today.")
-    assert tuesday["open"] == " Set up now and your first report lands today."
+    assert tuesday["open"] == " Set up now."
 
 
 @needs_node

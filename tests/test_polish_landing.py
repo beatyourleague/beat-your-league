@@ -534,6 +534,7 @@ function run(w) {
   const timers = [];
   global.setTimeout = (fn, ms) => { if (ms > 1000) { timers.push(ms); return 0; } return real(fn, ms); };
   const make = (id, hidden) => ({ id, hidden, textContent: "", kids: [],
+    classList: { contains: () => false },
     replaceChildren(...k) { this.kids = k; }, appendChild(k) { this.kids.push(k); },
     setAttribute() {} });
   const els = {};
