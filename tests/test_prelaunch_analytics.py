@@ -425,6 +425,35 @@ def test_a_restored_league_pass_roster_counts_as_the_pass_page(tmp_path) -> None
     assert join.index("const WANTS_PASS =") < assignment.start()
 
 
+@needs_node
+def test_a_free_report_buy_link_counts_under_the_tag_inside_its_ref(tmp_path) -> None:
+    """Review, reproduced: the free report's buy links became join/?ref=<ref>
+    with the tag only inside the ref, and count.js read only ?via=, so the
+    join view, the roster check and the buy press all counted as "(no tag)".
+    The join page names the tag it read off the restored roster in
+    window.bylVia; count.js takes it on the join page only, after the URL's
+    own ?via=, through the same sanitiser. It never reads the ref itself."""
+    ref = "https://beatyourleague.com/join/?ref=s4-abc_via-reddit-oct28"
+    scenarios = [
+        {"href": ref, "win": {"bylPage": "join", "bylVia": "reddit-oct28"},
+         "events": [["roster", ""], ["checkout", "open"]]},
+        {"href": ref},                                             # an older join page
+        {"href": ref + "&via=x", "win": {"bylPage": "join", "bylVia": "reddit-oct28"}},
+        {"href": "https://beatyourleague.com/how-it-works", "win": {"bylVia": "reddit"}},
+        {"href": ref, "win": {"bylPage": "join", "bylVia": "A@B.CO!"}},
+        {"href": ref, "win": {"bylPage": "join", "bylVia": {"x": 1}}},
+    ]
+    results = _run(tmp_path, scenarios)
+    assert [b["v"] for b in _bodies(results[0])] == ["reddit-oct28"] * 3
+    assert [_bodies(r)[0]["v"] for r in results[1:]] == ["", "x", "", "abco", ""]
+    for result in results:
+        for call in result["calls"]:
+            assert "s4-abc" not in call["body"]
+    join = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+    assignment = join.index('window.bylVia = SOURCE || "";')
+    assert join.index("const SOURCE =") < assignment
+
+
 # --------------------------------------------------------------------- #
 # the Worker contract (live once infra/form-worker.js has its /e route)
 # --------------------------------------------------------------------- #
@@ -736,8 +765,37 @@ def test_free_report_to_paid_needs_the_send_log_and_its_key(monkeypatch) -> None
     assert "send log wasn't read" in lines[1] and "rate" in lines[1]
     monkeypatch.delenv("LOG_SECRET")
     lines = stats.free_to_paid_lines(rows, [], NOW, owners=frozenset(), sent=[])
-    assert "LOG_SECRET isn't set" in lines[1]
+    assert "LOG_SECRET isn't in this shell or .env" in lines[1]
     assert not any("within" in line for line in lines)
+
+
+def test_free_report_to_paid_reads_log_secret_from_dot_env(tmp_path, monkeypatch) -> None:
+    """Review, reproduced: with LOG_SECRET in the owner's .env and not in the
+    shell, make stats printed "LOG_SECRET isn't set" and no rate, while make
+    signups read the same .env fine. The command line reads it there and hands
+    it down; the send keys it matches are the ones run.trials wrote under it."""
+    from run.trials import trial_key
+    monkeypatch.delenv("LOG_SECRET", raising=False)
+    asked = NOW - timedelta(days=20)
+    rows = [{"kind": "trial", "email": "two@fans.mail", "received_at": asked.isoformat()}]
+    sent = [{"key": trial_key("2026", "two@fans.mail", key="dot-env-key"),
+             "sent_at": (asked + timedelta(hours=1)).isoformat()}]
+    lines = stats.free_to_paid_lines(rows, [], NOW, owners=frozenset(), sent=sent,
+                                     log_secret="dot-env-key")
+    assert lines[0] == "  Free reports: 1 requested, 1 mailed, 0 paid after theirs"
+    # A different key matches nothing: the codes really are keyed by it.
+    other = stats.free_to_paid_lines(rows, [], NOW, owners=frozenset(), sent=sent,
+                                     log_secret="another-key")
+    assert other[0] == "  Free reports: 1 requested, 0 mailed, 0 paid after theirs"
+    # And the command line passes the .env value through to main().
+    seen = {}
+    monkeypatch.setattr(stats, "main", lambda argv=None, **kw: seen.update(kw) or 0)
+    env = tmp_path / ".env"
+    env.write_text("LOG_SECRET=dot-env-key\n", encoding="utf-8")
+    assert stats.cli([], environ={}, env_file=env) == 0
+    assert seen["log_secret"] == "dot-env-key"
+    assert stats.cli([], environ={"LOG_SECRET": "shell-key"}, env_file=env) == 0
+    assert seen["log_secret"] == "shell-key"
 
 
 def test_seats_are_counted_against_each_pass_cap() -> None:

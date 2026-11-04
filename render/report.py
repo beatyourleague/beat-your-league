@@ -1774,8 +1774,11 @@ def saturday_line(meta: Mapping[str, Any] | None) -> str | None:
 # subscriber's report says SATURDAY_FOLLOWUP. About the plan, never about this
 # reader's row, and never "we'll email you": nothing follows a free report.
 # Built OFF until the owner sets SENDER_POSTAL_ADDRESS (render/sender.py).
-TRIAL_SATURDAY_NOTE = ("On the plan, every lineup is checked again on Saturday, "
-                       "after Friday's final injury reports.")
+# Never "every lineup": the check reads only plans stored when a weekly report
+# went out, and refuses a week whose injury reports aren't in. The landing
+# FAQ's own promise, in the same words.
+TRIAL_SATURDAY_NOTE = ("On the plan, the Saturday check reads Friday's final injury "
+                       "reports and tells you if they change your lineup.")
 
 
 def trial_saturday_note(report: Mapping[str, Any] | None) -> str | None:

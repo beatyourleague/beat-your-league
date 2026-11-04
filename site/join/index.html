@@ -1053,6 +1053,10 @@ const TRY_MODE = QUERY.get("try") === "1" && !UPDATE_MODE && !SEAT_MODE;
 // a roster restored as a League Pass counts as the pass page (window.bylCount).
 window.bylPage = SEAT_MODE || UPDATE_MODE ? "other" : TRY_MODE ? "join-try"
   : WANTS_PASS ? "join-pass" : "join";
+// The channel the page counter counts this visit under: this link's ?via=, else the
+// tag the restored roster carries. A free report's buy links carry the tag
+// only inside the ref, so without this they counted as untagged.
+window.bylVia = SOURCE || "";
 
 // The heading names what this visit is for (review: it read "Set Up Your
 // Team" over a roster update, a free report and a seat claim alike). The

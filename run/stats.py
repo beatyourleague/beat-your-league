@@ -393,7 +393,8 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
                    one_time: bool | None = None,
                    season_2027: Iterable[str] = (),
                    owners: Iterable[str] | None = None,
-                   sent: Iterable[Mapping] | None = None) -> list[str]:
+                   sent: Iterable[Mapping] | None = None,
+                   log_secret: str | None = None) -> list[str]:
     """The payments half. Each read is independent — a key without Refunds
     access still shows subscriptions and checkouts — and a part that cannot
     be read says so instead of printing a zero it never counted.
@@ -424,7 +425,8 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
     def passes(sessions: list[dict]) -> list[str]:
         out = passes_lines(sessions, plans, season_label, since)
         if rows is not None:
-            out.extend(free_to_paid_lines(rows, sessions, now, since, owners, sent))
+            out.extend(free_to_paid_lines(rows, sessions, now, since, owners, sent,
+                                          log_secret))
         return out
 
     label = SUBSCRIPTIONS_LABEL_ONE_TIME if one_time else SUBSCRIPTIONS_LABEL
@@ -597,20 +599,25 @@ def passes_lines(sessions: Iterable[Mapping], link_plans: Mapping[str, str],
 FREE_TO_PAID_WINDOWS = (7, FREE_TO_PAID_DAYS)
 FREE_MAILED_UNKNOWN = ("  Free reports mailed: can't be matched to requests here ({why}), "
                        "so no free report → paid rate")
+# Why, when LOG_SECRET is missing. The dashboard says the same words.
+FREE_MAILED_NO_SECRET = "LOG_SECRET isn't in this shell or .env"
 
 
-def free_reports_mailed(requested: Iterable[str], sent: Iterable[Mapping]
-                        ) -> dict[str, datetime]:
+def free_reports_mailed(requested: Iterable[str], sent: Iterable[Mapping],
+                        key: str | None = None) -> dict[str, datetime]:
     """canonical mailbox -> when its free report went out (the earliest),
     for each of ``requested`` the send log holds a free report for. Matched on
     the send key run.trials writes (``trial_key``, keyed under LOG_SECRET, so
     this raises run.digest.DigestError without it); the owner's own test
     reports have keys of their own and never match. A refused, stale or
     unbuildable request has no key in the log, so it is never counted as
-    mailed. Counts in, never an address out."""
+    mailed. ``key`` is LOG_SECRET as the command line read it (this shell or
+    .env); None reads this process's environment. Counts in, never an
+    address out."""
     from run.digest import secret
     from run.trials import is_owner_trial_key, trial_key
-    secret()                                  # no key, no match: say so
+    log_key = key or None
+    secret(log_key)                           # no key, no match: say so
     when: dict[str, datetime] = {}
     seasons: set[str] = set()
     for entry in sent:
@@ -624,7 +631,7 @@ def free_reports_mailed(requested: Iterable[str], sent: Iterable[Mapping]
         when[key] = min(when.get(key, at), at)
     out: dict[str, datetime] = {}
     for who in requested:
-        hits = [when[k] for k in (trial_key(s, who) for s in seasons) if k in when]
+        hits = [when[k] for k in (trial_key(s, who, log_key) for s in seasons) if k in when]
         if hits:
             out[who] = min(hits)
     return out
@@ -633,7 +640,8 @@ def free_reports_mailed(requested: Iterable[str], sent: Iterable[Mapping]
 def free_to_paid_lines(rows: Iterable[Mapping], sessions: Iterable[Mapping],
                        now: datetime, since: int | None = None,
                        owners: Iterable[str] | None = None,
-                       sent: Iterable[Mapping] | None = None) -> list[str]:
+                       sent: Iterable[Mapping] | None = None,
+                       log_secret: str | None = None) -> list[str]:
     """Free reports requested, mailed and followed by a purchase, then the
     rate from a MAILED free report to a purchase within 7 and 14 days of it.
 
@@ -644,7 +652,9 @@ def free_to_paid_lines(rows: Iterable[Mapping], sessions: Iterable[Mapping],
     still convert; the raw counts need no closed window. People are mailboxes
     as the free report counts them (run.trials.canonical_email); owner and
     test addresses are left out (run.owner.not_counted), and the owner's own
-    purchases are left out of ``sessions`` by the caller."""
+    purchases are left out of ``sessions`` by the caller. ``log_secret`` is
+    LOG_SECRET as read from this shell or .env (``cli``); None reads this
+    process's environment."""
     from run.digest import DigestError
     from run.owner import not_counted
     from run.trials import canonical_email
@@ -656,10 +666,10 @@ def free_to_paid_lines(rows: Iterable[Mapping], sessions: Iterable[Mapping],
         return [f"  Free reports: {len(requested)} requested",
                 FREE_MAILED_UNKNOWN.format(why="the send log wasn't read")]
     try:
-        mailed = free_reports_mailed(requested, sent)
+        mailed = free_reports_mailed(requested, sent, log_secret)
     except DigestError:
         return [f"  Free reports: {len(requested)} requested",
-                FREE_MAILED_UNKNOWN.format(why="LOG_SECRET isn't set")]
+                FREE_MAILED_UNKNOWN.format(why=FREE_MAILED_NO_SECRET)]
     bought: dict[str, list[datetime]] = defaultdict(list)
     for session in _paid_pass_sessions(sessions, since):
         email = ((session.get("customer_details") or {}).get("email")
@@ -1132,6 +1142,9 @@ STRIPE_NAMES = ("STRIPE_STATS_KEY", "STRIPE_API_KEY")
 FORM_NAMES = ("FORM_ENDPOINT", "FORM_API_KEY", "STRIPE_PAYMENT_LINKS")
 # The owner's own addresses (run/owner.py), left out of every count.
 OWNER_NAMES = ("OWNER_EMAILS",)
+# The send log's key (run/digest.py), so a free report can be matched to the
+# request that asked for it. make signups reads it from the same places.
+LOG_NAMES = ("LOG_SECRET",)
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
@@ -1204,14 +1217,14 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
               "log would publish sales and traffic. Run it on your own machine.",
               file=sys.stderr)
         return 2
-    names = CF_NAMES + TRAFFIC_NAMES + FORM_NAMES + STRIPE_NAMES + OWNER_NAMES
+    names = CF_NAMES + TRAFFIC_NAMES + FORM_NAMES + STRIPE_NAMES + OWNER_NAMES + LOG_NAMES
     found = read_env_file(env_file or ENV_FILE, names)
     value = {name: environ.get(name) or found.get(name, "") for name in names}
     cf = {name: value[name] for name in CF_NAMES + TRAFFIC_NAMES}
     form = {name: value[name] for name in FORM_NAMES}
     from run.owner import owner_addresses
     return main(argv, cf=cf, form=form, stripe_key=stripe_key_from(value),
-                owners=owner_addresses(value))
+                owners=owner_addresses(value), log_secret=value["LOG_SECRET"] or None)
 
 
 def stripe_key_from(env: Mapping[str, str]) -> str:
@@ -1221,7 +1234,7 @@ def stripe_key_from(env: Mapping[str, str]) -> str:
 
 def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
          form: Mapping[str, str] | None = None, stripe_key: str | None = None,
-         owners: Iterable[str] | None = None) -> int:
+         owners: Iterable[str] | None = None, log_secret: str | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--registry", type=Path, default=None)
@@ -1275,7 +1288,7 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
     # The owner's own teams, and the seats on a pass they bought, are tests:
     # out of every subscriber count, and their mail out of the send counts.
     send_log = load_send_log(SENT_LOG)
-    sends = send_summary(send_log, season, send_marks(registry, owners))
+    sends = send_summary(send_log, season, send_marks(registry, owners, log_secret))
     if registry is not None:
         registry, owner_rows = without_owner_rows(registry, owners)
     if registry is not None and rows is not None:
@@ -1297,7 +1310,8 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
             api_key, now, rows=rows,
             link_plans=parse_link_plans(raw_links),
             season_label=f"{season} season" if since is not None else "ever", since=since,
-            season_2027=season_2027_links(raw_links), owners=owners, sent=send_log)
+            season_2027=season_2027_links(raw_links), owners=owners, sent=send_log,
+            log_secret=log_secret)
     # The same rule for traffic: one line says why it is missing, the exit
     # code is the rest of the page's.
     # Credentials arrive only through ``cf`` (the command line's), never read

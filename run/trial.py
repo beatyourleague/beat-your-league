@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 from engine.subscriber import LINEUP_SHAPES, RosterSpec
-from render.email import render_email, subject_for, text_summary
+from render.email import render_email, text_summary, trial_subject
 from run.delivery import DRY_PROVIDER, DeliveryError, Message, build_provider, send_all
 from run.solo import (CACHE_DIR, SoloError, load_week_data, report_for,
                        week_has_kicked_off)
@@ -112,9 +112,9 @@ def trial_message(report: dict, email: str, ids: list[str], season: str,
     plain = text_summary(report)
     return plain, Message(
         to=email,
-        # "report", never "file" (owner rule) — and the same words the hourly
-        # free report's subject uses.
-        subject="Your free report — " + subject_for(report),
+        # "report", never "file" (owner rule) — and the hourly free report's
+        # own subject, from the one function that writes it.
+        subject=trial_subject(report),
         html=render_email(report),
         text=plain,
         key=trial_key(email, ids, season, week),

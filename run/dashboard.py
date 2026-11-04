@@ -101,9 +101,9 @@ GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 # two views can't read different places. STRIPE_PAYOUT_CURRENCY=usd says the
 # USD payout account exists (run/economics.py's launch line).
 ENV_NAMES = (*stats.CF_NAMES, *stats.TRAFFIC_NAMES, *stats.STRIPE_NAMES, *stats.FORM_NAMES,
-             *stats.OWNER_NAMES, "RESEND_READ_KEY", "STRIPE_PAYOUT_CURRENCY")
+             *stats.OWNER_NAMES, *stats.LOG_NAMES, "RESEND_READ_KEY", "STRIPE_PAYOUT_CURRENCY")
 SECRET_NAMES = ("CF_ANALYTICS_TOKEN", "STRIPE_STATS_KEY", "STRIPE_API_KEY", "FORM_API_KEY",
-                "RESEND_READ_KEY", "STRIPE_PAYMENT_LINKS", "OWNER_EMAILS")
+                "RESEND_READ_KEY", "STRIPE_PAYMENT_LINKS", "OWNER_EMAILS", "LOG_SECRET")
 # The names the launch gates read from the shell (os.environ). For the length
 # of the gates' run they also see what this dashboard read from .env, so a
 # gate never says "isn't in this shell" about a value the page itself is using.
@@ -315,8 +315,10 @@ def collect_forms(ctx: Context) -> Source:
     from run.digest import address, available
     # A free-report request's keyed mailbox code, the one its send key ends
     # in (run.trials.trial_key), so free_to_paid counts reports MAILED. The
-    # code is already in the committed send log; without LOG_SECRET, none.
-    keyed = available()
+    # code is already in the committed send log; without LOG_SECRET (this
+    # shell or .env, as make stats and make signups read it), none.
+    log_key = ctx.env.get("LOG_SECRET") or None
+    keyed = available(log_key)
     clean = []
     for row in rows:
         # A row at our own domain, a reserved test domain or one of the
@@ -330,7 +332,7 @@ def collect_forms(ctx: Context) -> Source:
             "at": _iso(row.get("received_at")),
             "via": via if isinstance(via, str) and stats.VIA_RE.fullmatch(via) else None,
             "who": who(row.get("email")),
-            "sent_code": (address(str(row["email"])) if keyed and row.get("email")
+            "sent_code": (address(str(row["email"]), key=log_key) if keyed and row.get("email")
                           and row.get("kind") == "trial" else None),
         })
     channels = {k: dict(c) for k, c in stats.channel_summary(rows, owners).items()}
@@ -503,7 +505,8 @@ def collect_sends(ctx: Context) -> Source:
     # Mail to the owner's own subscriptions is a test (run/owner.py), told
     # apart by the registry's slugs when a copy is here.
     from run.owner import owner_addresses, send_marks
-    marks = send_marks(_registry_rows(ctx), owner_addresses(ctx.env))
+    marks = send_marks(_registry_rows(ctx), owner_addresses(ctx.env),
+                       ctx.env.get("LOG_SECRET") or None)
     return _source("sends", data={"entries": entries, "season": season, "stopped": stopped,
                                   "summary": stats.send_summary(entries, season, marks)},
                    read_at=ctx.now)
@@ -1020,16 +1023,22 @@ def forms_metrics(src: Source, period: str, now: datetime) -> dict | None:
 
 
 FREE_TO_PAID_DAYS = stats.FREE_TO_PAID_DAYS
+# What the page says instead of a free report → paid rate when no request can
+# be matched to a send: make stats' own reason, so the two views agree.
+FREE_TO_PAID_UNMATCHED = (f"Free report → paid can't be counted: free reports can't be matched "
+                          f"to requests ({stats.FREE_MAILED_NO_SECRET}).")
 
 
 def free_to_paid(forms: Source, stripe: Source, now: datetime,
-                 sends: Source | None = None) -> tuple[int, int, int] | None:
+                 sends: Source | None = None) -> tuple[int, int, int] | str | None:
     """(paid within 14 days of the free report, free reports MAILED old
     enough to judge, mailed ones still inside the window) — the rate
     ``make stats`` prints (stats.free_to_paid_lines), on digests. Only free
     reports the send log says went out count: a refused, stale or
     unbuildable request is not somebody who got one. None without the send
-    log, or without LOG_SECRET (no request can then be matched to a send)."""
+    log. Without LOG_SECRET no request can be matched to a send, and the
+    answer is FREE_TO_PAID_UNMATCHED, which the page shows in the rate's
+    place, never a silent gap."""
     if not (forms.ok and stripe.ok) or sends is None or not sends.ok:
         return None
     from run.trials import is_owner_trial_key
@@ -1042,7 +1051,7 @@ def free_to_paid(forms: Source, stripe: Source, now: datetime,
             went[code] = min(went.get(code, stamp), stamp)
     trials = [row for row in forms.data["rows"] if row["kind"] == "trial"]
     if trials and not any(row.get("sent_code") for row in trials):
-        return None                         # read without LOG_SECRET
+        return FREE_TO_PAID_UNMATCHED       # read without LOG_SECRET
     first: dict[str, datetime] = {}
     for row in forms.data["rows"]:
         stamp = went.get(row.get("sent_code") or "")
@@ -1669,7 +1678,7 @@ class Insight:
 
 
 def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
-                   ftp: tuple[int, int, int] | None, ledger: dict | None) -> list[Insight]:
+                   ftp: tuple[int, int, int] | str | None, ledger: dict | None) -> list[Insight]:
     out: list[Insight] = []
     t, money, forms = m.traffic, m.money, m.forms
     span = "this period" if m.days is None else f"the last {m.days} days"
@@ -1772,7 +1781,11 @@ def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
                                    f"read a refund rate.",
                            f"Wait for {MIN_REFUND_SAMPLE} before judging it.",
                            f"floor {MIN_REFUND_SAMPLE} purchases"))
-    if ftp is not None and m.period == "all":
+    if isinstance(ftp, str) and m.period == "all":
+        out.append(Insight("info", ftp,
+                           "Add LOG_SECRET to this shell or .env (the same value as the GitHub "
+                           "secret), then rebuild.", "send log codes"))
+    elif ftp is not None and m.period == "all":
         paid, judged, young = ftp
         if judged >= 10:
             # Never a follow-up email: the free report says it's the only one
@@ -2596,7 +2609,10 @@ def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: dateti
         if t is not None and t["rosters"]:
             conv.append(("Roster checked → buy press", pct(t["presses"] / t["rosters"]),
                          f"{num(t['presses'])} of {num(t['rosters'])}"))
-        if ftp is not None:
+        if isinstance(ftp, str):
+            conv.append((f"Free report → paid in {FREE_TO_PAID_DAYS} d", "—",
+                         f"needs {stats.LOG_NAMES[0]}"))
+        elif ftp is not None:
             paid, judged, young = ftp
             conv.append((f"Free report → paid in {FREE_TO_PAID_DAYS} d",
                          pct(paid / judged) if judged else "—",

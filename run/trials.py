@@ -222,12 +222,13 @@ def remember_rosters(path: Path, season: str, rosters) -> None:
                                     separators=(",", ":")) + "\n")
 
 
-def trial_key(season: str, email: str) -> str:
+def trial_key(season: str, email: str, key: str | None = None) -> str:
     """One free report per mailbox per season. The code is keyed under
     LOG_SECRET (run/digest.py): the send log is public, and a plain hash of
-    the address would let anybody who knows it see it asked for one."""
+    the address would let anybody who knows it see it asked for one. ``key``
+    is LOG_SECRET when the caller read it from the owner's .env."""
     from run.digest import address
-    return f"trial-{season}-{address(email)}"
+    return f"trial-{season}-{address(email, key=key)}"
 
 
 def row_vias(rows) -> dict[tuple[str, str], str]:

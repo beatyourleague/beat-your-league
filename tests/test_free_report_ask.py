@@ -215,7 +215,7 @@ def test_with_a_sender_address_the_three_lines_appear_on_both_halves(monkeypatch
     report = _with_everything()
     page, text = _docs(report)
     line = em.trial_this_week_line(report["meta"])
-    assert re.fullmatch(r"Join well before the \w{3} \w{3} \d{1,2}, \d{1,2}:\d\d [AP]M ET "
+    assert re.fullmatch(r"Join well before the \w{3} \w{3} \d{1,2} · \d{1,2}:\d\d [AP]M ET "
                         r"kickoff and this week's report usually comes too\.", line), line
     byes = "The Week 15 bye above stays on every Wednesday report until it's covered."
     for doc in (page, text):
@@ -253,8 +253,31 @@ def test_the_this_week_line_needs_a_week_not_yet_kicked_off(monkeypatch) -> None
     nov = dict(meta, first_kickoff="2026-11-06T01:15:00+00:00",
                generated_at="2026-11-04T23:00:00+00:00")
     assert em.trial_this_week_line(nov) == (
-        "Join well before the Thu Nov 5, 8:15 PM ET kickoff and this week's report "
+        "Join well before the Thu Nov 5 · 8:15 PM ET kickoff and this week's report "
         "usually comes too.")
+
+
+def test_the_this_week_line_prints_the_kickoff_on_the_reports_own_clock(monkeypatch) -> None:
+    """Review: the line had a formatter of its own ("Thu Nov 5, 8:15 PM ET")
+    beside render.report.eastern ("Thu Nov 5 · 8:15 PM ET"), the clock every
+    kickoff in the report is printed in. One clock, one format."""
+    from datetime import datetime
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", SENDER)
+    meta = dict(_with_everything()["meta"], first_kickoff="2026-11-06T01:15:00+00:00",
+                generated_at="2026-11-04T23:00:00+00:00")
+    stamp = rr.eastern(datetime.fromisoformat(meta["first_kickoff"]))
+    assert em.trial_this_week_line(meta) == em.TRIAL_THIS_WEEK.format(kickoff=stamp)
+
+
+def test_the_saturday_sentence_promises_no_more_than_the_check_does() -> None:
+    """Review: "every lineup is checked again on Saturday" was untrue of a
+    buyer with no stored plan (joined after Wednesday's send) and of a week
+    whose injury reports aren't in, when the check refuses. It says what the
+    landing FAQ already promises, in its words."""
+    note = rr.TRIAL_SATURDAY_NOTE.lower()
+    assert "every" not in note
+    assert "saturday check" in note and "friday's final injury" in note
+    assert "tells you if" in note
 
 
 def test_the_saturday_sentence_needs_a_plan_that_waits_on_saturday(monkeypatch) -> None:
@@ -281,7 +304,7 @@ def test_the_run_puts_the_first_kickoff_on_the_report(tmp_path, monkeypatch, cap
                                     now=THURSDAY)
     assert code == 0 and mailed, (out, err)
     # _drive's week kicks off 2099-01-01 00:00 UTC: 7:00 PM ET on Dec 31.
-    assert "Join well before the Wed Dec 31, 7:00 PM ET kickoff" in mailed[0].text
+    assert "Join well before the Wed Dec 31 · 7:00 PM ET kickoff" in mailed[0].text
 
 
 # ------------------------------------------- make stats: channels grouped

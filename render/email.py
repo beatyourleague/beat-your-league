@@ -257,8 +257,9 @@ def _parse_stamp(value: Any):
 
 
 def trial_this_week_line(meta: Mapping[str, Any] | None) -> str | None:
-    """(a) "Join well before the Thu Nov 5, 8:15 PM ET kickoff and this
-    week's report usually comes too." Dated, so a reader who opens it after
+    """(a) "Join well before the Thu Nov 5 · 8:15 PM ET kickoff and this
+    week's report usually comes too." Dated on the report's own clock
+    (render.report.eastern), so a reader who opens it after
     that kickoff can see it has passed. None without a sender address, in the
     season's last week, without the week's first kickoff on the report
     (``meta["first_kickoff"]``, run/trials.py), or when the report was built
@@ -273,11 +274,8 @@ def trial_this_week_line(meta: Mapping[str, Any] | None) -> str | None:
     built = _parse_stamp(meta.get("generated_at")) or datetime.now(timezone.utc)
     if built >= kickoff:
         return None
-    from zoneinfo import ZoneInfo
-    local = kickoff.astimezone(ZoneInfo("America/New_York"))
-    when = (f"{local:%a %b} {local.day}, {local.hour % 12 or 12}:{local.minute:02d} "
-            f"{'AM' if local.hour < 12 else 'PM'} ET")
-    return TRIAL_THIS_WEEK.format(kickoff=when)
+    from render.report import eastern
+    return TRIAL_THIS_WEEK.format(kickoff=eastern(kickoff))
 
 
 def trial_byes_ask(report: Mapping[str, Any] | None) -> str | None:

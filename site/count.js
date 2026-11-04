@@ -17,7 +17,9 @@
 // The same <script src="/count.js" defer> line is on every public page,
 // generated ones included (render.report.COUNT_TAG). The join page names its
 // mode in window.bylPage and calls window.bylCount("roster" | "checkout" |
-// "waitlist" | "trial").
+// "waitlist" | "trial"). It also names, in window.bylVia, the channel tag a
+// restored roster carries (?ref= with no ?via=: the free report's buy links),
+// read by roster.js on the page; this file still never reads a ref itself.
 (function () {
   "use strict";
   // "https://forms.beatyourleague.com/e" once the Worker is live — never a
@@ -82,7 +84,13 @@
     const query = new URLSearchParams(window.location.search);
     // The same sanitiser every funnel page applies to ?via= before a form row
     // carries it, so a channel counts under one name in both places.
-    const via = (query.get("via") || "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24);
+    // On the join page only, a link with no ?via= takes the tag the page read
+    // off its restored roster (window.bylVia), so a free report's buy link
+    // counts under its channel; it passes the same sanitiser and FIELD.
+    const page = pageKey(window.location.pathname, query);
+    const own = page.indexOf("join") === 0 && typeof window.bylVia === "string"
+      ? window.bylVia : "";
+    const via = (query.get("via") || own).toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24);
     let ref = "";
     try { ref = new URL(document.referrer).hostname.toLowerCase(); } catch (e) { ref = ""; }
     // A step inside the site says so with our own name — still a bare host —
@@ -90,7 +98,7 @@
     // from the landing to the join page.
     if (ref === LIVE || ref.endsWith("." + LIVE)) ref = LIVE;
     const row = {
-      e: event, p: pageKey(window.location.pathname, query), v: via, r: ref,
+      e: event, p: page, v: via, r: ref,
       d: (window.innerWidth || 0) < 768 ? "m" : "d",
       s: state === "open" || state === "closed" ? state : "",
     };
