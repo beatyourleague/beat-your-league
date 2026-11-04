@@ -311,6 +311,13 @@ Nothing here starts until football has proved itself. In order, each step earnin
   rules; nothing carries over from football because it looks similar.
 - **Then an all-sports monthly plan,** the one version of monthly that bills for months with
   something in them, which is why it comes last.
+- **The CFL (owner question, Nov 3 2026).** Its season runs June to the Grey Cup in mid-November,
+  so it would fill the summer months football leaves empty. Look at it next spring, not before.
+  Three open questions, in order: (1) a data source whose terms allow a paid fantasy product
+  (no open licence like nflverse's found yet; the CFL's own stats service has terms not yet
+  read raw); (2) who plays season-long CFL fantasy, since most of it is the CFL's own
+  salary-cap game rather than the ESPN/Yahoo leagues this report is built for; (3) enough
+  seasons of history for a preregistered backtest before any odds print (principle 1).
 
 ## The 2027 Season Pass's second season (found building it, Oct 30 2026)
 - **A carried subscriber needs asking for their 2027 roster.** A pass buyer is the first
