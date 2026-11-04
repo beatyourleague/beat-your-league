@@ -101,9 +101,9 @@ GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 # two views can't read different places. STRIPE_PAYOUT_CURRENCY=usd says the
 # USD payout account exists (run/economics.py's launch line).
 ENV_NAMES = (*stats.CF_NAMES, *stats.TRAFFIC_NAMES, *stats.STRIPE_NAMES, *stats.FORM_NAMES,
-             "RESEND_READ_KEY", "STRIPE_PAYOUT_CURRENCY")
+             *stats.OWNER_NAMES, "RESEND_READ_KEY", "STRIPE_PAYOUT_CURRENCY")
 SECRET_NAMES = ("CF_ANALYTICS_TOKEN", "STRIPE_STATS_KEY", "STRIPE_API_KEY", "FORM_API_KEY",
-                "RESEND_READ_KEY", "STRIPE_PAYMENT_LINKS")
+                "RESEND_READ_KEY", "STRIPE_PAYMENT_LINKS", "OWNER_EMAILS")
 # The names the launch gates read from the shell (os.environ). For the length
 # of the gates' run they also see what this dashboard read from .env, so a
 # gate never says "isn't in this shell" about a value the page itself is using.
@@ -309,13 +309,15 @@ def collect_forms(ctx: Context) -> Source:
         return off("forms", "FORM_ENDPOINT is not set — the Worker isn't deployed yet, "
                             "or its address isn't in this shell.")
     from run.intake import fetch_seats
-    from run.trials import count_test_rows, is_test_address
+    from run.owner import count_not_counted, not_counted, owner_addresses
+    owners = owner_addresses(ctx.env)
     rows = fetch_seats(endpoint, ctx.env.get("FORM_API_KEY") or None)
     clean = []
     for row in rows:
-        # A row at our own domain or a reserved test domain is a test, never
-        # demand: make stats leaves it out too (TOOLS-2).
-        if is_test_address(row.get("email")):
+        # A row at our own domain, a reserved test domain or one of the
+        # owner's own addresses is a test, never demand: make stats leaves it
+        # out too (TOOLS-2, run/owner.py).
+        if not_counted(row.get("email"), owners):
             continue
         via = row.get("via")
         clean.append({
@@ -324,9 +326,11 @@ def collect_forms(ctx: Context) -> Source:
             "via": via if isinstance(via, str) and stats.VIA_RE.fullmatch(via) else None,
             "who": who(row.get("email")),
         })
-    channels = {k: dict(c) for k, c in stats.channel_summary(rows).items()}
-    return _source("forms", data={"rows": clean, "summary": stats.form_summary(rows, ctx.now),
-                                  "channels": channels, "left_out": count_test_rows(rows)},
+    channels = {k: dict(c) for k, c in stats.channel_summary(rows, owners).items()}
+    return _source("forms", data={"rows": clean,
+                                  "summary": stats.form_summary(rows, ctx.now, owners),
+                                  "channels": channels,
+                                  "left_out": count_not_counted(rows, owners)},
                    read_at=ctx.now)
 
 
@@ -346,10 +350,17 @@ def collect_stripe(ctx: Context) -> Source:
     from run.refs import is_roster_ref
     from run.subscriptions import (DisputeLookup, SubscriptionError, _charge_refunded,
                                    dispute_state)
+    from run.owner import is_owner_purchase, owner_addresses
+    owners = owner_addresses(ctx.env)
     plans = parse_link_plans(ctx.env.get("STRIPE_PAYMENT_LINKS", ""))
-    raw = stats._stripe_list("checkout/sessions",
-                             [("expand[]", "data.payment_intent.latest_charge"),
-                              ("expand[]", "data.invoice.charge")], key)
+    listed = stats._stripe_list("checkout/sessions",
+                                [("expand[]", "data.payment_intent.latest_charge"),
+                                 ("expand[]", "data.invoice.charge")], key)
+    # The owner's own purchases are tests (run/owner.py): out of every sale,
+    # refund, dispute, gate and conversion on the page, and counted apart.
+    raw = [s for s in listed if not is_owner_purchase(s, owners)]
+    owner_paid = (len(stats._paid_pass_sessions(listed, None))
+                  - len(stats._paid_pass_sessions(raw, None)))
     lookup = DisputeLookup(key)
     paid_ids = {id(s) for s in stats._paid_pass_sessions(raw, None)}
     sessions = []
@@ -383,11 +394,12 @@ def collect_stripe(ctx: Context) -> Source:
     # can't read invoices costs this line, never the rest of the section.
     try:
         renewals = [{"created": i.get("created"), "amount": i["amount_paid"] / 100}
-                    for i in stats.renewals(stats._stripe_list("invoices", [("status", "paid")], key))]
+                    for i in stats.renewals(stats._stripe_list("invoices", [("status", "paid")], key))
+                    if not is_owner_purchase(i, owners)]
     except SubscriptionError:
         renewals = []
     data = {"sessions": sessions, "renewals": renewals, "link_map": bool(plans),
-            "dispute_errors": len(lookup.errors)}
+            "dispute_errors": len(lookup.errors), "owner_left_out": owner_paid}
     from run.checkout import season_2027_links
     links = season_2027_links(ctx.env.get("STRIPE_PAYMENT_LINKS", ""))
     if links:
@@ -396,8 +408,9 @@ def collect_stripe(ctx: Context) -> Source:
         # Read costs this one block, never the rest of the Money section.
         try:
             data["season_2027"] = stats.season_2027_summary(
-                stats._stripe_list("checkout/sessions",
-                                   [("expand[]", "data.invoice.charge")], key),
+                [s for s in stats._stripe_list("checkout/sessions",
+                                               [("expand[]", "data.invoice.charge")], key)
+                 if not is_owner_purchase(s, owners)],
                 links, ctx.now.date(), stats.season_2027_end(), lookup)
         except Exception as exc:  # noqa: BLE001 — fail soft, say why
             data["season_2027"] = {"error": redact(exc)}
@@ -488,6 +501,11 @@ def collect_registry(ctx: Context) -> Source:
         rows = load_rosters(path)
     except RosterRegistryError as exc:
         return _source("registry", status="error", note=redact(exc))
+    # The owner's own teams are tests (run/owner.py): out of every count.
+    from run.owner import is_owner_address, owner_addresses
+    owners = owner_addresses(ctx.env)
+    every = len(rows)
+    rows = [s for s in rows if not is_owner_address(s.email, owners=owners)]
     names = {"season": "Pass holders", "monthly": "Monthly", "pass": "League Pass buyers",
              "league_pass": "League Pass seats", "season_2027": "2027 Season Pass holders"}
     # One subscription is one plan, however many teams it carries.
@@ -501,7 +519,8 @@ def collect_registry(ctx: Context) -> Source:
                                      "plans": dict(plans),
                                      "seats": filled,
                                      "setups": dict(Counter(f"{s.scoring}/{s.league_size}"
-                                                            for s in rows))},
+                                                            for s in rows)),
+                                     "owner_left_out": every - len(rows)},
                    read_at=ctx.now)
 
 
@@ -2359,8 +2378,10 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
         target = re.search(r"([≥≤])\s*(\d+(?:\.\d+)?)(%?)", g["green"])
         tnum = float(target.group(2)) if target else None
         if "free reports sent" in low and sends is not None:
+            from run.trials import is_owner_trial_key
             current = sum(1 for e in sends["entries"]
                           if e["key"].startswith(f"trial-{sends['season']}-")
+                          and not is_owner_trial_key(e["key"])
                           and (since is None or (_ts(e["sent_at"]) or now) >= since))
         elif "paid purchases" in low and S["stripe"].ok:
             current = len(paid)
@@ -2412,10 +2433,15 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
     left_out = (f" {_n(before, 'purchase')} before D {'is' if before == 1 else 'are'} left out "
                 f"of them (Money's other views still count {'it' if before == 1 else 'them'})."
                 if before else "")
+    mine = int((S["stripe"].data or {}).get("owner_left_out") or 0) if S["stripe"].ok else 0
+    left_out += (f" {_n(mine, 'purchase')} from your own addresses (OWNER_EMAILS) "
+                 f"{'is' if mine == 1 else 'are'} not counted anywhere on this page."
+                 if mine else "")
     d_note = (f"D = {d_date} (written in PLAN §6). Sales, refunds and free reports count from D."
               + left_out if d_date else
               "D, the day checkout opens, isn't written in PLAN §6 yet. Until it is, sales and "
-              "refunds count from the season's start, so a test purchase of your own counts too.")
+              "refunds count from the season's start, so a test purchase of your own counts too, "
+              "unless it was made from an address in OWNER_EMAILS." + left_out)
     return (f'<div class="card"><div class="cardhead"><div><h3>PLAN §6 decision gates</h3>'
             f'<p class="muted small">{h(d_note)} Targets are read from PLAN.md, never restated.</p>'
             f'</div></div><div class="tablewrap"><table class="tbl gates"><thead><tr><th>Read by</th>'
@@ -2572,9 +2598,13 @@ def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime
             f'<li><span>Pass {i + 1}</span><span class="meter"><i class="met" '
             f'style="width:{(n / c * 100) if c else 0:.0f}%"></i></span><b>{n} of {c}</b></li>'
             for i, (n, c) in enumerate(d["seats"])) or '<li class="muted">No League Pass yet.</li>'
+        mine = int(d.get("owner_left_out") or 0)
+        mine_note = (f'<p class="muted small pad">{h(_n(mine, "team"))} on your own addresses '
+                     f'(OWNER_EMAILS) not counted.</p>' if mine else "")
         parts.append(f'<div class="card"><div class="cardhead"><h3>Subscribers</h3>'
                      f'<span class="big">{num(d["total"])}</span></div><ul class="kv">{plans}</ul>'
-                     f'<h4>League Pass seats claimed</h4><ul class="kv seats">{seats}</ul></div>')
+                     f'<h4>League Pass seats claimed</h4><ul class="kv seats">{seats}</ul>'
+                     f'{mine_note}</div>')
     else:
         parts.append(f'<div class="card"><div class="cardhead"><h3>Subscribers & seats</h3></div>'
                      f'{setup_card(reg, compact=True)}</div>')

@@ -21,8 +21,10 @@ The form is public, so:
 - A trade changes part of a roster. A paste sharing under half of the team on
   file isn't a trade, and is not answered: this must not become a free report
   on a friend's team.
-- Three answers per address per day, and optional mail gives way to paid mail
-  (run/intake.py DAY_HEADROOM), so a stranger can't spend the day's sends.
+- Three answers per address per day (OWNER_DAILY_CAP for the owner's own
+  addresses, run/owner.py: raised to test with, never removed), and optional
+  mail gives way to paid mail (run/intake.py DAY_HEADROOM), so a stranger
+  can't spend the day's sends.
 """
 
 from __future__ import annotations
@@ -54,8 +56,12 @@ class TradeAsk:
     owner: str = ""
 
 
-def asks_from(rows: Iterable[Mapping], now: datetime) -> list[TradeAsk]:
-    """The rows worth answering, oldest first, within the daily allowance."""
+def asks_from(rows: Iterable[Mapping], now: datetime,
+              owners: frozenset[str] | None = None) -> list[TradeAsk]:
+    """The rows worth answering, oldest first, within the daily allowance
+    (higher, never unlimited, for the owner's own addresses: run/owner.py)."""
+    from run.owner import daily_cap, owner_addresses
+    owners = owner_addresses() if owners is None else owners
     out: list[TradeAsk] = []
     per_day: dict[tuple[str, str], int] = {}
     for row in sorted(rows, key=lambda r: str(r.get("received_at") or "")):
@@ -70,7 +76,7 @@ def asks_from(rows: Iterable[Mapping], now: datetime) -> list[TradeAsk]:
             continue
         day = (email, ts[:10])
         per_day[day] = per_day.get(day, 0) + 1
-        if per_day[day] <= CONFIRMS_PER_DAY:
+        if per_day[day] <= daily_cap(email, CONFIRMS_PER_DAY, owners):
             out.append(TradeAsk(email, ref, ts, str(row.get("owner") or "").strip().lower()))
     return out
 

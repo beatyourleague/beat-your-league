@@ -453,6 +453,40 @@ Reactivate. Then, with the test key in your shell, `.venv/bin/python -m run.bill
 2026-12-20` (dry): it lists the subscription as in its final paid period only when that period
 ends after Week 16's report. Press Cancel on the test page and confirm "no further charges".
 
+### Your own addresses (~5 min)
+
+Tell the system which email addresses are yours, so you can test the live product with them.
+
+1. **GitHub:** the repo → **Settings → Secrets and variables → Actions → New repository
+   secret**. Name `OWNER_EMAILS`, value your addresses separated by commas
+   (`you@example.com,other@example.com`). **Add secret.**
+2. **This Mac:** the same line in `.env`: `OWNER_EMAILS=you@example.com,other@example.com`.
+   `make stats`, `make dashboard`, `make signups` and `make launch-check` read it there.
+
+What it does, for those addresses only (a `+tag` or Gmail's dots still count as the same
+address):
+- **The free report** can be asked for again and again: no one-per-season limit, no "you
+  already subscribe" refusal, no "this roster already had one" refusal. Every other rule
+  stays: never about games already underway, and no request older than two weeks.
+- **Daily limits are higher, not gone:** 20 a day instead of 3 for roster-update and
+  extra-team confirmations and Trade Check answers, and 20 free reports a day. The forms are
+  public, so anyone can type your address; a limit keeps a stranger from filling your inbox.
+- **Left out of the numbers:** `make stats`, the dashboard (sales, refunds, disputes,
+  subscribers, seats, conversions and the PLAN §6 gates), the launch check's refund and
+  dispute rate, and the launch email's recipient list. Each says how many it left out.
+  `make signups` marks them `[owner]`.
+
+What it doesn't change: a weekly report still needs a paid plan, the stop list still stops,
+a refund or cancel still ends the plan, and the three-team limit still holds. Nothing prints
+the addresses themselves.
+
+**Refunding your own test purchases** is fine any time: Stripe → **Payments** → the payment →
+**Refund**. The one-refund-per-person rule is for buyers; nothing in the code enforces it, and
+your own purchases are left out of the refund rate. Stripe keeps its fee each time (about
+$1.18 on a $14.99 charge). Many buy-and-refund rounds on one card can look like card testing
+to Stripe's risk checks, so keep live purchases occasional and use Stripe's test mode (above)
+for repeated checks.
+
 ## 5. The form Worker (~25 min) — do this first
 
 It needs nothing from steps 1–4. One Cloudflare Worker (in the same account as the domain)
@@ -947,7 +981,8 @@ next. After the last game every weekly job exits quietly until the next schedule
    a send of ours ran late and their first weekly report arrived after its week kicked off,
    they have a week from that send — ask me and I'll check the send log.
 2. **Their first refund?** Search their email under **Customers**. One per person (one per
-   league for a League Pass).
+   league for a League Pass). Your own test purchases don't count: refund those any time
+   ([step 4, "Your own addresses"](#your-own-addresses-5-min)).
 3. **Issue it:** **Payments** → their payment → **Refund** → the full amount. That is all: a
    plan is entitled only while its payment is not refunded in full, so the next hourly run
    drops them and the reports stop by themselves (a League Pass refund ends its seats the

@@ -204,7 +204,8 @@ def _owners(email: str, rows: list[Mapping], live: set[str]) -> list[Mapping]:
 def sweep_teams(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
                 known_ids: set[str] | None, secret: str, live: set[str] | None,
                 log: Iterable[TeamEntry] = (), confirm_rows: Iterable[Mapping] = (),
-                now: datetime | None = None) -> TeamSweep:
+                now: datetime | None = None,
+                owners: frozenset[str] | None = None) -> TeamSweep:
     """Form rows -> what to mail and what to add.
 
     ``registry_rows`` must be the rosters as they now stand, logged teams
@@ -240,6 +241,10 @@ def sweep_teams(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
             continue
         contents.setdefault(str(row.get("email", "")).lower(), set()).add(content)
     per_day: dict[tuple[str, str], int] = {}
+    # The owner's own addresses get a higher daily cap to test with, never
+    # none (run/owner.py). The team limit itself is the same for everybody.
+    from run.owner import daily_cap, owner_addresses
+    mine = owner_addresses() if owners is None else owners
     for row in sorted(rows, key=lambda r: str(r.get("received_at") or "")):
         email = str(row.get("email") or "").strip().lower()
         ref = str(row.get("ref") or "").strip()
@@ -285,7 +290,7 @@ def sweep_teams(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
             continue
         bucket = (email, ts[:10])
         per_day[bucket] = per_day.get(bucket, 0) + 1
-        if per_day[bucket] > CONFIRMS_PER_DAY:
+        if per_day[bucket] > daily_cap(email, CONFIRMS_PER_DAY, mine):
             continue
         (sweep.pending if target is not None else sweep.full).append(request)
     return sweep

@@ -60,6 +60,13 @@ Rules, each a way a free report could cost more than it earns:
   marker in the send log (``run.watchdog``) — or until 20:00 UTC,
   whichever is first — free reports wait, so a weekend's backlog can never
   spend the day's sending allowance before the reports people paid for.
+- **The owner's own addresses are for testing** (``OWNER_EMAILS``,
+  run/owner.py). Their requests skip the one-per-season limit, the subscriber
+  refusal and the same-roster refusal, so the owner can ask again and again;
+  each request has its own send key (``owner_trial_key``), so a double-fired
+  run still mails it once, and at most OWNER_DAILY_CAP a day go to one owner
+  mailbox, because the form is public. Every other rule here still holds, and
+  an owner's roster is never remembered as served.
 - **Before launch is not a failure.** The registry is read only when there
   are requests to check against it, and a MISSING registry while no Stripe key
   is set reads as nobody subscribing (nobody can have paid). Setting
@@ -223,6 +230,32 @@ def trial_key(season: str, email: str) -> str:
     return f"trial-{season}-{address(email)}"
 
 
+OWNER_KEY_PART = "owner"
+
+
+def owner_trial_prefix(season: str, email: str) -> str:
+    """The send-log prefix of one owner mailbox's free reports this season."""
+    from run.digest import address
+    return f"trial-{season}-{OWNER_KEY_PART}-{address(email, 8)}-"
+
+
+def owner_trial_key(season: str, email: str, row) -> str:
+    """An owner address's free report is keyed per REQUEST (run/owner.py), so
+    the owner can ask again and again while a double-fired run still mails
+    one request once: the Worker's own stamp and the roster name it."""
+    import hashlib
+    stamp = str(row.get("received_at") or "")
+    ref = str(row.get("ref") or "").strip()
+    digest = hashlib.sha256(f"{stamp}|{ref}".encode("utf-8")).hexdigest()[:10]
+    return owner_trial_prefix(season, email) + digest
+
+
+def is_owner_trial_key(key: str) -> bool:
+    """A free report the owner sent themselves: left out of the counts."""
+    parts = str(key).split("-")
+    return len(parts) > 3 and parts[0] == "trial" and parts[2] == OWNER_KEY_PART
+
+
 def week_underway_from(cache_dir: Path, season: str, week: int) -> datetime | None:
     """The week's FIRST kickoff: from then on the week is underway. None when
     it can't be told, which the caller reads as underway."""
@@ -306,7 +339,8 @@ def not_before(now: datetime, start: datetime | None) -> datetime | None:
 
 
 def pending(rows, registry_emails: set[str], sent: set[str], season: str, *,
-            since: datetime | None) -> list[tuple[str, str]]:
+            since: datetime | None,
+            owners: frozenset[str] = frozenset()) -> list[tuple[str, str]]:
     """(email, ref) worth a free report: received at or after ``since`` (see
     :func:`not_before`; None admits nothing), valid, not a subscriber, not
     already given one this season — newest request per address wins.
@@ -324,8 +358,8 @@ def pending(rows, registry_emails: set[str], sent: set[str], season: str, *,
             continue
         email = canonical_email(str(row.get("email") or ""))
         ref = str(row.get("ref") or "").strip()
-        if not _EMAIL_RE.match(email) or email in held:
-            continue
+        if not _EMAIL_RE.match(email) or email in held or email in owners:
+            continue                   # an owner's request: owner_pending
         if trial_key(season, email) in sent:
             continue
         try:
@@ -334,6 +368,60 @@ def pending(rows, registry_emails: set[str], sent: set[str], season: str, *,
             continue
         chosen[email] = ref
     return list(chosen.items())
+
+
+def owner_pending(rows, owners: frozenset[str], sent: set[str], season: str, *,
+                  since: datetime | None, entries=(), now: datetime | None = None
+                  ) -> list[tuple[str, str, str]]:
+    """(email, ref, key) for the owner's own free-report requests
+    (run/owner.py): every request, not one a season, and never refused as a
+    subscriber's address. The rest still holds: the request must be fresh
+    (``since``), decode, and be unsent; and each owner mailbox gets at most
+    OWNER_DAILY_CAP a day, counted from the send log plus this list, because
+    the form is public and anybody can type the owner's address."""
+    from run.owner import OWNER_DAILY_CAP
+    from run.refs import RefError, decode_roster
+    if not owners:
+        return []
+    day = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).date()
+    today: dict[str, int] = {}
+    for entry in entries:
+        key = str(entry.get("key") or "")
+        if not is_owner_trial_key(key):
+            continue
+        try:
+            at = datetime.fromisoformat(str(entry.get("sent_at") or ""))
+            at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+            fresh = at.astimezone(timezone.utc).date() == day
+        except ValueError:
+            fresh = True               # unreadable: count it, never free a slot
+        if fresh:
+            prefix = key.rsplit("-", 1)[0]
+            today[prefix] = today.get(prefix, 0) + 1
+    out: list[tuple[str, str, str]] = []
+    for row in sorted(rows, key=lambda r: str(r.get("received_at") or "")):
+        if str(row.get("kind") or "") != "trial":
+            continue
+        stamp = received(row)
+        if since is None or stamp is None or stamp < since:
+            continue
+        email = canonical_email(str(row.get("email") or ""))
+        ref = str(row.get("ref") or "").strip()
+        if email not in owners or not _EMAIL_RE.match(email):
+            continue
+        key = owner_trial_key(season, email, row)
+        if key in sent or any(k == key for _e, _r, k in out):
+            continue
+        try:
+            decode_roster(ref)
+        except RefError:
+            continue
+        prefix = owner_trial_prefix(season, email).rstrip("-")
+        if today.get(prefix, 0) >= OWNER_DAILY_CAP:
+            continue
+        today[prefix] = today.get(prefix, 0) + 1
+        out.append((email, ref, key))
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -373,15 +461,19 @@ def main(argv: list[str] | None = None) -> int:
     from run.solo import (CACHE_DIR, SoloError, current_season, current_week,
                           season_over)
     from run.watchdog import not_configured
+    from run.owner import owner_addresses
+    owners = owner_addresses()
     season = current_season(CACHE_DIR, today=now.date())
     sent = load_sent()
+    entries = sent_entries()
     since = not_before(now, season_start(CACHE_DIR, season))
     if since is None and any(str(r.get("kind") or "") == "trial" for r in rows):
         print(f"Free reports: the {season} schedule's first game can't be read, "
               f"so no request can be shown to be from this season; none sent.")
     # Is there anything to do at all? Asked BEFORE the registry is read: an
     # hourly run with no requests has no business failing on the registry.
-    if not pending(rows, set(), sent, season, since=since):
+    mine = owner_pending(rows, owners, sent, season, since=since, entries=entries, now=now)
+    if not pending(rows, set(), sent, season, since=since, owners=owners) and not mine:
         print("Free reports: none pending.")
         return 0
     if not free_reports_open():
@@ -406,7 +498,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Free reports: the subscriber registry is unreadable ({exc}); "
                   f"nothing was sent.", file=sys.stderr)
             return 1
-    todo = pending(rows, registry_emails, sent, season, since=since)
+    # (email, ref, send key, the owner's own) — the owner's requests skip the
+    # per-season, subscriber and same-roster limits (run/owner.py), and keep
+    # every other rule below: fresh, before kickoff, inside the day's room.
+    todo = [(email, ref, trial_key(season, email), False) for email, ref in
+            pending(rows, registry_emails, sent, season, since=since, owners=owners)]
+    todo += [(email, ref, key, True) for email, ref, key in mine]
     if not todo:
         print("Free reports: none pending.")
         return 0
@@ -432,7 +529,6 @@ def main(argv: list[str] | None = None) -> int:
     # 40 free reports plus the day's seat notes left Saturday's final check,
     # welcomes and first reports about 40 of the free tier's 100.
     from run.intake import day_headroom, sent_on
-    entries = sent_entries()
     own_room = TRIAL_DAILY_CAP - sent_today(entries, now)
     if own_room <= 0:
         print(f"Free reports: {len(todo)} waiting — today's {TRIAL_DAILY_CAP} "
@@ -479,12 +575,13 @@ def main(argv: list[str] | None = None) -> int:
     digests_of: dict[str, frozenset[str]] = {}
     messages, failed, skipped, refused = [], 0, [], 0
     known = {p.player_id for p in data.directory.players}
-    for email, ref in todo:
+    for email, ref, key, owner in todo:
         if len(messages) >= limit:
             break                       # the caps count BUILT reports only
         roster = decode_roster(ref)
         digests = roster_digests(season, roster.player_ids)
-        if (any(too_close(digests, old) for old in served)
+        if not owner and (
+                any(too_close(digests, old) for old in served)
                 or any(too_close(roster.player_ids, held) for held in subscriber_rosters)):
             # Critique #3: the same team from another inbox. Not mailed, not
             # counted toward the caps; the address is never printed.
@@ -493,7 +590,7 @@ def main(argv: list[str] | None = None) -> int:
         if any(pid not in known for pid in roster.player_ids):
             # A ref that decodes but names a player the directory has never
             # heard of: skipped and named, never a failed run.
-            skipped.append(trial_key(season, email)[-12:])
+            skipped.append(key[-12:])
             continue
         try:
             # processed_dir=None: nothing reaches the ledger (module rule).
@@ -502,18 +599,20 @@ def main(argv: list[str] | None = None) -> int:
             if roster.league_type != "redraft":
                 report["meta"]["league_type"] = roster.league_type
         except Exception as exc:  # noqa: BLE001 — one request, not the run
-            skipped.append(trial_key(season, email)[-12:])
+            skipped.append(key[-12:])
             print(f"  trial not built ({type(exc).__name__}: {exc})")
             continue
         report["meta"]["trial"] = True
         # Held as served from the moment it is built, so a second request for
-        # the same roster in this run is refused too.
-        served.append(digests)
-        digests_of[trial_key(season, email)] = digests
+        # the same roster in this run is refused too. The owner's own tests
+        # are never remembered: a test roster must not refuse a real buyer.
+        if not owner:
+            served.append(digests)
+            digests_of[key] = digests
         messages.append(Message(
             to=email, subject=f"Your free report: Week {data.week}, decided",
             html=render_email(report), text=text_summary(report),
-            key=trial_key(season, email),
+            key=key,
             # No list to leave and no subscription to cancel: a header pointing
             # at the subscription-cancel page would be wrong for this reader.
             unsubscribe=None))

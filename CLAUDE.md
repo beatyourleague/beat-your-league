@@ -245,7 +245,7 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status (Nov 3 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (3,430 tests passing after instant delivery, Nov 3 2026). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29. The GitHub secrets went in on Nov 2–3 2026 (the manual daily intake ran green) and the Monthly link is back on the join page; checkout opens in its interim state until the owner's own purchase (LAUNCH step 4). Any payment from the Aug–Sep window is swept by the intake now that the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
+**Status (Nov 3 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (3,446 tests passing after owner addresses, Nov 3 2026). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29. The GitHub secrets went in on Nov 2–3 2026 (the manual daily intake ran green) and the Monthly link is back on the join page; checkout opens in its interim state until the owner's own purchase (LAUNCH step 4). Any payment from the Aug–Sep window is swept by the intake now that the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
 Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
 probability at report time, grades only after both players' games are final, RULES L1-L4:
 never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
@@ -1554,6 +1554,33 @@ entry by test), so the welcome and first report arrive within minutes. Rules
   `run.launch_check.check_instant_delivery` is OWNER when false, PASS when true, SKIP when
   unreadable, and the dashboard runs it and shows it on the launch card. Setup is LAUNCH step 4,
   "Before you buy". Buyer copy keeps "usually within the hour" until the owner's purchase proves it.
+
+**Owner addresses (Nov 3 2026) — `run/owner.py`, `OWNER_EMAILS`.** The owner tests the live
+product with their own inbox, so the system treats their addresses as the owner's. One source:
+`OWNER_EMAILS` (comma-separated), a GitHub secret in CI (mapped on both intakes, the free
+report and the Trade Check) and a line in the gitignored `.env` locally (a set variable, even
+empty, wins over the file; the suite sets it empty). Matched by mailbox
+(`run.trials.canonical_email`); unset is nobody (fail closed); nothing prints the addresses,
+at most a count. No code ever enforced one refund per person: Stripe refunds are pressed by
+hand, so the owner could always refund their own purchases. Rules (`tests/test_owner_addresses.py`):
+- **Room to test.** The free report skips one-per-season, the subscriber refusal and the
+  same-roster refusal for an owner address (`run.trials.owner_pending`), keyed per REQUEST
+  (`trial-{season}-owner-{address}-{sha(stamp|ref)}`), so a repeat goes out while a
+  double-fired run mails one request once; an owner roster is never remembered as served. It
+  keeps every other rule: fresh, never about games underway, nothing recorded, the day's
+  headroom. Per-address daily caps are RAISED to `OWNER_DAILY_CAP` = 20, never removed
+  (`run.owner.daily_cap`: roster-update and team confirmations, Trade Check answers, seat
+  codes and notes, owner free reports): the forms are public, anyone can type the address.
+- **Left out of the numbers**, as test domains are (`run.owner.not_counted`): form rows,
+  channels, conversions, free report → paid in `make stats` and the dashboard; Stripe objects
+  by the buyer address they carry (`run.owner.stripe_email`: a session's, an invoice's, a
+  charge's, a refund's charge and a subscription's customer, those two expanded only when owner
+  addresses are set); registry teams and seats; owner free reports in the send-log counts and
+  the PLAN §6 gates; the launch check's refund and dispute rate; the launch email's list.
+  Each says how many ("owner/test rows not counted"). `make signups` marks `[owner]`.
+- **Unchanged on purpose:** entitlement (a weekly report needs a paid plan; the free report is
+  the only exemption), the stop list, refund and cancel handling, the team limit, the ledger
+  and every published probability.
 
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
 30. You lost by four." and its answer is "Stop making that call five minutes before kickoff. Every

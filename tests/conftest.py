@@ -29,6 +29,10 @@ import pytest
 # is keyed under LOG_SECRET and refuses without it. Tests get a fixed stand-in
 # (a test that needs it unset deletes it with monkeypatch).
 os.environ.setdefault("LOG_SECRET", "test-log-secret")
+# run/owner.py: the owner's own addresses. Set, and empty, so the suite never
+# reads a developer's shell or .env value (a set variable wins over the file);
+# a test that needs owners passes them or sets the variable itself.
+os.environ["OWNER_EMAILS"] = ""
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_DIR = REPO_ROOT / "data" / "registry"

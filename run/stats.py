@@ -71,16 +71,28 @@ def _when(value: object) -> datetime | None:
     return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
 
 
-def form_summary(rows: Iterable[Mapping], now: datetime) -> dict[str, dict[str, int]]:
+def _owners(owners: Iterable[str] | None) -> frozenset[str]:
+    """The owner's own addresses (run/owner.py): ``owners`` when the caller
+    read them (the command line, from the shell or .env), else this
+    process's environment or .env."""
+    from run.owner import owner_addresses
+    return owner_addresses() if owners is None else frozenset(owners)
+
+
+def form_summary(rows: Iterable[Mapping], now: datetime,
+                 owners: Iterable[str] | None = None) -> dict[str, dict[str, int]]:
     """Per kind: rows ever, in the last 7 days, in the last day, and people
     (distinct mailboxes, one spelling per mailbox as the free report counts them).
-    A row at our own domain or a reserved test domain is a test, never demand
-    (``run.trials.is_test_address``); ``left_out_line`` says how many."""
-    from run.trials import canonical_email, is_test_address
+    A row at our own domain, a reserved test domain or one of the owner's own
+    addresses is a test, never demand (``run.owner.not_counted``);
+    ``left_out_line`` says how many."""
+    from run.owner import not_counted
+    from run.trials import canonical_email
+    owners = _owners(owners)
     out: dict[str, dict[str, int]] = {}
     people: dict[str, set[str]] = defaultdict(set)
     for row in rows:
-        if is_test_address(row.get("email")):
+        if not_counted(row.get("email"), owners):
             continue
         kind = str(row.get("kind") or "seat")
         counts = out.setdefault(kind, {"total": 0, "week": 0, "day": 0, "people": 0})
@@ -105,14 +117,16 @@ NO_VIA = "(no tag)"
 BAD_VIA = "(unreadable tag)"
 
 
-def channel_summary(rows: Iterable[Mapping]) -> dict[str, Counter[str]]:
+def channel_summary(rows: Iterable[Mapping],
+                    owners: Iterable[str] | None = None) -> dict[str, Counter[str]]:
     """Per kind: rows by ``via`` tag. Rows, not people — a channel is credited
     with every request it brought, the same count the "ever" column shows.
-    Test rows are left out, as ``form_summary`` leaves them out."""
-    from run.trials import is_test_address
+    Owner and test rows are left out, as ``form_summary`` leaves them out."""
+    from run.owner import not_counted
+    owners = _owners(owners)
     out: dict[str, Counter[str]] = {}
     for row in rows:
-        if is_test_address(row.get("email")):
+        if not_counted(row.get("email"), owners):
             continue
         kind = str(row.get("kind") or "seat")
         via = row.get("via")
@@ -127,12 +141,20 @@ def channel_summary(rows: Iterable[Mapping]) -> dict[str, Counter[str]]:
 
 
 def left_out_line(n: int) -> str:
-    """One line naming how many form rows were left out as tests (``n``,
-    ``run.trials.count_test_rows``), or ""."""
+    """One line naming how many form rows were left out as the owner's or as
+    tests (``n``, ``run.owner.count_not_counted``), or ""."""
     if not n:
         return ""
-    return (f"{n} test row{'s' if n != 1 else ''} from our own domain or a reserved "
-            f"test domain, not counted.")
+    return (f"{n} owner/test row{'s' if n != 1 else ''} not counted (your own addresses, "
+            f"our own domain or a reserved test domain).")
+
+
+def owner_purchases_line(n: int) -> str:
+    """One line naming how many Stripe purchases were the owner's own, or ""."""
+    if not n:
+        return ""
+    return (f"  {n} purchase{'s' if n != 1 else ''} from your own addresses "
+            f"(OWNER_EMAILS) not counted.")
 
 
 def _channel_lines(channels: Mapping[str, Counter[str]]) -> list[str]:
@@ -366,7 +388,8 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
                    link_plans: Mapping[str, str] | None = None,
                    season_label: str = "ever", since: int | None = None,
                    one_time: bool | None = None,
-                   season_2027: Iterable[str] = ()) -> list[str]:
+                   season_2027: Iterable[str] = (),
+                   owners: Iterable[str] | None = None) -> list[str]:
     """The payments half. Each read is independent — a key without Refunds
     access still shows subscriptions and checkouts — and a part that cannot
     be read says so instead of printing a zero it never counted.
@@ -374,7 +397,15 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
     ``rows`` (the form Worker's, when read) adds free report → paid; ``since``
     (epoch seconds, the day after last season's final game) scopes passes to
     this season, named ``season_label``; ``one_time`` (default: what the site
-    sells, render.report.SELLING_ONE_TIME) labels subscriptions as 2027's."""
+    sells, render.report.SELLING_ONE_TIME) labels subscriptions as 2027's.
+
+    The owner's own purchases (``owners``, run/owner.py) are left out of
+    every part, matched on the buyer's address the object carries: a
+    session's, an invoice's, a refund's charge and a subscription's
+    customer (both expanded only when owner addresses are set), and the
+    plans-sold part says how many it left out."""
+    from run.owner import is_owner_purchase
+    owners = _owners(owners)
     if one_time is None:
         from render.report import SELLING_ONE_TIME as one_time
     week_ago = int((now - timedelta(days=7)).timestamp())
@@ -384,7 +415,7 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
     def passes(sessions: list[dict]) -> list[str]:
         out = passes_lines(sessions, plans, season_label, since)
         if rows is not None:
-            out.append(free_to_paid_line(rows, sessions, now, since))
+            out.append(free_to_paid_line(rows, sessions, now, since, owners))
         return out
 
     label = SUBSCRIPTIONS_LABEL_ONE_TIME if one_time else SUBSCRIPTIONS_LABEL
@@ -394,11 +425,14 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
          [("expand[]", "data.payment_intent.latest_charge"),
           ("expand[]", "data.invoice.charge")], passes),
         ("monthly renewals", "invoices", [("status", "paid")], _renewals_line),
-        ("subscriptions", "subscriptions", [("status", "active")],
+        ("subscriptions", "subscriptions",
+         [("status", "active")] + ([("expand[]", "data.customer")] if owners else []),
          lambda subs: _subscriptions_line(subs, label)),
         ("checkout sessions", "checkout/sessions",
          [("created[gte]", str(week_ago))], _checkouts_line),
-        ("refunds", "refunds", [("created[gte]", str(month_ago))], _refunds_line),
+        ("refunds", "refunds",
+         [("created[gte]", str(month_ago))] + ([("expand[]", "data.charge")] if owners else []),
+         _refunds_line),
         # Every session ever, not the week: a channel's worth is its total.
         ("paid signups by channel", "checkout/sessions", [], _paid_by_channel_line),
         ("paid signups by league type", "checkout/sessions", [], _paid_by_league_line),
@@ -414,8 +448,14 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
     lines: list[str] = []
     for what, path, params, summarise in parts:
         try:
-            got = summarise(_stripe_list(path, params, api_key))
+            listed = _stripe_list(path, params, api_key)
+            kept = [o for o in listed if not is_owner_purchase(o, owners)]
+            got = summarise(kept)
             lines.extend(got if isinstance(got, list) else [got])
+            if what == "plans sold":
+                mine = len(_paid_pass_sessions(listed, since)) - len(_paid_pass_sessions(kept, since))
+                if mine:
+                    lines.append(owner_purchases_line(mine))
         except Exception as exc:  # noqa: BLE001 — fail soft, say which part
             hint = (" — a restricted key needs Read on it"
                     if re.search(r"HTTP 40[13]", str(exc)) else "")
@@ -541,16 +581,22 @@ def passes_lines(sessions: Iterable[Mapping], link_plans: Mapping[str, str],
 
 
 def free_to_paid_line(rows: Iterable[Mapping], sessions: Iterable[Mapping],
-                      now: datetime, since: int | None = None) -> str:
+                      now: datetime, since: int | None = None,
+                      owners: Iterable[str] | None = None) -> str:
     """Of the people who asked for a free report, how many bought a pass
     within FREE_TO_PAID_DAYS of first asking — joined on the mailbox the way
     the free report counts people (run.trials.canonical_email). Requests
-    younger than the window are counted apart: they can still convert."""
+    younger than the window are counted apart: they can still convert. The
+    owner's own requests are not people who asked (their purchases are left
+    out of ``sessions`` by the caller, run/owner.py)."""
+    from run.owner import is_owner_address
     from run.trials import canonical_email
+    owners = _owners(owners)
     first: dict[str, datetime] = {}
     for row in rows:
         stamp = _when(row.get("received_at"))
-        if row.get("kind") == "trial" and row.get("email") and stamp is not None:
+        if (row.get("kind") == "trial" and row.get("email") and stamp is not None
+                and not is_owner_address(row.get("email"), owners=owners)):
             who = canonical_email(str(row["email"]))
             first[who] = min(first.get(who, stamp), stamp)
     bought: dict[str, list[datetime]] = defaultdict(list)
@@ -823,7 +869,11 @@ def send_summary(entries: Iterable[Mapping], season: str) -> dict:
         elif key.startswith("team-") and this_season(entry):
             other["extra-team emails"] += 1
         elif key.startswith(f"trial-{season}-"):
-            other["free reports"] += 1
+            from run.trials import is_owner_trial_key
+            if is_owner_trial_key(key):
+                other["free reports to your own addresses (tests, not counted above)"] += 1
+            else:
+                other["free reports"] += 1
         elif key.startswith("welcome-") and str(entry.get("sent_at", "")).startswith(season):
             other["welcome emails (new subscribers)"] += 1
         elif key.startswith("preseason-") and str(entry.get("sent_at", "")).startswith(season):
@@ -838,16 +888,20 @@ def send_summary(entries: Iterable[Mapping], season: str) -> dict:
             "finals": dict(sorted(finals.items())), "other": dict(other)}
 
 
-def conversions(rows: Iterable[Mapping], subscriber_emails: Iterable[str]) -> dict[str, tuple[int, int]]:
+def conversions(rows: Iterable[Mapping], subscriber_emails: Iterable[str],
+                owners: Iterable[str] | None = None) -> dict[str, tuple[int, int]]:
     """Of the people who asked for a free report / joined the waitlist, how many
-    subscribe now: kind -> (subscribed, asked)."""
-    from run.trials import canonical_email, is_test_address
+    subscribe now: kind -> (subscribed, asked). Owner and test rows are not
+    people who asked."""
+    from run.owner import not_counted
+    from run.trials import canonical_email
+    owners = _owners(owners)
     held = {canonical_email(e) for e in subscriber_emails}
     asked: dict[str, set[str]] = defaultdict(set)
     for row in rows:
         kind = str(row.get("kind") or "")
         if (kind in ("trial", "waitlist") and row.get("email")
-                and not is_test_address(row["email"])):
+                and not not_counted(row["email"], owners)):
             asked[kind].add(canonical_email(str(row["email"])))
     return {kind: (len(seen & held), len(seen)) for kind, seen in asked.items()}
 
@@ -876,7 +930,7 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
            registry: list | None, registry_note: str, conv: dict | None,
            now: datetime, channels: Mapping[str, Counter[str]] | None = None,
            payments: list[str] | None = None, traffic: list[str] | None = None,
-           left_out: str = "") -> str:
+           left_out: str = "", owner_rows: int = 0) -> str:
     lines = [f"Beat Your League — demand, {now:%a %b %d %Y %H:%M} UTC", ""]
     lines.append("TRAFFIC (the site's own page counter, privacy section 3)")
     lines += traffic if traffic is not None else [
@@ -931,6 +985,9 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
                 got, asked = conv[kind]
                 lines.append(f"  From the {label}: {got} of {asked} subscribe now")
         lines += seat_lines(registry)
+        if owner_rows:
+            lines.append(f"  {owner_rows} team{'s' if owner_rows != 1 else ''} on your own "
+                         f"addresses (OWNER_EMAILS) not counted.")
     lines += ["", "PAYMENTS (Stripe, read-only)"]
     lines += payments if payments is not None else [
         "  STRIPE_API_KEY is not set in this shell or .env (nor STRIPE_STATS_KEY) "
@@ -963,6 +1020,8 @@ STRIPE_NAMES = ("STRIPE_STATS_KEY", "STRIPE_API_KEY")
 # not a key), from the same two places: the dashboard reads them from .env
 # too, and the two views must not disagree about whether the Worker exists.
 FORM_NAMES = ("FORM_ENDPOINT", "FORM_API_KEY", "STRIPE_PAYMENT_LINKS")
+# The owner's own addresses (run/owner.py), left out of every count.
+OWNER_NAMES = ("OWNER_EMAILS",)
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
@@ -1035,12 +1094,14 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
               "log would publish sales and traffic. Run it on your own machine.",
               file=sys.stderr)
         return 2
-    names = CF_NAMES + TRAFFIC_NAMES + FORM_NAMES + STRIPE_NAMES
+    names = CF_NAMES + TRAFFIC_NAMES + FORM_NAMES + STRIPE_NAMES + OWNER_NAMES
     found = read_env_file(env_file or ENV_FILE, names)
     value = {name: environ.get(name) or found.get(name, "") for name in names}
     cf = {name: value[name] for name in CF_NAMES + TRAFFIC_NAMES}
     form = {name: value[name] for name in FORM_NAMES}
-    return main(argv, cf=cf, form=form, stripe_key=stripe_key_from(value))
+    from run.owner import owner_addresses
+    return main(argv, cf=cf, form=form, stripe_key=stripe_key_from(value),
+                owners=owner_addresses(value))
 
 
 def stripe_key_from(env: Mapping[str, str]) -> str:
@@ -1049,7 +1110,8 @@ def stripe_key_from(env: Mapping[str, str]) -> str:
 
 
 def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
-         form: Mapping[str, str] | None = None, stripe_key: str | None = None) -> int:
+         form: Mapping[str, str] | None = None, stripe_key: str | None = None,
+         owners: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--registry", type=Path, default=None)
@@ -1071,7 +1133,8 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
     def setting(name: str) -> str:
         return form.get(name) or os.environ.get(name, "")
 
-    from run.trials import count_test_rows
+    from run.owner import count_not_counted
+    owners = _owners(owners)
     rows: list[dict] | None = None
     endpoint = setting("FORM_ENDPOINT")
     if not endpoint:
@@ -1093,15 +1156,19 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
     sends = send_summary(load_send_log(SENT_LOG), season)
 
     from run.rosters import RosterRegistryError, load_rosters
-    registry, registry_note, conv = None, "", None
+    registry, registry_note, conv, owner_rows = None, "", None, 0
     try:
         registry = load_rosters(args.registry)
+        # The owner's own teams are tests: out of every subscriber count.
+        from run.owner import is_owner_address
+        counted = [s for s in registry if not is_owner_address(s.email, owners=owners)]
+        owner_rows, registry = len(registry) - len(counted), counted
     except RosterRegistryError as exc:
         registry_note = (f"No registry on this machine ({exc}). It lives sealed in "
                          f"the CI cache; `make stats-registry` fetches and opens a "
                          f"copy, then pass --registry PATH.")
     if registry is not None and rows is not None:
-        conv = conversions(rows, [s.email for s in registry])
+        conv = conversions(rows, [s.email for s in registry], owners=owners)
     if registry is not None:
         print(teams_line(registry))
 
@@ -1119,7 +1186,7 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
             api_key, now, rows=rows,
             link_plans=parse_link_plans(raw_links),
             season_label=f"{season} season" if since is not None else "ever", since=since,
-            season_2027=season_2027_links(raw_links))
+            season_2027=season_2027_links(raw_links), owners=owners)
     # The same rule for traffic: one line says why it is missing, the exit
     # code is the rest of the page's.
     # Credentials arrive only through ``cf`` (the command line's), never read
@@ -1128,11 +1195,13 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None,
     traffic = traffic_summary(cf.get("CF_ACCOUNT_ID", ""), cf.get("CF_ANALYTICS_TOKEN", ""),
                               counter_endpoint(), cf.get("TRAFFIC_FROM", ""))
 
-    page = render(form_summary(rows, now) if rows is not None else None, form_note,
+    page = render(form_summary(rows, now, owners) if rows is not None else None, form_note,
                   sends, season, registry, registry_note, conv, now,
-                  channels=channel_summary(rows) if rows is not None else None,
+                  channels=channel_summary(rows, owners) if rows is not None else None,
                   payments=payments, traffic=traffic,
-                  left_out=left_out_line(count_test_rows(rows)) if rows is not None else "")
+                  left_out=(left_out_line(count_not_counted(rows, owners))
+                            if rows is not None else ""),
+                  owner_rows=owner_rows)
     print(page, end="")
     if args.html is not None:
         args.html.parent.mkdir(parents=True, exist_ok=True)

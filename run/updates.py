@@ -678,6 +678,7 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
                       now: datetime | None = None,
                       applied: Mapping[tuple[str, str], str] | None = None,
                       confirm_rows: Iterable[Mapping] = (),
+                      owners: frozenset[str] | None = None,
                       ) -> tuple[list[PendingRequest], list[str]]:
     """Public-form requests -> requests worth a confirmation email.
 
@@ -768,12 +769,16 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
     pending = [r for r in live
                if r.ts > applied.get((r.email, r.replaces), "")]
     # The daily cap, by the Worker's own date, oldest first — deterministic.
+    # The owner's own addresses get a higher one to test with, never none
+    # (run/owner.py: the form is public).
+    from run.owner import daily_cap, owner_addresses
+    owners = owner_addresses() if owners is None else owners
     per_day: dict[tuple[str, str], int] = {}
     capped: list[PendingRequest] = []
     for request in sorted(pending, key=lambda r: r.ts):
         bucket = (request.email, request.ts[:10])
         per_day[bucket] = per_day.get(bucket, 0) + 1
-        if per_day[bucket] <= CONFIRMS_PER_DAY:
+        if per_day[bucket] <= daily_cap(request.email, CONFIRMS_PER_DAY, owners):
             capped.append(request)
     return capped, problems
 

@@ -188,6 +188,9 @@ jobs:
           # A rotated UPDATE_SECRET's old value, comma-separated: seat links
           # already sent are still matched while it is set (OPS-R10).
           UPDATE_SECRET_PREVIOUS: ${{ secrets.UPDATE_SECRET_PREVIOUS }}
+          # The owner's own addresses (run/owner.py): a higher daily cap on
+          # confirmation emails, to test with. Unset = nobody is the owner.
+          OWNER_EMAILS: ${{ secrets.OWNER_EMAILS }}
           # Spare daily sends to keep in hand: a repo variable, for when the
           # email plan's daily cap changes (unset = the code's own default).
           EMAIL_DAILY_HEADROOM: ${{ vars.EMAIL_DAILY_HEADROOM }}
@@ -247,6 +250,9 @@ jobs:
           # A free report builds this week's report, so the same postponed-game
           # excuse as the intake above (LAUNCH.md section 8).
           POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
+          # The owner's own addresses (run/owner.py): a free report as often as
+          # the owner asks, up to a daily cap. Unset = nobody is the owner.
+          OWNER_EMAILS: ${{ secrets.OWNER_EMAILS }}
         run: .venv/bin/python -m run.trials
       # The Trade Check (run/trades.py): hourly, because a trade offer doesn't
       # wait. Sends nothing with nothing pending. Answers only an address on an
@@ -269,6 +275,8 @@ jobs:
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
           EMAIL_DAILY_HEADROOM: ${{ vars.EMAIL_DAILY_HEADROOM }}
           POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
+          # The owner's own addresses (run/owner.py): a higher daily cap.
+          OWNER_EMAILS: ${{ secrets.OWNER_EMAILS }}
         run: .venv/bin/python -m run.trades
       # The rookie report (run/rookies.py): May to August, once the class is in
       # the data, to the addresses that asked for it in their season review.

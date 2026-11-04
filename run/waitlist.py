@@ -125,7 +125,7 @@ FORBIDDEN_CLAIMS = ("waiver market", "your rival", "your league's", "opponent",
                     "updates itself", "live")
 
 
-def load_list(path: Path) -> tuple[list[str], list[str]]:
+def load_list(path: Path, owners: frozenset[str] | None = None) -> tuple[list[str], list[str]]:
     """Read a list export. Returns (addresses, problems).
 
     Tolerant about columns and strict about addresses: an export renamed
@@ -135,7 +135,9 @@ def load_list(path: Path) -> tuple[list[str], list[str]]:
     """
     if not path.is_file():
         raise FileNotFoundError(f"no waitlist export at {path}")
+    from run.owner import is_owner_address, owner_addresses
     from run.trials import canonical_email, is_test_address
+    owners = owner_addresses() if owners is None else owners
     addresses: list[str] = []
     problems: list[str] = []
     seen: set[str] = set()
@@ -159,6 +161,9 @@ def load_list(path: Path) -> tuple[list[str], list[str]]:
                 problems.append(f"row {index}: a test row from our own domain or a "
                                 f"reserved test domain")
                 continue
+            if is_owner_address(value, owners=owners):
+                problems.append(f"row {index}: one of your own addresses (OWNER_EMAILS)")
+                continue
             if canonical_email(value) in seen:
                 continue                       # one mailbox, one message
             seen.add(canonical_email(value))
@@ -166,7 +171,7 @@ def load_list(path: Path) -> tuple[list[str], list[str]]:
     return addresses, problems
 
 
-def waitlist_addresses(rows) -> list[str]:
+def waitlist_addresses(rows, owners: frozenset[str] | None = None) -> list[str]:
     """The launch list in a Worker read (kind "waitlist"), deduped, in order.
 
     The Worker is the same mailbox the seats and roster updates use, so the
@@ -177,16 +182,20 @@ def waitlist_addresses(rows) -> list[str]:
     One MAILBOX, one entry (the first spelling seen): ``a+1@`` and ``a+2@``
     are one inbox, and so are Gmail's dotted spellings. A row at our own
     domain or a reserved test domain is the owner's test, never a person on
-    the list (``run.trials.is_test_address``; ``main`` says how many).
+    the list (``run.trials.is_test_address``), and so is a row from one of the
+    owner's own addresses (``OWNER_EMAILS``, run/owner.py); ``main`` says how
+    many.
     """
-    from run.trials import canonical_email, is_test_address
+    from run.owner import not_counted, owner_addresses
+    from run.trials import canonical_email
+    owners = owner_addresses() if owners is None else owners
     addresses: list[str] = []
     seen: set[str] = set()
     for row in rows:
         if str(row.get("kind") or "") != "waitlist":
             continue
         value = str(row.get("email") or "").strip().lower()
-        if is_test_address(value):
+        if not_counted(value, owners):
             continue
         if EMAIL_RE.match(value) and canonical_email(value) not in seen:
             seen.add(canonical_email(value))
@@ -513,11 +522,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Could not read the waitlist: {exc}", file=sys.stderr)
             return 1
         addresses, refs = waitlist_addresses(rows), saved_refs(rows)
-        from run.trials import count_test_rows
-        tests = count_test_rows(r for r in rows if str(r.get("kind") or "") == "waitlist")
+        from run.owner import count_not_counted
+        tests = count_not_counted(r for r in rows if str(r.get("kind") or "") == "waitlist")
         if tests:
-            print(f"  left out {tests} test row(s) from our own domain or a reserved "
-                  f"test domain", file=sys.stderr)
+            print(f"  left out {tests} owner/test row(s): your own addresses, our own "
+                  f"domain or a reserved test domain", file=sys.stderr)
 
     for problem in problems:
         print(f"  skipped {problem}", file=sys.stderr)

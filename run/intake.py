@@ -1479,12 +1479,16 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
     # where codes are SENT, against the send log (``per_pass_allowance``):
     # counted here, on the claim's own date, a held claim stayed held on every
     # later run until it expired (pre-launch review).
+    # The owner's own addresses get a higher cap to test with, never none
+    # (run/owner.py).
+    from run.owner import daily_cap, owner_addresses
     from run.trials import canonical_email
+    owners = owner_addresses()
     per_day: dict[tuple[str, str], int] = {}
     for request in sorted(pending, key=lambda r: r.ts):
         bucket = (canonical_email(request.email), request.ts[:10])
         per_day[bucket] = per_day.get(bucket, 0) + 1
-        if per_day[bucket] > CONFIRMS_PER_DAY:
+        if per_day[bucket] > daily_cap(request.email, CONFIRMS_PER_DAY, owners):
             continue
         out.awaiting.append(request)
     out.seat_caps = {p.pass_id: p.seat_cap for p in passes}
@@ -1635,13 +1639,15 @@ def unmatched_due(unmatched: Iterable[Mapping], now: datetime) -> list[Mapping]:
         if at is None or not (UNMATCHED_GRACE <= now - at <= UNMATCHED_MAX_AGE):
             continue
         due.append((at, row))
+    from run.owner import daily_cap, owner_addresses
     from run.trials import canonical_email
+    owners = owner_addresses()     # a higher cap to test with (run/owner.py)
     per_day: dict[tuple[str, str], int] = {}
     out: list[Mapping] = []
     for at, row in sorted(due, key=lambda item: item[0]):
         bucket = (canonical_email(str(row.get("email") or "")), at.date().isoformat())
         per_day[bucket] = per_day.get(bucket, 0) + 1
-        if per_day[bucket] <= UNMATCHED_PER_DAY:
+        if per_day[bucket] <= daily_cap(row.get("email"), UNMATCHED_PER_DAY, owners):
             out.append(row)
     return out
 
@@ -1703,7 +1709,9 @@ def full_key(row: Mapping) -> str:
 def full_due(full: Iterable[Mapping], now: datetime) -> list[Mapping]:
     """The full-pass notes to send: within UNMATCHED_MAX_AGE of the claim, at
     most UNMATCHED_PER_DAY per MAILBOX per Worker date. Pure."""
+    from run.owner import daily_cap, owner_addresses
     from run.trials import canonical_email
+    owners = owner_addresses()     # a higher cap to test with (run/owner.py)
     per_day: dict[tuple[str, str], int] = {}
     out: list[Mapping] = []
     for row in sorted(full, key=lambda r: _received(r) or _EPOCH):
@@ -1712,7 +1720,7 @@ def full_due(full: Iterable[Mapping], now: datetime) -> list[Mapping]:
             continue
         bucket = (canonical_email(str(row.get("email") or "")), at.date().isoformat())
         per_day[bucket] = per_day.get(bucket, 0) + 1
-        if per_day[bucket] <= UNMATCHED_PER_DAY:
+        if per_day[bucket] <= daily_cap(row.get("email"), UNMATCHED_PER_DAY, owners):
             out.append(row)
     return out
 
