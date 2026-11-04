@@ -1977,7 +1977,7 @@ def test_costs_tick_step_4_and_hours_alone_do_not() -> None:
 
 def test_the_card_shows_names_never_values() -> None:
     env = {**ALL_SET, "RESEND_READ_KEY": "re_live_ABCDEFGHIJKL0123"}
-    S = _connected(registry=dash.off("registry", "Not on this Mac."))
+    S = _connected(books=dash.off("books", "Nothing yet."))
     page = dash.render_page(S, NOW, fonts=False, env=env)
     card = _card(page)
     assert "OWNER_EMAILS" in card and "LOG_SECRET" in card
@@ -1999,7 +1999,11 @@ def test_unconnected_sections_shrink_to_one_line_naming_their_step() -> None:
     assert '<a href="#connect">Needs step 2: Stripe key</a>' in money
     assert "Stripe — not connected yet" not in page and "Once connected: Plans sold" not in page
     cust = page.split('id="customers"', 1)[1].split('id="issues"', 1)[0]
-    assert "Needs step 7: Subscriber list" in cust
+    # The registry step is on demand: its line carries its own how-to,
+    # never a link to a card that can be hidden.
+    line = cust.split("Registry isn't connected.", 1)[1].split("</p>", 1)[0]
+    assert "Optional: When you want the list" in line and "#connect" not in line
+    assert "data/dashboard-registry.html" in line
     # The KPI tiles say the same in their few words.
     tiles = re.findall(r'<div class="kpi off"><p class="kl">(Plans sold|Net revenue)</p>'
                        r'<p class="kval">—</p><p class="ks">.*?</p>', page)
@@ -2210,11 +2214,21 @@ def test_today_and_the_card_read_one_list_of_steps() -> None:
 
 
 def test_the_optional_step_never_reaches_today() -> None:
+    """Review #7/#16: the registry step is done only on make
+    dashboard-registry's own page, so on every other build it stayed open:
+    Today listed it forever and the card never hid. It is on demand now,
+    like the bounce key: on the card, never in Today, never keeping it up."""
     names = _env("OWNER_EMAILS", "TRAFFIC_FROM", "LOG_SECRET")
     S = _today_sources(stripe=dash._source("stripe", data={"sessions": []}, read_at=WED),
                        books=dash._source("books", data=books_fixture(), read_at=WED))
+    assert S["registry"].status == "off" and S["bounces"].status == "off"
     tasks = dash.today_tasks(S, WED, names, [], [], None, None)
-    assert [t.id for t in _kinds(tasks, "connect")] == ["registry"]
+    assert _kinds(tasks, "connect") == []
+    assert dash.connect_card(S, names) == ""
+    states = {s["step"].n: s["state"] for s in dash.connect_steps(S, names)}
+    assert states[6] == states[7] == "open"
+    assert set(dash.OPTIONAL_CONNECT_STEPS) == {"resend", "registry"}
+    assert [s.n for s in dash.CONNECT_STEPS if s.optional] == [6, 7]
 
 
 def test_today_runs_in_its_fixed_order_and_folds_the_rest_into_later() -> None:
@@ -2285,13 +2299,89 @@ def test_saturday_and_monday_rows_and_no_row_on_other_days() -> None:
                                        None, None), "rhythm")
 
 
+def _ledger_calls(*calls: tuple[int, str, str]) -> Source:
+    """A ledger source of (week, status, recorded_at) calls."""
+    return dash._source("ledger", data={"season": "2026", "unreadable": [], "calls": [
+        {"store": "typed-ppr-12-2026", "week": w, "confidence": 0.6, "status": st,
+         "outcome": "hit" if st == "graded" else None, "recorded_at": at,
+         "graded_at": "2026-11-03T14:00:00+00:00" if st == "graded" else None}
+        for w, st, at in calls]}, read_at=WED)
+
+
 def test_a_missed_monday_grading_leads_only_while_calls_wait() -> None:
     wf = {**_wf("monday.yml"), "missing": True, "slot": _utc(2026, 11, 3, 13, 17)}
-    tasks = dash.today_tasks(_today_sources(), WED, {}, [], [wf], {"pending": 3, "graded": 0}, None)
-    assert tasks[0].kind == "risk" and "3 calls wait to be graded" in tasks[0].title
+    week8 = [(8, "pending", "2026-10-28T22:30:00+00:00")] * 3
+    S = _today_sources(ledger=_ledger_calls(*week8))
+    tasks = dash.today_tasks(S, WED, {}, [], [wf], dash.ledger_view(S["ledger"], WED), None)
+    assert tasks[0].kind == "risk" and "3 calls from before it wait to be graded" in tasks[0].title
     assert "Tue 8:17 AM ET" in tasks[0].title and "monday-receipts" in tasks[0].how
-    tasks = dash.today_tasks(_today_sources(), WED, {}, [], [wf], {"pending": 0, "graded": 4}, None)
+    S = _today_sources(ledger=_ledger_calls((8, "graded", "2026-10-28T22:30:00+00:00")))
+    tasks = dash.today_tasks(S, WED, {}, [], [wf], dash.ledger_view(S["ledger"], WED), None)
     assert not _kinds(tasks, "risk")
+
+
+def test_a_missed_grading_counts_only_calls_it_could_have_settled() -> None:
+    """Review #12/#18: calls the next week's report recorded after the
+    missed slot are about games not played yet. Running monday-receipts
+    settles none of them, so they never raise the red row or its count."""
+    wf = {**_wf("monday.yml"), "missing": True, "slot": _utc(2026, 11, 3, 13, 17)}
+    thu = _utc(2026, 11, 5, 15, 0)
+    week9 = {"season": "2026", "week": 9, "phase": "season", "lands_on": "2026-11-11",
+             "built_at": "2026-11-04T22:40:00+00:00"}
+    # Week 8 graded, six Week 9 calls recorded Wednesday night: nothing to settle.
+    S = _today_sources(thu, week=week9, ledger=_ledger_calls(
+        (8, "graded", "2026-10-28T22:30:00+00:00"),
+        *[(9, "pending", "2026-11-04T22:30:00+00:00")] * 6))
+    led = dash.ledger_view(S["ledger"], thu)
+    assert led["pending"] == 6
+    assert not _kinds(dash.today_tasks(S, thu, {}, [], [wf], led, None), "risk")
+    # Two Week 8 calls still pending beside them: those two, never eight.
+    S = _today_sources(thu, week=week9, ledger=_ledger_calls(
+        *[(8, "pending", "2026-10-28T22:30:00+00:00")] * 2,
+        *[(9, "pending", "2026-11-04T22:30:00+00:00")] * 6))
+    row = _kinds(dash.today_tasks(S, thu, {}, [], [wf], dash.ledger_view(S["ledger"], thu), None),
+                 "risk")[0]
+    assert "2 calls from before it wait to be graded" in row.title
+    # A call with no recorded time counts only when its week is over.
+    S = _today_sources(thu, week=week9, ledger=_ledger_calls((8, "pending", ""), (9, "pending", "")))
+    assert dash._gradeable_pending(S, wf["slot"]) == 1
+    # A bare count with no calls behind it can't say which could be graded.
+    assert not _kinds(dash.today_tasks(_today_sources(thu), thu, {}, [], [wf],
+                                       {"pending": 3, "graded": 0}, None), "risk")
+
+
+def test_a_missed_cron_names_its_own_workflow_and_only_wednesdays_has_the_kickoff_limit() -> None:
+    """Review #20: Today said "Actions → monday-receipts", Issues said "the
+    workflow" with Wednesday's kickoff caveat, and the attention card under
+    Today's red row said "No urgent issues"."""
+    import re as _re
+    for path in (dash.REPO_ROOT / ".github" / "workflows").glob("*.yml"):
+        if path.name in dash.ACTIONS_NAMES:
+            name = _re.search(r"^name:\s*(\S+)", path.read_text(encoding="utf-8"), _re.M).group(1)
+            assert dash.ACTIONS_NAMES[path.name] == name
+    assert set(dash.ACTIONS_NAMES) >= {f for f, _l in dash.WORKFLOWS}
+    health = [{**_wf(f), "missing": True, "slot": _utc(2026, 11, 3, 13, 17)}
+              for f in ("monday.yml", "weekly.yml", "saturday.yml")]
+    S = _today_sources(ledger=_ledger_calls((8, "pending", "2026-10-28T22:30:00+00:00")))
+    issues = dash.build_issues(S, WED, health, dash.ledger_view(S["ledger"], WED),
+                               dash.metrics_for(S, "7d", WED))
+    fixes = {i.title.split(" didn't")[0]: i.fix for i in issues if "didn't run" in i.title}
+    assert fixes["Monday grading"][0] == "Actions → monday-receipts → Run workflow."
+    assert fixes["Saturday check"][0] == "Actions → saturday-final-check → Run workflow."
+    assert fixes["Wednesday reports"][0] == ("Actions → weekly-report → Run workflow, only before "
+                                             "the week's first kickoff.")
+    assert sum("kickoff" in " ".join(f) for f in fixes.values()) == 1
+    # Today's grading row and the Issue give the same first step.
+    tasks = dash.today_tasks(S, WED, {}, [], [health[0]], dash.ledger_view(S["ledger"], WED), None)
+    assert _kinds(tasks, "risk")[0].how == fixes["Monday grading"][0]
+    # With only the medium grading issue, the card under Today says "other".
+    medium = [i for i in issues if i.severity == "medium"]
+    card = dash.attention(medium, today_risk=True)
+    assert "No other urgent issues." in card and "No urgent issues." not in card
+    assert "The urgent one is first in Today." in card
+    assert "No urgent issues." in dash.attention(medium)
+    assert "No other urgent issues." in dash.attention([], today_risk=True)
+    assert "All clear" in dash.attention([])
 
 
 def _secrets_gate(status: str, detail: str) -> Source:
@@ -2510,7 +2600,10 @@ def test_a_cron_that_reached_github_after_its_slot_is_not_missed(monkeypatch) ->
     later = _utc(2026, 11, 10, 15, 0)
     owed = dash.workflow_health(src, later, cron=cron)[0]
     assert owed["missing"]
-    tasks = dash.today_tasks(_today_sources(later, github=src), later, {}, None, None, ledger,
+    # Three Week 8 calls recorded before that slot, still pending.
+    S = _today_sources(later, github=src, ledger=_ledger_calls(
+        *[(8, "pending", "2026-10-28T22:30:00+00:00")] * 3))
+    tasks = dash.today_tasks(S, later, {}, None, None, dash.ledger_view(S["ledger"], later),
                              None, cron=cron)
     assert [t for t in tasks if t.id == "grading"]
 
@@ -2706,3 +2799,265 @@ def test_the_temp_page_must_be_gitignored_too(tmp_path, capsys) -> None:
                     collectors={}) == 2
     assert "is not gitignored" in capsys.readouterr().err and not out.exists()
     assert stats._gitignored(dash.temp_page(dash.DEFAULT_OUT))
+
+
+# Review fixes (branch dash-fix-today)
+# --------------------------------------------------------------------- #
+
+def test_the_registry_page_is_its_own_snapshot_the_updater_never_writes(tmp_path,
+                                                                        monkeypatch) -> None:
+    """Review #16: with the background updater on, make dashboard-registry
+    wrote data/dashboard.html in agent mode, and within 15 minutes the agent
+    rebuilt it without the registry while the tab reloaded itself."""
+    assert dash.REGISTRY_OUT == dash.REPO_ROOT / "data" / "dashboard-registry.html"
+    out = dash.REPO_ROOT / "data" / f"dashboard-main-{id(tmp_path)}.html"
+    reg_out = dash.REPO_ROOT / "data" / f"dashboard-registry-{id(tmp_path)}.html"
+    monkeypatch.setattr(dash, "DEFAULT_OUT", out)
+    monkeypatch.setattr(dash, "REGISTRY_OUT", reg_out)
+    agents = tmp_path / "agents"
+    agents.mkdir()
+    (agents / "com.beatyourleague.dashboard.plist").write_bytes(auto.plist_bytes(tmp_path, Path("/p")))
+    collectors = {k: (lambda ctx, s=s: s) for k, s in rich_sources().items()}
+    opened = []
+    try:
+        assert dash.cli(["--registry", str(tmp_path / "rosters.json"), "--now", NOW.isoformat()],
+                        environ={}, env_file=tmp_path / ".env", collectors=collectors,
+                        opener=opened.append, agent_dir=agents) == 0
+        assert opened == [reg_out] and not out.exists()
+        body = re.search(r"<body[^>]*>", reg_out.read_text(encoding="utf-8")).group(0)
+        assert "data-refresh" not in body and 'data-updater="agent"' not in body
+    finally:
+        out.unlink(missing_ok=True)
+        reg_out.unlink(missing_ok=True)
+    # The real name is gitignored, and the step says where the page goes.
+    assert stats._gitignored(Path("data/dashboard-registry.html"))
+    step = dash.CONNECT_STEPS[6]
+    assert step.optional and "data/dashboard-registry.html" in step.how
+    assert "background updater never overwrites it" in step.how
+    makefile = (dash.REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    recipe = makefile.split("\ndashboard-registry:", 1)[1].split("\n\n", 1)[0]
+    assert "data/dashboard.html" not in recipe
+
+
+def test_the_key_steps_say_only_what_launch_md_allows() -> None:
+    """Review #17/#21: step 6 put the Full access Resend key in .env, which
+    LAUNCH.md step 2 item 3 says goes nowhere but the GitHub secret, and
+    claimed the hourly run checks bounces without it. Step 2 cited a LAUNCH
+    item that keeps the owner-stats key out of .env; section 8 allows it."""
+    text = (dash.REPO_ROOT / "LAUNCH.md").read_text(encoding="utf-8")
+    item3 = text.split("## 2. Resend", 1)[1].split("\n4. ", 1)[0]
+    assert "goes nowhere but that secret" in item3
+    resend = dash.CONNECT_STEPS[5]
+    assert "only as the GitHub secret RESEND_READ_KEY, never in .env" in resend.how
+    assert "Add RESEND_READ_KEY" not in resend.how and "without it" not in resend.how.split(
+        "With that secret set")[0]
+    assert "With that secret set, the hourly run checks bounces" in resend.how
+    assert "Optional" not in resend.how            # the card's pill and the line say it once
+    line = dash.needs_line(dash.off("bounces", "x"))
+    assert line.count("Optional") == 1 and "to .env" not in line
+    assert "to .env" not in dash.TODAY_CONNECT[6][1]
+    stripe = dash.CONNECT_STEPS[1]
+    assert "(LAUNCH.md section 8, The dashboard)" in stripe.how
+    dash_para = text.split("**The dashboard.**", 1)[1].split("\n\n", 1)[0]
+    assert "STRIPE_STATS_KEY" in dash_para and ".env" in dash_para
+    # The card's own header no longer says every name goes in .env.
+    S = empty_sources()
+    card = dash.connect_card(S, {})
+    assert "unless a step says otherwise" in card
+
+
+def _wed_rhythm(now: datetime, week: dict, runs: tuple = (), games: Path | None = None):
+    S = _today_sources(now, week=week, github=GITHUB_ON)
+    return dash._rhythm(S, now, [_wf("weekly.yml", *runs)], dash.REPO_ROOT,
+                        games=games or Path("/nonexistent/games.csv"))
+
+
+def test_a_wednesday_game_week_reads_the_morning_report(tmp_path) -> None:
+    """Review #13/#19: in a week with a game that Wednesday the report goes
+    out from the 8:17 AM ET slot (run/report_slot.py), and Today said it
+    "goes out about 5:17 PM ET" about a report already in the inbox."""
+    games = tmp_path / "games.csv"
+    games.write_text("game_type,gameday,away_team,home_team\nREG,2026-11-25,GB,LA\n"
+                     "POST,2026-11-18,X,Y\n", encoding="utf-8")
+    assert dash.wednesday_game(date(2026, 11, 25), {}, games)
+    assert not dash.wednesday_game(date(2026, 11, 18), {}, games)     # not a regular-season game
+    assert not dash.wednesday_game(date(2026, 11, 4), {}, tmp_path / "none.csv")
+    # After the morning run, week.json's first kickoff says it too.
+    assert dash.wednesday_game(date(2026, 11, 25), {"first_kickoff": "2026-11-26T01:00:00Z"},
+                               tmp_path / "none.csv")
+    before = {"season": "2026", "week": 11, "phase": "season", "lands_on": "2026-11-25",
+              "built_at": "2026-11-18T22:40:00+00:00", "first_kickoff": "2026-11-20T01:15:00Z"}
+    row = _wed_rhythm(_utc(2026, 11, 25, 12, 0), before, games=games)
+    assert row.title == "Read your own Week 12 report once it lands"
+    assert "8:17 AM ET" in row.how and "5:17 PM" not in row.how
+    after = {"season": "2026", "week": 12, "phase": "season", "lands_on": "2026-12-02",
+             "built_at": "2026-11-25T13:30:00+00:00", "first_kickoff": "2026-11-26T01:00:00Z"}
+    green = (_utc(2026, 11, 25, 13, 17), "success")
+    row = _wed_rhythm(_utc(2026, 11, 25, 16, 0), after, (green,))
+    assert row.title == "Read your own Week 12 report" and "green" in row.how
+    # Through today_tasks too, with no schedule file at all.
+    S = _today_sources(_utc(2026, 11, 25, 16, 0), week=after, github=GITHUB_ON)
+    row = _kinds(dash.today_tasks(S, _utc(2026, 11, 25, 16, 0), {}, [], [_wf("weekly.yml", green)],
+                                  None, None), "rhythm")[0]
+    assert row.title == "Read your own Week 12 report"
+    # An ordinary Wednesday keeps the evening slot.
+    row = _wed_rhythm(_utc(2026, 11, 4, 15, 0), {"season": "2026", "week": 8, "phase": "season",
+                                                 "lands_on": "2026-11-04"},
+                      ((_utc(2026, 11, 4, 13, 17), "success"),), games=games)
+    assert "5:17 PM ET" in row.how and "once it lands" in row.title
+
+
+def test_every_tile_holding_the_owners_activity_says_so() -> None:
+    """Review #9: Rosters checked and Buy presses come from the same counter
+    TRAFFIC_FROM trims; Refund rate and Waitlist hold the owner's own test
+    purchase and form rows until OWNER_EMAILS is set."""
+    page = dash.render_page(rich_sources(), NOW, fonts=False, env={})
+    for label in ("Rosters checked", "Buy presses"):
+        assert _kl(page, label) and all(dash.OWN_VISITS in k for k in _kl(page, label))
+    for label in ("Refund rate", "Waitlist"):
+        assert _kl(page, label) and all(dash.OWN_TESTS in k for k in _kl(page, label))
+    both = dash.render_page(rich_sources(), NOW, fonts=False,
+                            env={"OWNER_EMAILS": OWNER_VALUE, "TRAFFIC_FROM": "2026-10-01"})
+    for label in ("Rosters checked", "Buy presses", "Refund rate", "Waitlist"):
+        assert _kl(both, label) and not any("ownchip" in k for k in _kl(both, label))
+
+
+def _paid(*days: tuple[int, int], league: int = 0) -> list[dict]:
+    """Paid sessions on (month, day) 2026; the last ``league`` are League Passes."""
+    out = []
+    for k, (mo, dy) in enumerate(days):
+        out.append({"id": f"cs_{k}", "created": int(_utc(2026, mo, dy, 15).timestamp()),
+                    "paid": True, "status": "complete", "via": None, "amount": 14.99,
+                    "pass": "League Pass" if k >= len(days) - league else "Monthly",
+                    "refunded": 0.0, "full_refund": False, "dispute": None})
+    return out
+
+
+def _stripe(sessions: list[dict], now: datetime) -> Source:
+    return dash._source("stripe", data={"sessions": sessions, "link_map": True,
+                                        "dispute_errors": 0}, read_at=now)
+
+
+def test_a_past_reading_is_frozen_at_its_date() -> None:
+    """Review #8: past its read-by date the row counted up to today, so a
+    later sale rewrote "when it was read on Nov 18" and could hide the red
+    line the gate had crossed on the day."""
+    nov25 = _utc(2026, 11, 25, 15, 0)
+    sends = {"entries": [{"key": f"trial-2026-{j:012x}", "provider": "resend",
+                          "sent_at": ("2026-11-10T15:00:00+00:00" if j < 8 else
+                                      "2026-11-21T15:00:00+00:00")} for j in range(12)],
+             "season": "2026"}
+    S = _today_sources(nov25, stripe=_stripe(_paid((11, 10), (11, 12), (11, 18), (11, 22)), nov25))
+    targets = dash.plan_targets(S, nov25, sends, None, S["registry"])
+    t = _gate(targets, "free reports")
+    assert t["current"] == 8 and t["state"] == "missed" and t["red_now"]
+    assert "12 by today" in t["extra"]
+    # The 18th counts: the reading is the end of that day, Eastern.
+    p = _gate(targets, "paid purchases")
+    assert p["current"] == 3 and p["red_now"] and "4 by today" in p["extra"]
+    tasks = _kinds(dash.today_tasks({**S, "sends": dash._source(
+        "sends", data={**sends, "stopped": 0, "summary": stats.send_summary(sends["entries"], "2026")},
+        read_at=nov25)}, nov25, {}, [], [], None, None), "target")
+    titles = [t.title for t in tasks]
+    assert "Free reports sent (hand-run or self-serve): 8 of 20 when it was read on Nov 18" in titles
+    assert "Paid purchases: 3 of 5 when it was read on Nov 18" in titles
+    # On its read day nothing is frozen yet: every row it is given counts.
+    nov18 = _utc(2026, 11, 18, 15, 0)
+    t = _gate(dash.plan_targets(S, nov18, sends, None, S["registry"]), "free reports")
+    assert t["current"] == 12 and "by today" not in (t["extra"] or "")
+    # Graded rows freeze on when each call was graded.
+    dec30 = _utc(2026, 12, 30, 15, 0)
+    calls = [{"store": "typed-ppr-12-2026", "week": 10, "confidence": 0.6, "status": "graded",
+              "outcome": "hit", "recorded_at": "2026-11-11T22:00:00+00:00",
+              "graded_at": ("2026-12-01T13:30:00+00:00" if k < 25 else "2026-12-29T13:30:00+00:00")}
+             for k in range(33)]
+    S = _today_sources(dec30, ledger=dash._source("ledger", data={"season": "2026", "calls": calls,
+                                                                  "unreadable": []}, read_at=dec30))
+    g = _gate(dash.plan_targets(S, dec30, None, dash.ledger_view(S["ledger"], dec30), S["registry"]),
+              "graded rows")
+    assert g["current"] == 25 and g["state"] == "missed" and "33 by today" in g["extra"]
+
+
+def test_a_green_cell_the_page_cannot_fully_measure_is_never_met() -> None:
+    """Review #10: "≥5, ≥2 from outside the owner's own leagues" read as 5,
+    and "~30 + 2" as 30 with League Passes counted in."""
+    nov11 = _utc(2026, 11, 11, 15, 0)
+    S = _today_sources(nov11, stripe=_stripe(_paid(*[(11, 10)] * 5), nov11))
+    t = _gate(dash.plan_targets(S, nov11, None, None, S["registry"]), "paid purchases")
+    assert t["current"] == 5 and t["state"] == "tracking"
+    assert "Not measured here: ≥2 from outside the owner's own leagues" in t["extra"]
+    row = next(r for r in dash.gates_html(S, nov11, None, None, S["registry"]).split("<tr>")
+               if "Paid purchases" in r)
+    assert ">Met<" not in row and ">Tracking<" in row and "Not measured here" in row
+    # Without Stripe the row needs the key, and "+ 2" is never an unmeasured part.
+    off = _gate(dash.plan_targets(_today_sources(nov11), nov11, None, None,
+                                  _today_sources(nov11)["registry"]), "league passes")
+    assert off["state"] == "unmeasured" and "Not measured here" not in (off["extra"] or "")
+    # Purchases + League Passes: each half against its own number.
+    dec23 = _utc(2026, 12, 23, 15, 0)
+    for monthly, passes, state, red in ((30, 0, "missed", True), (28, 2, "missed", True),
+                                        (30, 2, "met", False)):
+        S = _today_sources(dec23, stripe=_stripe(_paid(*[(12, 1)] * (monthly + passes),
+                                                       league=passes), dec23))
+        c = _gate(dash.plan_targets(S, dec23, None, None, S["registry"]), "league passes")
+        assert (c["state"], c["red_now"]) == (state, red), (monthly, passes)
+        assert c["cur_text"] == f"{monthly} + {passes}" and c["target_text"] == "30 + 2"
+    S = _today_sources(dec23, stripe=_stripe(_paid(*[(12, 1)] * 30), dec23))
+    titles = [t.title for t in _kinds(dash.today_tasks(S, dec23, {}, [], [], None, None), "target")]
+    assert "Purchases + League Passes: 30 + 0 of 30 + 2 when it was read on Dec 22" in titles
+    # The same sales came after Nov 18, so that reading stays what it was.
+    assert "Paid purchases: 0 of 5 when it was read on Nov 18" in titles
+    # Before the date, short only on passes: behind pace, and the need names passes alone.
+    dec1 = _utc(2026, 12, 1, 15, 0)
+    S = _today_sources(dec1, stripe=_stripe(_paid(*[(11, 20)] * 30), dec1))
+    c = _gate(dash.plan_targets(S, dec1, None, None, S["registry"]), "league passes")
+    assert c["state"] == "behind_pace" and c["needed"].endswith("for League Passes")
+    assert "for purchases" not in c["needed"] and "straight line" not in c["pace"]
+    row = next(t for t in _kinds(dash.today_tasks(S, dec1, {}, [], [], None, None), "target")
+               if "League Passes" in t.title)
+    assert row.title == "Purchases + League Passes: 30 + 0 of 30 + 2 by Dec 22, behind pace"
+    assert row.how.startswith("About 1 every ") and "for League Passes from here" in row.how
+
+
+def test_each_league_pass_is_judged_on_its_own_fourteen_days(tmp_path) -> None:
+    """Review #11: a pass bought today with no seats yet read "Behind"."""
+    from run.refs import LEAGUE_PASS, decode_roster
+    from run.rosters import RosterSubscriber, to_json
+    from test_trials import _fixture_ref
+    ref = _fixture_ref()
+    spec = decode_roster(ref)
+
+    def sub(email, **kw):
+        return RosterSubscriber(email=email, ref=ref, player_ids=tuple(spec.player_ids),
+                                slots=tuple(spec.slots), scoring=spec.scoring, **kw)
+    rows = [sub("buyer@fans.mail", billing="pass", pass_id="sub_PPPP1", league_size=12,
+                subscription_ids=("sub_PPPP1",), origin="aaaaaaaaaa", roster_as_of="2026-11-10"),
+            sub("pal@fans.mail", plan=LEAGUE_PASS, covered_by="buyer@fans.mail", pass_id="sub_PPPP1",
+                origin="bbbbbbbbbb")]
+    path = tmp_path / "rosters.json"
+    path.write_text(_json.dumps(to_json(rows)), encoding="utf-8")
+    reg = dash.collect_registry(Context(env={}, now=_utc(2026, 11, 10, 15), registry=path))
+    assert reg.data["seats"] == [(1, 12)] and reg.data["seats_bought"] == ["2026-11-10"]
+
+    def seats(now: datetime, registry: Source) -> dict:
+        S = _today_sources(now, registry=registry)
+        return _gate(dash.plan_targets(S, now, None, None, registry), "seats")
+    t = seats(_utc(2026, 11, 10, 15), reg)
+    assert t["state"] == "tracking" and not t["red_now"] and "read Nov 24" in t["extra"]
+    gates = dash.gates_html(_today_sources(_utc(2026, 11, 10, 15), registry=reg),
+                            _utc(2026, 11, 10, 15), None, None, reg)
+    row = next(r for r in gates.split("<tr>") if "Seats claimed" in r)
+    assert ">Behind<" not in row and ">Tracking<" in row
+    assert seats(_utc(2026, 11, 24, 15), reg)["state"] == "tracking"     # its own read day
+    late = _utc(2026, 11, 25, 15)
+    t = seats(late, reg)
+    assert t["state"] == "missed" and t["red_now"] and t["when"] == date(2026, 11, 24)
+    row = _kinds(dash.today_tasks(_today_sources(late, registry=reg), late, {}, [], [], None, None),
+                 "target")[0]
+    assert row.title == "Seats claimed: 1 of 12 seats when it was read on Nov 24"
+    assert row.how.startswith("PLAN §6 says: Fewer")
+    # Half the seats on time is met; a pass with no purchase day stays tracking.
+    full = dash._source("registry", data={**reg.data, "seats": [(6, 12)]}, read_at=late)
+    assert seats(late, full)["state"] == "met"
+    undated = dash._source("registry", data={**reg.data, "seats_bought": [None]}, read_at=late)
+    assert seats(late, undated)["state"] == "tracking"

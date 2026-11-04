@@ -922,8 +922,9 @@ insights, switchable between 7 days, 30 days and all. It reads the same `.env` a
 `RESEND_READ_KEY` adds bounces), changes nothing anywhere, and writes only
 `data/dashboard.html`, which is gitignored: don't commit it, share it or post a screenshot of
 it in public. A source you haven't connected shows its LAUNCH step instead of numbers.
-`make dashboard-registry` adds subscribers and seats the way `make stats-registry` does. It
-never runs in CI.
+`make dashboard-registry` adds subscribers and seats the way `make stats-registry` does, on a
+separate page, `data/dashboard-registry.html`, that doesn't update itself, so the background
+updater never writes over it. Run it when you want the list. It never runs in CI.
 
 **See who signed up.** Yes: a waitlist row is someone who typed their email into the site and
 asked to be told when it opens. `make signups` prints every address the form Worker holds, in
