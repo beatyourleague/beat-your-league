@@ -343,3 +343,30 @@ def test_a_missing_stop_list_is_an_empty_one(tmp_path: Path) -> None:
     send_all([_message()], provider=provider, sent_log=tmp_path / "s.jsonl",
              suppress_file=tmp_path / "nothing-here.txt")
     assert len(provider.sent) == 1
+
+
+def test_every_provider_call_names_its_own_user_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reproduced Nov 4 2026, the first real purchase: Resend's API sits behind
+    Cloudflare, which refused Python's default User-Agent with "403 error code:
+    1010", so the welcome and the first report both failed to send. Every
+    request _post_json makes carries ours, and a caller's headers still win."""
+    import urllib.request
+
+    import run.delivery as delivery
+    seen: list[urllib.request.Request] = []
+
+    class _Response:
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def read(self): return b'{"id": "x"}'
+
+    def fake_urlopen(request, timeout=0):
+        seen.append(request)
+        return _Response()
+
+    monkeypatch.setattr(delivery.urllib.request, "urlopen", fake_urlopen)
+    assert delivery._post_json("https://api.resend.com/emails", {}, {"Authorization": "Bearer k"}) \
+        == {"id": "x"}
+    agent = seen[0].get_header("User-agent")
+    assert agent and not agent.startswith("Python-urllib"), agent
+    assert seen[0].get_header("Authorization") == "Bearer k"

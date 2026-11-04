@@ -13,6 +13,7 @@ the channel tag a payment carries (C5) and the first email a seat earns
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -155,7 +156,10 @@ def test_a_reclaim_is_a_roster_change_not_a_second_seat(
     assert "1 with a confirmed new roster" in capsys.readouterr().out
     [seat] = seats
     assert seat.ref == NEWER_SEAT_REF and seat.slug == _origin(first)
-    assert seat.roster_as_of == (NOW - timedelta(hours=2)).date().isoformat()
+    # The Eastern date, as every date a buyer reads (PUR-8): the UTC date
+    # differs from it every evening after 7 PM ET.
+    assert seat.roster_as_of == (NOW - timedelta(hours=2)).astimezone(
+        ZoneInfo("America/New_York")).date().isoformat()
     welcomes = [m for m in sends if m.key.startswith("welcome-") and m.to == seat.email]
     assert len(welcomes) == 1, [m.key for m in welcomes]
 
@@ -174,7 +178,8 @@ def test_a_newer_claim_is_not_undone_by_an_older_update() -> None:
     assert applied == 0 and kept["ref"] == NEWER_SEAT_REF
     [moved], applied = apply_updates([row], latest)
     assert applied == 1 and moved["ref"] == REF
-    assert moved["roster_as_of"] == update.seen_at[:10]
+    assert moved["roster_as_of"] == datetime.fromisoformat(update.seen_at).astimezone(
+        ZoneInfo("America/New_York")).date().isoformat()
 
 
 # --------------------------------------------------------------------- #

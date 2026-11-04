@@ -155,8 +155,14 @@ class DryRunProvider:
 
 def _post_json(url: str, payload: dict, headers: dict[str, str]) -> dict:
     body = json.dumps(payload).encode("utf-8")
+    # A User-Agent of our own on every send: Resend's API sits behind
+    # Cloudflare, which refuses Python's default one with "error code: 1010",
+    # and the first real purchase (Nov 4 2026) had its welcome and first
+    # report refused that way.
     request = urllib.request.Request(url, data=body, method="POST",
-                                     headers={"Content-Type": "application/json", **headers})
+                                     headers={"Content-Type": "application/json",
+                                              "User-Agent": "beat-your-league-delivery",
+                                              **headers})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             raw = response.read().decode("utf-8") or "{}"
