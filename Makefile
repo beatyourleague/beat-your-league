@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry signups signups-registry dashboard dashboard-live dashboard-registry cost hours link books ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry signups signups-registry dashboard dashboard-live dashboard-auto dashboard-auto-off dashboard-auto-status dashboard-registry cost hours link books ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
         og og-week brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample byes \
         platforms
 
@@ -120,17 +120,35 @@ signups-registry:
 # The owner's private dashboard (run/dashboard.py): one self-contained page at
 # data/dashboard.html (gitignored), built from the same read-only sources as
 # `make stats` plus Actions health, the launch check's fast gates and the
-# ledger, then opened in the browser. Refuses in CI. ARGS=--no-open writes only.
+# ledger, then opened in the browser. The crons' files (send log, record,
+# sample) are read from GitHub's copy after a `git fetch`, never a pull.
+# Every page shows how old it is and turns amber after an hour. Refuses in CI.
+# ARGS=--no-open writes only. With the background updater on, this writes the
+# page the updater writes, so the open tab keeps reloading itself.
 dashboard:
 	$(PY) -m run.dashboard $(ARGS)
 
 # The same page kept fresh: rebuilt every EVERY minutes (default 15, at least
 # 10) until Ctrl-C, and the open tab reloads itself after each rebuild, keeping
 # your place. Leave it running in a Terminal tab; the page turns amber when it
-# stops updating.
+# stops updating. It stops when the tab closes or the Mac sleeps:
+# dashboard-auto below doesn't.
 EVERY ?= 15
 dashboard-live:
 	$(PY) -m run.dashboard --every $(EVERY) $(ARGS)
+
+# The background updater (run/dashboard_auto.py): a per-user LaunchAgent,
+# generated from this checkout's path at install time, that rebuilds the page
+# every 15 minutes (and once after the Mac wakes) with no Terminal tab open.
+# It holds no key: each build reads .env itself. One line a build goes to
+# data/dashboard-updater.log (gitignored). -off removes it; -status says how
+# it's doing. macOS may show "Background Items Added": leave it allowed.
+dashboard-auto:
+	$(PY) -m run.dashboard_auto install
+dashboard-auto-off:
+	$(PY) -m run.dashboard_auto uninstall
+dashboard-auto-status:
+	$(PY) -m run.dashboard_auto status
 
 # Your books, for the dashboard's profit and posts (run/books.py; files in the
 # gitignored data/ folder, never committed):

@@ -1252,3 +1252,470 @@ def test_the_forms_card_points_at_make_signups_and_shows_no_address() -> None:
     card = page.split("<h3>Form Worker rows</h3>", 1)[1].split('<div class="card">', 1)[0]
     assert "make signups" in card and "never shows them" in card
     assert "@" not in card
+
+
+# ===================================================================== #
+# dash-fresh: the page's age (A1), the background updater (A2) and the
+# crons' files read from GitHub's copy (A3)
+# ===================================================================== #
+
+import json as _json
+import plistlib
+import shutil
+import subprocess
+
+import run.dashboard_auto as auto
+
+# The real ones, before the fixture below swaps them out for every test.
+_REAL_GIT_RUN = dash._git_run
+_REAL_ROTATE = auto.rotate_log
+
+
+def _no_git(args, cwd):
+    """No test reaches GitHub: every git command 'fails', so a build reads
+    this checkout's files (the fallback)."""
+    return 1, b""
+
+
+@pytest.fixture(autouse=True)
+def _fresh_isolation(monkeypatch, tmp_path):
+    monkeypatch.setattr(dash, "_git_run", _no_git)
+    monkeypatch.setattr(auto, "LAUNCH_AGENTS", tmp_path / "no-launch-agents")
+    monkeypatch.setattr(auto, "rotate_log", lambda *a, **k: None)
+
+
+# --- A1: every page says how old it is -------------------------------- #
+
+def test_a_one_off_page_carries_its_build_time_and_age_but_never_reloads() -> None:
+    """The Nov 3 4:23 AM page looked current a day later: a one-off build had
+    no age and no warning. Now every page counts its own age and says when it
+    is old; only a live page reloads itself."""
+    page = dash.render_page(rich_sources(), NOW, fonts=False)
+    body_tag = re.search(r"<body[^>]*>", page).group(0)
+    assert f'data-generated="{int(NOW.timestamp() * 1000)}"' in body_tag
+    assert "data-refresh" not in body_tag and "data-updater" not in body_tag
+    assert '<span class="age" data-age>built just now</span>' in page
+    assert dash.AGED_STRIP in page and 'class="aged" data-aged hidden' in page
+    assert ("Built <span data-age-words>an hour</span> ago, so these numbers are old. Run "
+            "<code>make dashboard</code>, or <code>make dashboard-auto</code> to keep it fresh."
+            ) in page
+    assert "by make dashboard, once. It doesn&#x27;t update itself." in page
+    assert "<script>" + dash.FRESH_JS + "</script>" in page
+    assert dash.OLD_AFTER_MINUTES == 60 and "OLD=60*60000" in dash.FRESH_JS
+
+
+@pytest.mark.parametrize("updater,name,stale_cmd", [
+    ("terminal", "Terminal loop", "make dashboard-live"),
+    ("agent", "Background updater", "make dashboard-auto-status")])
+def test_a_live_page_names_what_rebuilds_it(updater, name, stale_cmd) -> None:
+    page = dash.render_page(rich_sources(), NOW, fonts=False, live_minutes=15, updater=updater)
+    body_tag = re.search(r"<body[^>]*>", page).group(0)
+    assert 'data-refresh="900"' in body_tag and f'data-updater="{updater}"' in body_tag
+    assert f"Live · every 15 min<em> · {name}</em>" in page
+    stale = page.split('<div class="stale" hidden>', 1)[1].split("</div>", 1)[0]
+    assert stale_cmd in stale and "stopped updating" in stale
+    # Both strips exist; the script shows the amber one only while the
+    # stopped-updating one is hidden, so a live page never shows both.
+    assert dash.AGED_STRIP in page and "!(stale&&!stale.hidden)" in dash.FRESH_JS
+
+
+def test_an_unknown_updater_is_named_as_the_terminal_loop() -> None:
+    page = dash.render_page(rich_sources(), NOW, fonts=False, live_minutes=15, updater="<x>")
+    assert 'data-updater="terminal"' in page and "<x>" not in page
+
+
+def _run_fresh_js(age_ms: int, stale_visible: bool = False) -> dict:
+    """FRESH_JS in node against a tiny stand-in for the page."""
+    script = """
+var els={age:{textContent:""},aged:{hidden:true},words:{textContent:""},stale:STALE};
+var GEN=1700000000000;Date.now=function(){return GEN+AGE};
+global.setInterval=function(){};
+global.document={body:{getAttribute:function(n){return n==="data-generated"?String(GEN):null}},
+ querySelector:function(s){return {"[data-age]":els.age,"[data-aged]":els.aged,
+  "[data-age-words]":els.words,".stale":els.stale}[s]||null}};
+""".replace("AGE", str(age_ms)).replace(
+        "STALE", "{hidden:false}" if stale_visible else "{hidden:true}") + dash.FRESH_JS + """
+console.log(JSON.stringify({age:els.age.textContent,aged:els.aged.hidden,words:els.words.textContent}));
+"""
+    done = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0, done.stderr
+    return _json.loads(done.stdout)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_the_page_counts_its_own_age_and_turns_amber_after_an_hour() -> None:
+    fresh = _run_fresh_js(20 * 1000)
+    assert fresh == {"age": "built just now", "aged": True, "words": ""}
+    assert _run_fresh_js(45 * 60_000)["age"] == "built 45 min ago"
+    assert _run_fresh_js(45 * 60_000)["aged"] is True
+    old = _run_fresh_js(31 * 3_600_000)
+    assert old == {"age": "built 31 h ago", "aged": False, "words": "31 hours"}
+    assert _run_fresh_js(61 * 60_000)["words"] == "1 hour"
+    assert _run_fresh_js(3 * 86_400_000)["age"] == "built 3 days ago"
+    # A live page whose loop stopped shows its own strip, not both.
+    assert _run_fresh_js(31 * 3_600_000, stale_visible=True)["aged"] is True
+
+
+def test_the_page_is_written_under_a_per_process_temp_name(tmp_path, monkeypatch) -> None:
+    """The background updater and a build by hand can overlap: a shared temp
+    name let one swap the other's half-written page in."""
+    out = dash.REPO_ROOT / "data" / f"dashboard-tmpname-{id(tmp_path)}.html"
+    swapped = []
+    real = os.replace
+    monkeypatch.setattr(dash.os, "replace", lambda a, b: (swapped.append(Path(a).name), real(a, b)))
+    try:
+        dash.write_dashboard(rich_sources(), out, NOW, env={})
+        assert swapped == [f".{out.name}.{os.getpid()}.tmp"]
+        assert out.is_file() and not list(out.parent.glob(f".{out.name}.*.tmp"))
+    finally:
+        out.unlink(missing_ok=True)
+
+
+# --- A2: the background updater --------------------------------------- #
+
+def _fake_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "Code" / "beat-your-league"
+    (repo / "data").mkdir(parents=True)
+    (repo / ".env").write_text(f"STRIPE_STATS_KEY={SECRET}\nCF_ANALYTICS_TOKEN={CF_TOKEN}\n"
+                               f"OWNER_EMAILS={LEAK}\n")
+    return repo
+
+
+def test_the_plist_round_trips_and_holds_no_secret(tmp_path) -> None:
+    repo = _fake_repo(tmp_path)
+    python = repo / ".venv" / "bin" / "python"
+    raw = auto.plist_bytes(repo, python)
+    doc = plistlib.loads(raw)
+    log = str(repo / "data" / "dashboard-updater.log")
+    assert doc == {
+        "Label": "com.beatyourleague.dashboard",
+        "ProgramArguments": [str(python), "-m", "run.dashboard", "--auto", "--every", "15"],
+        "WorkingDirectory": str(repo), "StartInterval": 900, "RunAtLoad": True,
+        "EnvironmentVariables": {"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"},
+        "StandardOutPath": log, "StandardErrorPath": log}
+    text = raw.decode("utf-8")
+    for name in (*dash.ENV_NAMES, *dash.SECRET_NAMES, "CACHE_KEY", "UPDATE_SECRET"):
+        assert name not in text
+    for value in (SECRET, CF_TOKEN, LEAK, "STRIPE_STATS_KEY"):
+        assert value not in text
+    assert ".env" not in text
+
+
+def test_the_updaters_log_and_page_are_gitignored() -> None:
+    assert stats._gitignored(dash.REPO_ROOT / auto.LOG_REL)
+    assert stats._gitignored(dash.REPO_ROOT / (auto.LOG_REL + ".1"))
+    assert stats._gitignored(dash.REPO_ROOT / auto.PAGE_REL)
+
+
+def test_no_committed_file_carries_a_path_from_this_mac() -> None:
+    for rel in ("run/dashboard_auto.py", "run/dashboard.py", "Makefile"):
+        text = (dash.REPO_ROOT / rel).read_text(encoding="utf-8")
+        assert "/Users/" not in text and "/home/" not in text, rel
+
+
+class _Launchctl:
+    def __init__(self, codes=None, print_out=""):
+        self.calls, self.codes, self.print_out = [], list(codes or []), print_out
+
+    def __call__(self, args):
+        self.calls.append(args)
+        if args[0] == "print":
+            return (0 if self.print_out else 113), self.print_out
+        if args[0] == "bootstrap" and self.codes:
+            return self.codes.pop(0), "Bootstrap failed: 5: Input/output error"
+        return (0 if args[0] != "bootout" else 3), ""
+
+
+def test_install_writes_the_agent_into_the_folder_it_is_given(tmp_path, capsys) -> None:
+    repo, agents = _fake_repo(tmp_path), tmp_path / "LaunchAgents"
+    run = _Launchctl()
+    assert auto.install(repo, agents, run, uid=501, python=Path("/venv/python")) == 0
+    target = agents / "com.beatyourleague.dashboard.plist"
+    assert plistlib.loads(target.read_bytes())["WorkingDirectory"] == str(repo)
+    assert run.calls == [["bootout", "gui/501/com.beatyourleague.dashboard"],
+                         ["bootstrap", "gui/501", str(target)]]
+    assert not list(agents.glob(".*.tmp"))
+    assert auto.installed(agents)
+    err = capsys.readouterr().err
+    assert "every 15 minutes" in err and "make dashboard-auto-off" in err
+
+
+def test_install_retries_a_slow_bootout_then_says_how_to_recover(tmp_path, capsys) -> None:
+    repo, agents = _fake_repo(tmp_path), tmp_path / "LaunchAgents"
+    waits = []
+    assert auto.install(repo, agents, _Launchctl(codes=[5, 0]), uid=501,
+                        python=Path("/p"), wait=waits.append) == 0
+    assert waits == [1]
+    assert auto.install(repo, agents, _Launchctl(codes=[5, 5, 5]), uid=501,
+                        python=Path("/p"), wait=lambda s: None) == 1
+    assert "make dashboard-auto-off" in capsys.readouterr().err
+
+
+def test_uninstall_removes_the_agent_and_is_quiet_when_there_is_none(tmp_path, capsys) -> None:
+    repo, agents = _fake_repo(tmp_path), tmp_path / "LaunchAgents"
+    auto.install(repo, agents, _Launchctl(), uid=501, python=Path("/p"))
+    run = _Launchctl()
+    assert auto.uninstall(agents, run, uid=501) == 0
+    assert ["bootout", "gui/501/com.beatyourleague.dashboard"] in run.calls
+    assert not auto.installed(agents)
+    capsys.readouterr()
+    assert auto.uninstall(agents, _Launchctl(), uid=501) == 0
+    assert "isn't installed" in capsys.readouterr().err
+
+
+def test_status_reads_launchd_and_the_logs_last_lines(tmp_path, capsys) -> None:
+    repo, agents = _fake_repo(tmp_path), tmp_path / "LaunchAgents"
+    assert auto.status(repo, agents, _Launchctl(), uid=501) == 0
+    assert "is off" in capsys.readouterr().err
+    auto.install(repo, agents, _Launchctl(), uid=501, python=Path("/p"))
+    (repo / auto.LOG_REL).write_text("Wed 4:15 PM ET  updated dashboard.html\n"
+                                     "Wed 4:30 PM ET  this update failed (OSError: disk); "
+                                     "the last page stays up\n")
+    (repo / auto.PAGE_REL).write_text("<html></html>")
+    now = (repo / auto.PAGE_REL).stat().st_mtime + 4 * 60
+    capsys.readouterr()
+    good = "state = not running\n\truns = 7\n\tlast exit code = 0\n"
+    assert auto.status(repo, agents, _Launchctl(print_out=good), uid=501, now=now) == 0
+    err = capsys.readouterr().err
+    assert "waiting for its next build" in err and "Builds since it was loaded: 7." in err
+    assert "The last build worked." in err and "The page was written 4 min ago." in err
+    assert "this update failed (OSError: disk)" in err
+    bad = "state = not running\n\tlast exit code = 1\n"
+    assert auto.status(repo, agents, _Launchctl(print_out=bad), uid=501, now=now) == 1
+    assert "The last build failed (exit 1)" in capsys.readouterr().err
+    assert auto.status(repo, agents, _Launchctl(), uid=501, now=now) == 1   # installed, not loaded
+
+
+@pytest.mark.parametrize("environ", [{"CI": "true"}, {"GITHUB_ACTIONS": "true"}])
+def test_the_updater_refuses_in_ci(environ, tmp_path, capsys) -> None:
+    run = _Launchctl()
+    assert auto.main(["install"], environ=environ, agent_dir=tmp_path, run=run) == 2
+    assert run.calls == [] and not list(tmp_path.iterdir())
+    assert "does not run in CI" in capsys.readouterr().err
+
+
+def test_the_log_rotates_by_rename_never_truncate(tmp_path) -> None:
+    log = tmp_path / "dashboard-updater.log"
+    log.write_text("x" * 100)
+    _REAL_ROTATE(log, max_bytes=200)
+    assert log.read_text() == "x" * 100
+    log.write_text("y" * 300)
+    _REAL_ROTATE(log, max_bytes=200)
+    assert not log.exists() and (tmp_path / "dashboard-updater.log.1").read_text() == "y" * 300
+
+
+def test_an_auto_build_writes_a_reloading_page_opens_nothing_and_logs_one_line(tmp_path, capsys) -> None:
+    out = dash.REPO_ROOT / "data" / f"dashboard-auto-{id(tmp_path)}.html"
+    rich = rich_sources()
+    collectors = {k: (lambda ctx, s=s: s) for k, s in rich.items()}
+    opened = []
+    try:
+        code = dash.cli(["--auto", "--out", str(out), "--now", NOW.isoformat()],
+                        environ={"STRIPE_API_KEY": SECRET}, env_file=tmp_path / ".env",
+                        collectors=collectors, opener=opened.append)
+        assert code == 0 and opened == []
+        page = out.read_text(encoding="utf-8")
+        body_tag = re.search(r"<body[^>]*>", page).group(0)
+        assert 'data-refresh="900"' in body_tag and 'data-updater="agent"' in body_tag
+        lines = capsys.readouterr().err.strip().splitlines()
+        assert len(lines) == 1 and lines[0].endswith(f"updated {out.name}")
+        assert not re.search(r"\d+ (of|sources|views|plans)", lines[0])
+    finally:
+        out.unlink(missing_ok=True)
+
+
+def test_a_failed_auto_build_exits_1_without_a_secret(tmp_path, capsys, monkeypatch) -> None:
+    def failing_build(*a, **k):
+        raise RuntimeError(f"Stripe said no to {SECRET} for {LEAK}")
+    monkeypatch.setattr(dash, "_build", failing_build)
+    code = dash.cli(["--auto", "--out", "data/dashboard.html"], environ={"STRIPE_API_KEY": SECRET},
+                    env_file=tmp_path / ".env", collectors={})
+    err = capsys.readouterr().err
+    assert code == 1 and "this update failed" in err and SECRET not in err and LEAK not in err
+
+
+def test_with_the_updater_on_a_build_by_hand_keeps_the_tab_reloading(tmp_path, monkeypatch) -> None:
+    """A snapshot written over the updater's page would stop the open tab
+    reloading for good. With the agent installed, make dashboard writes the
+    updater's kind of page; another --out stays a snapshot."""
+    out = dash.REPO_ROOT / "data" / f"dashboard-byhand-{id(tmp_path)}.html"
+    other = dash.REPO_ROOT / "data" / f"dashboard-other-{id(tmp_path)}.html"
+    monkeypatch.setattr(dash, "DEFAULT_OUT", out)
+    agents = tmp_path / "agents"
+    agents.mkdir()
+    (agents / "com.beatyourleague.dashboard.plist").write_bytes(auto.plist_bytes(tmp_path, Path("/p")))
+    rich = rich_sources()
+    collectors = {k: (lambda ctx, s=s: s) for k, s in rich.items()}
+    opened = []
+    try:
+        assert dash.cli(["--now", NOW.isoformat()], environ={}, env_file=tmp_path / ".env",
+                        collectors=collectors, opener=opened.append, agent_dir=agents) == 0
+        assert opened == [out]
+        assert 'data-updater="agent"' in out.read_text(encoding="utf-8")
+        dash.cli(["--out", str(other), "--no-open"], environ={}, env_file=tmp_path / ".env",
+                 collectors=collectors, agent_dir=agents)
+        assert "data-refresh" not in re.search(r"<body[^>]*>", other.read_text()).group(0)
+        # Without the agent, make dashboard is a snapshot again.
+        dash.cli(["--no-open"], environ={}, env_file=tmp_path / ".env", collectors=collectors,
+                 agent_dir=tmp_path / "none")
+        assert "data-refresh" not in re.search(r"<body[^>]*>", out.read_text()).group(0)
+    finally:
+        out.unlink(missing_ok=True)
+        other.unlink(missing_ok=True)
+
+
+# --- A3: the crons' files come from GitHub's copy --------------------- #
+
+class _Git:
+    """A stand-in git: origin/main holds ``files``; records every command."""
+
+    def __init__(self, files: dict, fetch: int = 0, behind: str = "2",
+                 cat_fails: bool = False, log: str = "2026-11-03T04:10:00-05:00"):
+        self.files, self.fetch, self.behind = files, fetch, behind
+        self.cat_fails, self.log = cat_fails, log
+        self.calls: list = []
+
+    def __call__(self, args, cwd):
+        self.calls.append(list(args))
+        cmd = args[0]
+        if cmd == "fetch":
+            return self.fetch, b""
+        if cmd == "ls-tree":
+            return 0, b"\0".join(n.encode() for n in self.files) + b"\0"
+        if cmd == "cat-file":
+            name = args[2].split(":", 1)[1]
+            return (1, b"") if self.cat_fails else (0, self.files[name])
+        if cmd == "rev-list":
+            return 0, (self.behind + "\n").encode()
+        if cmd == "log":
+            return 0, (self.log + "\n").encode()
+        return 128, b""
+
+
+def _sent_line(key: str, at: str) -> bytes:
+    return (_json.dumps({"key": key, "sent_at": at, "provider": "resend"}) + "\n").encode()
+
+
+def test_the_crons_files_are_read_from_githubs_copy_and_never_written_here(tmp_path) -> None:
+    local = tmp_path / "checkout"
+    (local / "data" / "processed").mkdir(parents=True)
+    old = _sent_line("2026-w08-aaaaaaaaaa", "2026-10-28T23:00:00+00:00")
+    (local / "data" / "processed" / "sent.jsonl").write_bytes(old)
+    before = sorted(p.relative_to(local).as_posix() for p in local.rglob("*"))
+    git = _Git({"data/processed/sent.jsonl": old + _sent_line("2026-w09-bbbbbbbbbb",
+                                                              "2026-11-04T23:00:00+00:00"),
+                "data/processed/ledger/typed-ppr-12-2026/calls.jsonl": b"",
+                "site/week.json": b'{"season": "2026", "week": 9}',
+                "../escape.txt": b"no", "README.md": b"not a cron file"})
+    with dash.cron_copy(local, NOW, git) as cron:
+        assert cron.source == "github" and cron.behind == 2 and cron.files == 3
+        copy_root = cron.root
+        assert copy_root != local and not str(copy_root).startswith(str(dash.REPO_ROOT))
+        ctx = Context(env={}, now=NOW, root=local, cron=cron)
+        sends = dash.collect_sends(ctx)
+        assert [e["key"][:8] for e in sends.data["entries"]] == ["2026-w08", "2026-w09"]
+        assert dash.collect_site(ctx).data["week"]["week"] == 9
+        assert not (copy_root / "README.md").exists() and not (tmp_path / "escape.txt").exists()
+    assert not copy_root.exists()                        # the temporary copy is gone
+    assert sorted(p.relative_to(local).as_posix() for p in local.rglob("*")) == before
+    assert {c[0] for c in git.calls} <= {"fetch", "ls-tree", "cat-file", "rev-list", "log"}
+    assert git.calls[0] == ["fetch", "--quiet", "origin", "main"]
+
+
+def test_without_github_the_build_reads_this_macs_copy_and_says_so(tmp_path) -> None:
+    git = _Git({}, fetch=128)
+    with dash.cron_copy(tmp_path, NOW, git) as cron:
+        assert cron.source == "local" and cron.reason == "unreachable" and cron.root == tmp_path
+    assert [c[0] for c in git.calls] == ["fetch", "log"]
+    row = dash.cron_row(cron.view(), NOW)
+    assert "GitHub couldn&#x27;t be reached, so this Mac&#x27;s copy was read" in row
+    assert "Its newest commit is from Tue Nov 3, 4:10 AM ET" in row and 'class="warn"' in row
+    broken = _Git({"site/week.json": b"{}"}, cat_fails=True)
+    with dash.cron_copy(tmp_path, NOW, broken) as cron:
+        assert cron.source == "local" and cron.reason == "unreadable"
+    assert "GitHub&#x27;s copy couldn&#x27;t be read" in dash.cron_row(cron.view(), NOW)
+
+
+def test_the_freshness_list_says_which_copy_and_how_far_behind(tmp_path) -> None:
+    view = dash.CronCopy(root=tmp_path, source="github", behind=1, fetched_at=NOW).view()
+    page = dash.render_page(rich_sources(), NOW, fonts=False, cron=view)
+    srclist = page.split('<ul class="srclist">', 1)[1].split("</ul>", 1)[0]
+    assert ("<b>Crons&#x27; files</b> <span>GitHub&#x27;s copy, fetched just now. This checkout is "
+            "1 commit behind GitHub, which this page doesn&#x27;t need.</span>") in srclist
+    level = dash.CronCopy(root=tmp_path, source="github", behind=0, fetched_at=NOW).view()
+    assert "This checkout is up to date." in dash.cron_row(level, NOW)
+    assert dash.cron_row(None, NOW) == ""
+
+
+def test_every_collector_of_a_cron_file_goes_through_one_helper() -> None:
+    text = (dash.REPO_ROOT / "run" / "dashboard.py").read_text(encoding="utf-8")
+    assert not re.search(r'root\s*/\s*"data"\s*/\s*"processed"', text)
+    assert not re.search(r'root\s*/\s*"site"\s*/\s*"(week\.json|join)"', text)
+    assert not re.search(r'root\s*/\s*"content"', text)
+    for rel in ("data/processed/sent.jsonl", "data/processed/suppressed.txt",
+                "data/processed/ledger", "site/week.json", "site/join/players.json"):
+        assert f'cron_file(ctx, "{rel}")' in text
+    for rel in ("data/processed/sent.jsonl", "data/processed/ledger", "site/week.json",
+                "site/join/players.json", "content/this-week.md"):
+        assert rel in dash.CRON_PATHS
+
+
+def test_the_bounce_check_reads_githubs_send_log(tmp_path, monkeypatch) -> None:
+    copy = tmp_path / "copy"
+    (copy / "data" / "processed").mkdir(parents=True)
+    (copy / "data" / "processed" / "sent.jsonl").write_bytes(
+        _sent_line("2026-w09-cccccccccc", "2026-10-28T12:00:00+00:00"))
+    seen = []
+
+    class Report:
+        key_cannot_read, checked, errors, paid, unpaid = False, 1, 0, [], []
+
+    import run.delivery as delivery
+
+    def fake_check(entries, now, api_key):
+        seen.append(entries)
+        return Report()
+    monkeypatch.setattr(delivery, "check_bounces", fake_check)
+    cron = dash.CronCopy(root=copy, source="github")
+    dash.collect_bounces(Context(env={"RESEND_READ_KEY": "re_x"}, now=NOW, root=tmp_path, cron=cron))
+    assert [e["key"] for e in seen[0]] == ["2026-w09-cccccccccc"]
+
+
+def test_git_is_never_interactive_and_never_waits_long(monkeypatch, tmp_path) -> None:
+    real_git_run = _REAL_GIT_RUN
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw, cmd=cmd)
+        return subprocess.CompletedProcess(cmd, 0, b"ok", b"")
+    monkeypatch.setattr(dash.subprocess, "run", fake_run)
+    assert real_git_run(["fetch", "--quiet", "origin", "main"], tmp_path) == (0, b"ok")
+    assert seen["cmd"][:2] == ["git", "fetch"] and seen["env"]["GIT_TERMINAL_PROMPT"] == "0"
+    assert "BatchMode=yes" in seen["env"]["GIT_SSH_COMMAND"]
+    assert seen["timeout"] <= 30 and seen["stdin"] is subprocess.DEVNULL
+
+    def boom(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, 20)
+    monkeypatch.setattr(dash.subprocess, "run", boom)
+    assert real_git_run(["fetch"], tmp_path) == (1, b"")
+
+
+def test_a_build_reads_githubs_copy_end_to_end(tmp_path) -> None:
+    out = dash.REPO_ROOT / "data" / f"dashboard-cron-{id(tmp_path)}.html"
+    git = _Git({"site/week.json": b'{"season": "2026", "week": 9}'}, behind="3")
+    rich = rich_sources()
+    seen = {}
+
+    def site(ctx):
+        seen["root"] = ctx.cron.root
+        seen["week"] = dash.collect_site(ctx).data["week"]["week"]
+        return rich["site"]
+    collectors = {**{k: (lambda ctx, s=s: s) for k, s in rich.items()}, "site": site}
+    try:
+        assert dash.cli(["--out", str(out), "--no-open", "--now", NOW.isoformat()], environ={},
+                        env_file=tmp_path / ".env", collectors=collectors, git=git) == 0
+        assert seen["week"] == 9 and not seen["root"].exists()
+        page = out.read_text(encoding="utf-8")
+        assert "This checkout is 3 commits behind GitHub" in page
+    finally:
+        out.unlink(missing_ok=True)

@@ -3,6 +3,7 @@
 Usage:
     python -m run.dashboard [--out PATH] [--registry PATH] [--no-open] [--now ISO]
                             [--every MINUTES]     (make dashboard-live: rebuild on a timer)
+                            [--auto]              (make dashboard-auto: one background build)
 
 One self-contained HTML page, built on the owner's own Mac from the owner's own
 sources, opened in the browser. The decisions, each for a reason:
@@ -53,7 +54,14 @@ sources, opened in the browser. The decisions, each for a reason:
   channel (the part before the first hyphen), and pinned on the traffic chart
   on the day it went out.
 - **Live mode** (``--every``) rebuilds on a timer and the page reloads itself;
-  the page turns amber when its numbers are older than two rounds.
+  the page turns amber when its numbers are older than two rounds. The
+  background updater (``make dashboard-auto``, run/dashboard_auto.py) runs one
+  ``--auto`` build every 15 minutes from launchd and writes the same kind of
+  page, so an open tab keeps reloading without a Terminal tab.
+- **Every page says how old it is**: the build time, an age that counts up
+  each minute, and an amber line once it is more than an hour old.
+- **The crons' files come from GitHub's copy** (``cron_copy``): fetched, then
+  read with ``git cat-file``, never pulled or checked out.
 """
 
 from __future__ import annotations
@@ -69,6 +77,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from collections import Counter, defaultdict
@@ -76,7 +85,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping
 from zoneinfo import ZoneInfo
 
@@ -153,6 +162,7 @@ class Context:
     now: datetime
     root: Path = REPO_ROOT
     registry: Path | None = None
+    cron: Any = None                  # a CronCopy: where the crons' committed files are read
 
 
 # The page counts people and never shows an address; this line says where
@@ -172,7 +182,7 @@ SOURCE_INFO = {
                "signups by channel."),
     "intake": ("Intake check", "LAUNCH.md step 3 — Stripe keys",
                "Payments the hourly intake can't serve (PAID-UNATTRIBUTED)."),
-    "sends": ("Send log", "`git pull` — the crons commit data/processed/sent.jsonl",
+    "sends": ("Send log", "The crons commit data/processed/sent.jsonl; the page reads GitHub's copy",
               "Emails sent per week, welcomes, free reports and stop requests."),
     "registry": ("Registry", "`make stats-registry` opens a copy; pass --registry PATH",
                  "Subscribers by plan and League Pass seats claimed against each cap."),
@@ -486,18 +496,152 @@ def collect_intake(ctx: Context) -> Source:
                    note="" if plans else LINK_MAP_NOTE, read_at=ctx.now)
 
 
+# --- the crons' committed files (GitHub's copy, read-only) ------------ #
+
+# The files the crons commit, which this page reads. A checkout that hasn't
+# pulled shows last week's sends and record (Nov 3 2026: one commit behind,
+# Week 8 still on the sample), so each build fetches origin/main and reads
+# these paths out of it with `git cat-file`, never touching the working tree:
+# no pull, no checkout, no write here. When GitHub can't be reached the build
+# reads this Mac's copy and the freshness list says so. Every collector that
+# reads one of these goes through cron_file().
+CRON_PATHS = ("data/processed/sent.jsonl", "data/processed/suppressed.txt",
+              "data/processed/ledger", "site/week.json", "site/join/players.json",
+              "content/this-week.md")
+CRON_REF = "origin/main"
+CRON_LABEL = "Crons' files"
+FETCH_TIMEOUT = 20       # seconds; a fetch that hangs falls back to this Mac's copy
+
+
+def _git_run(args: list[str], cwd: Path) -> tuple[int, bytes]:
+    """One git command, never interactive: no password prompt, no SSH
+    passphrase. Any failure is a non-zero code, never an exception."""
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never",
+           "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"}
+    try:
+        done = subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True,
+                              stdin=subprocess.DEVNULL, timeout=FETCH_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return 1, b""
+    return done.returncode, done.stdout
+
+
+GitRun = Callable[[list[str], Path], tuple[int, bytes]]
+
+
+@dataclass
+class CronCopy:
+    """Where this build read the crons' files from."""
+    root: Path
+    source: str                         # "github" | "local"
+    reason: str = ""                    # "unreachable" | "unreadable", when local
+    behind: int | None = None           # commits this checkout is behind GitHub
+    fetched_at: datetime | None = None
+    local_at: str | None = None         # this checkout's newest commit, when local
+    files: int = 0
+
+    def view(self) -> dict:
+        return {"source": self.source, "reason": self.reason, "behind": self.behind,
+                "fetched_at": self.fetched_at.isoformat() if self.fetched_at else None,
+                "local_at": self.local_at, "files": self.files}
+
+
+def cron_file(ctx: Context, rel: str) -> Path:
+    """A committed cron file as this build reads it: GitHub's copy when the
+    fetch worked, this checkout's otherwise (and in every collector test)."""
+    base = ctx.cron.root if ctx.cron is not None else ctx.root
+    return base / rel
+
+
+def _cron_name_ok(name: str) -> bool:
+    parts = PurePosixPath(name).parts
+    return bool(name) and not name.startswith("/") and ".." not in parts and any(
+        name == p or name.startswith(p + "/") for p in CRON_PATHS)
+
+
+def _github_copy(root: Path, dest: Path, now: datetime, git: GitRun) -> CronCopy | None:
+    code, listing = git(["ls-tree", "-r", "-z", "--name-only", CRON_REF, "--", *CRON_PATHS], root)
+    if code != 0:
+        return None
+    files = 0
+    for raw in listing.split(b"\0"):
+        name = raw.decode("utf-8", "replace")
+        if not _cron_name_ok(name):
+            continue
+        code, blob = git(["cat-file", "blob", f"{CRON_REF}:{name}"], root)
+        if code != 0:
+            return None
+        target = dest / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(blob)
+        files += 1
+    code, out = git(["rev-list", "--count", f"HEAD..{CRON_REF}"], root)
+    text = out.decode("ascii", "replace").strip() if code == 0 else ""
+    return CronCopy(root=dest, source="github", behind=int(text) if text.isdigit() else None,
+                    fetched_at=now, files=files)
+
+
+def _local_copy(root: Path, reason: str, git: GitRun) -> CronCopy:
+    code, out = git(["log", "-1", "--format=%cI", "HEAD"], root)
+    stamp = out.decode("ascii", "replace").strip() if code == 0 else ""
+    return CronCopy(root=root, source="local", reason=reason, local_at=stamp or None)
+
+
+@contextmanager
+def cron_copy(root: Path, now: datetime, git: GitRun | None = None):
+    """Fetch origin/main and lay the crons' files out in a temporary folder
+    outside the repo (deleted afterwards); this Mac's copy when that fails."""
+    git = git or _git_run
+    code, _out = git(["fetch", "--quiet", "origin", "main"], root)
+    if code != 0:
+        yield _local_copy(root, "unreachable", git)
+        return
+    with tempfile.TemporaryDirectory(prefix="byl-dashboard-") as tmp:
+        copy = _github_copy(root, Path(tmp), now, git)
+        if copy is not None:
+            yield copy
+            return
+    yield _local_copy(root, "unreadable", git)
+
+
+def cron_row(cron: Mapping | None, now: datetime) -> str:
+    """The freshness list's line for the crons' files: which copy was read."""
+    if not cron:
+        return ""
+    if cron.get("source") == "github":
+        fetched = _ts(cron.get("fetched_at"))
+        words = "GitHub's copy, fetched " + (ago(fetched, now) if fetched else "this build")
+        behind = cron.get("behind")
+        if behind == 0:
+            words += ". This checkout is up to date"
+        elif isinstance(behind, int):
+            words += (f". This checkout is {_n(behind, 'commit')} behind GitHub, "
+                      "which this page doesn't need")
+        cls = "good"
+    else:
+        words = ("GitHub couldn't be reached, so this Mac's copy was read"
+                 if cron.get("reason") == "unreachable"
+                 else "GitHub's copy couldn't be read, so this Mac's copy was read")
+        local = _ts(cron.get("local_at"))
+        if local:
+            when = local.astimezone(ET)
+            words += f". Its newest commit is from {when:%a %b} {when.day}, {when:%-I:%M %p} ET"
+        cls = "warn"
+    return f'<li class="{cls}"><i></i><b>{h(CRON_LABEL)}</b> <span>{h(words)}.</span></li>'
+
+
 # --- local files ------------------------------------------------------ #
 
 def collect_sends(ctx: Context) -> Source:
-    path = ctx.root / "data" / "processed" / "sent.jsonl"
+    path = cron_file(ctx, "data/processed/sent.jsonl")
     from run.suppress import load_suppressed
     try:
-        stopped = len(load_suppressed(ctx.root / "data" / "processed" / "suppressed.txt"))
+        stopped = len(load_suppressed(cron_file(ctx, "data/processed/suppressed.txt")))
     except Exception:  # noqa: BLE001 — the count is optional
         stopped = None
     if not path.is_file():
-        return off("sends", "No send log on this machine yet — nothing has been sent, or "
-                            "this checkout hasn't pulled the crons' commits.")
+        return off("sends", "No send log yet: nothing has been sent, or GitHub couldn't be "
+                            "reached and this checkout hasn't pulled the crons' commits.")
     entries = [{"key": str(e["key"]), "sent_at": _iso(e.get("sent_at")),
                 "provider": str(e.get("provider") or "")}
                for e in stats.load_send_log(path)]
@@ -560,7 +704,7 @@ def collect_bounces(ctx: Context) -> Source:
     if not key:
         return off("bounces", "RESEND_READ_KEY is not in this shell or .env.")
     from run.delivery import check_bounces
-    entries = stats.load_send_log(ctx.root / "data" / "processed" / "sent.jsonl")
+    entries = stats.load_send_log(cron_file(ctx, "data/processed/sent.jsonl"))
     report = check_bounces(entries, ctx.now, api_key=key)
     if report.key_cannot_read:
         return _source("bounces", status="error",
@@ -652,7 +796,7 @@ def collect_ledger(ctx: Context) -> Source:
     from engine.ledger import LedgerError, load_ledger
     season = _season(ctx)
     calls, unreadable = [], []
-    for path in sorted((ctx.root / "data" / "processed" / "ledger")
+    for path in sorted(cron_file(ctx, "data/processed/ledger")
                        .glob(f"typed-*-{season}/calls.jsonl")):
         try:
             held = load_ledger(path)
@@ -667,9 +811,9 @@ def collect_ledger(ctx: Context) -> Source:
                    read_at=ctx.now)
 
 
-def _git_time(root: Path, rel: str) -> str | None:
+def _git_time(root: Path, rel: str, rev: str = "HEAD") -> str | None:
     try:
-        done = subprocess.run(["git", "log", "-1", "--format=%cI", "--", rel], cwd=root,
+        done = subprocess.run(["git", "log", "-1", "--format=%cI", rev, "--", rel], cwd=root,
                               capture_output=True, text=True, timeout=20)
         return done.stdout.strip() or None
     except (OSError, subprocess.SubprocessError):
@@ -679,15 +823,16 @@ def _git_time(root: Path, rel: str) -> str | None:
 def collect_site(ctx: Context) -> Source:
     week, players_at = None, None
     try:
-        week = json.loads((ctx.root / "site" / "week.json").read_text(encoding="utf-8"))
+        week = json.loads(cron_file(ctx, "site/week.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         pass
     try:
-        players = json.loads((ctx.root / "site" / "join" / "players.json")
-                             .read_text(encoding="utf-8"))
+        players = json.loads(cron_file(ctx, "site/join/players.json").read_text(encoding="utf-8"))
         players_at = players.get("generated") if isinstance(players, dict) else None
     except (OSError, json.JSONDecodeError):
-        players_at = _git_time(ctx.root, "site/join/players.json")
+        github = ctx.cron is not None and ctx.cron.source == "github"
+        players_at = _git_time(ctx.root, "site/join/players.json",
+                               CRON_REF if github else "HEAD")
     keep = ("season", "week", "last_week", "built_at", "phase", "lands_on", "first_kickoff")
     return _source("site", data={"week": {k: week.get(k) for k in keep}
                                  if isinstance(week, dict) else None,
@@ -2978,7 +3123,7 @@ FRESHNESS_KEYS = ("traffic", "stripe", "forms", "intake", "sends", "bounces", "g
                   "launch", "registry", "plan", "books")
 
 
-def freshness(S: Mapping[str, Source], now: datetime) -> str:
+def freshness(S: Mapping[str, Source], now: datetime, cron: Mapping | None = None) -> str:
     """One quiet chip when every source is live; each source that isn't gets
     its own amber (not connected) or red (error) chip beside it. The full
     list, with data ages, opens from the summary chip."""
@@ -2996,6 +3141,7 @@ def freshness(S: Mapping[str, Source], now: datetime) -> str:
                 extra = f" · last send {ago(_ts(last), now)}"
         rows.append(f'<li class="{ {"ok": "good", "off": "warn", "error": "bad"}[src.status] }"><i></i>'
                     f'<b>{h(src.label)}</b> <span>{h(word + extra)}</span></li>')
+    rows.append(cron_row(cron, now))
     site = S["site"]
     if site.ok:
         week = site.data.get("week") or {}
@@ -3057,7 +3203,8 @@ NAV = (("overview", "Overview"), ("traffic", "Traffic"), ("funnel", "Funnel"), (
 
 def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_ROOT,
                 fonts: bool = True, env: Mapping[str, str] | None = None,
-                live_minutes: int | None = None) -> str:
+                live_minutes: int | None = None, updater: str = "terminal",
+                cron: Mapping | None = None) -> str:
     # A source nobody read is an unconnected one, never a crash.
     sources = {**{k: off(k, "Not read this time.") for k in SOURCE_INFO}, **sources}
     M = {p: metrics_for(sources, p, now) for p, _l, _d in PERIODS}
@@ -3078,27 +3225,24 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
                        f'{icon("ext", "ic tiny")}</a>' for n, u in CONSOLES)
     stamp = now.astimezone(ET)
     # Live mode: the page reloads itself after the next rebuild and says so,
-    # and says so again when the rebuilds have stopped (the stale strip).
-    live = (f'<span class="live" title="Rebuilt every {live_minutes} minutes while make dashboard-live '
-            f'runs">Live · every {live_minutes} min</span>' if live_minutes else "")
-    stale = ('<div class="stale" hidden>These numbers stopped updating. Live updates stopped at '
-             f'{stamp:%-I:%M %p} ET; run <code>make dashboard-live</code> again.</div>'
-             if live_minutes else "")
-    body_attrs = (f' data-refresh="{live_minutes * 60}" data-generated="{int(now.timestamp() * 1000)}"'
-                  if live_minutes else "")
+    # and says so again when the rebuilds have stopped (the stale strip). It
+    # names what rebuilds it: the Terminal loop or the background updater.
+    live, stale, body_attrs = updater_parts(live_minutes, updater, stamp)
+    body_attrs = f' data-generated="{int(now.timestamp() * 1000)}"' + body_attrs
     body = (
         f'<header class="top"><div class="topin"><a class="brand" href="#overview">'
         f'{mark_svg("dash", "logo")}<span><b>Beat Your League</b><em>Owner dashboard</em></span></a>'
-        f'<span class="gen" title="Generated {h(now.isoformat())}">{icon("clock", "ic tiny")} '
-        f'{stamp:%a %b} {stamp.day}, {stamp:%-I:%M %p} ET</span>{live}'
+        f'<span class="gen" title="Generated {h(now.isoformat())}{h(built_by(live_minutes, updater))}">'
+        f'{icon("clock", "ic tiny")} <span class="when">{stamp:%a %b} {stamp.day}, {stamp:%-I:%M %p} ET</span> '
+        f'<span class="age" data-age>built just now</span></span>{live}'
         f'<button class="theme" type="button" aria-label="Switch light or dark">{icon("moon", "ic moon")}'
         f'{icon("sun", "ic sun")}</button></div>'
         f'<nav class="tabs" aria-label="Sections"><div class="tabsin">{nav}</div></nav></header>'
-        f'<main class="wrap">{stale}'
+        f'<main class="wrap">{stale}{AGED_STRIP}'
         f'{attention(issues)}{launch_status(sources, now)}'
         f'<div class="filters"><div class="seg" role="group" aria-label="Period">{periods}</div>'
         f'<p class="muted small fnote">Traffic keeps 90 days; money and forms count all time under “All”.</p>'
-        f'{freshness(sources, now)}</div>'
+        f'{freshness(sources, now, cron)}</div>'
         + overview(sources, M, sends)
         + traffic_section(sources, M)
         + funnel_section(sources, M)
@@ -3113,14 +3257,57 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
     # Everything dynamic lives in the body; the CSS, the script and the
     # inlined fonts are constants of this module.
     body = scrub(body, os.environ if env is None else {**os.environ, **env})
-    css = (font_css(root) if fonts else "") + CSS
+    css = (font_css(root) if fonts else "") + CSS + FRESH_CSS
     return ('<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             '<meta name="robots" content="noindex, nofollow">'
             '<meta name="referrer" content="no-referrer">'
             '<title>BYL — Owner dashboard</title>'
             f'<style>{css}</style></head><body data-period="30d"{body_attrs}>{body}'
-            f'<script>{JS}</script></body></html>\n')
+            f'<script>{JS}</script><script>{FRESH_JS}</script></body></html>\n')
+
+
+# --- how old the page is, and what rebuilds it ------------------------ #
+
+# A page is a snapshot: refreshing the tab re-reads the same file. So every
+# page carries its build time (data-generated) and counts its own age up each
+# minute, and past an hour says its numbers are old and how to refresh them.
+# Only a live page (Terminal loop or background updater) reloads itself.
+OLD_AFTER_MINUTES = 60
+AGED_STRIP = ('<div class="aged" data-aged hidden>Built <span data-age-words>an hour</span> ago, '
+              'so these numbers are old. Run <code>make dashboard</code>, or '
+              '<code>make dashboard-auto</code> to keep it fresh.</div>')
+UPDATERS = {
+    "terminal": ("Terminal loop", "while make dashboard-live runs in a Terminal tab"),
+    "agent": ("Background updater", "in the background by make dashboard-auto"),
+}
+
+
+def built_by(live_minutes: int | None, updater: str) -> str:
+    if not live_minutes:
+        return " by make dashboard, once. It doesn't update itself."
+    _name, how = UPDATERS.get(updater, UPDATERS["terminal"])
+    return f". Rebuilt every {live_minutes} minutes {how}."
+
+
+def updater_parts(live_minutes: int | None, updater: str, stamp: datetime) -> tuple[str, str, str]:
+    """The live chip, the stopped-updating strip and the body attributes for
+    a page that reloads itself; three empty strings for a one-off build."""
+    if not live_minutes:
+        return "", "", ""
+    if updater not in UPDATERS:
+        updater = "terminal"
+    name, how = UPDATERS[updater]
+    live = (f'<span class="live" title="Rebuilt every {live_minutes} minutes {how}">'
+            f'Live · every {live_minutes} min<em> · {name}</em></span>')
+    if updater == "agent":
+        stale = ('<div class="stale" hidden>These numbers stopped updating. The background updater '
+                 f'last built this page at {stamp:%-I:%M %p} ET. Run '
+                 '<code>make dashboard-auto-status</code> to see why.</div>')
+    else:
+        stale = ('<div class="stale" hidden>These numbers stopped updating. Live updates stopped at '
+                 f'{stamp:%-I:%M %p} ET; run <code>make dashboard-live</code> again.</div>')
+    return live, stale, f' data-refresh="{live_minutes * 60}" data-updater="{updater}"'
 
 
 def scrub(text: str, env: Mapping[str, str]) -> str:
@@ -3437,6 +3624,35 @@ if(refresh&&gen){
 """
 
 
+FRESH_CSS = r"""
+.gen .age{color:#AEB9CC}.gen .when::after{content:" \00b7"}
+.live em{font-style:normal;font-weight:500;color:#9FD3B5}
+.aged{margin:0 0 16px;padding:12px 16px;border-radius:12px;border:1px solid var(--warn);background:var(--warnbg);
+color:var(--ink);font-size:14px;font-weight:600}
+@media (max-width:560px){.gen .when,.live em{display:none}}
+"""
+
+# The page's age, counted by the page itself each minute. Its words match
+# ago() above; the amber line waits for the stopped-updating strip, so a live
+# page never shows both.
+FRESH_JS = r"""
+(function(){
+"use strict";
+var gen=+document.body.getAttribute("data-generated")||0;if(!gen)return;
+var OLD=%d*60000,age=document.querySelector("[data-age]"),aged=document.querySelector("[data-aged]"),
+ words=document.querySelector("[data-age-words]"),stale=document.querySelector(".stale");
+function short(ms){var s=ms/1000;if(s<90)return "just now";if(s<3600)return Math.round(s/60)+" min ago";
+ if(s<48*3600)return Math.round(s/3600)+" h ago";return Math.round(s/86400)+" days ago";}
+function long(ms){var hr=Math.floor(ms/3600000);if(hr<48)return hr===1?"1 hour":hr+" hours";
+ return Math.floor(ms/86400000)+" days";}
+function tick(){var ms=Math.max(0,Date.now()-gen);
+ if(age)age.textContent="built "+short(ms);
+ if(aged){var show=ms>=OLD&&!(stale&&!stale.hidden);aged.hidden=!show;if(show&&words)words.textContent=long(ms);}}
+tick();setInterval(tick,60000);
+})();
+""" % OLD_AFTER_MINUTES
+
+
 # --------------------------------------------------------------------- #
 # command line
 # --------------------------------------------------------------------- #
@@ -3449,12 +3665,16 @@ def env_from(environ: Mapping[str, str], env_file: Path) -> dict[str, str]:
 
 def write_dashboard(sources: Mapping[str, Source], out: Path, now: datetime,
                     root: Path = REPO_ROOT, env: Mapping[str, str] | None = None,
-                    live_minutes: int | None = None) -> Path:
-    page = render_page(sources, now, root, env=env or {}, live_minutes=live_minutes)
+                    live_minutes: int | None = None, updater: str = "terminal",
+                    cron: Mapping | None = None) -> Path:
+    page = render_page(sources, now, root, env=env or {}, live_minutes=live_minutes,
+                       updater=updater, cron=cron)
     out.parent.mkdir(parents=True, exist_ok=True)
     # Written beside the target and swapped in, so a reload mid-write never
-    # reads half a page.
-    tmp = out.with_name(f".{out.name}.tmp")
+    # reads half a page. The temp name carries the process id: the background
+    # updater and a build by hand can overlap, and must not swap each other's
+    # half-written file in.
+    tmp = out.with_name(f".{out.name}.{os.getpid()}.tmp")
     tmp.write_text(page, encoding="utf-8")
     os.replace(tmp, out)
     return out
@@ -3464,7 +3684,8 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
         env_file: Path | None = None,
         collectors: Mapping[str, Callable[[Context], Source]] | None = None,
         opener: Callable[[Path], None] | None = None,
-        sleep: Callable[[float], None] | None = None) -> int:
+        sleep: Callable[[float], None] | None = None,
+        git: GitRun | None = None, agent_dir: Path | None = None) -> int:
     environ = os.environ if environ is None else environ
     if stats.in_ci(environ):
         print("make dashboard does not run in CI: the repository is public, so the job "
@@ -3481,6 +3702,9 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
     parser.add_argument("--every", type=int, default=None, metavar="MINUTES",
                         help=f"live mode: rebuild every MINUTES (at least {LIVE_MIN_MINUTES}) until "
                              "Ctrl-C; the open page reloads itself")
+    parser.add_argument("--auto", action="store_true",
+                        help="one build for the background updater (make dashboard-auto): the page "
+                             "keeps reloading itself and no browser opens")
     parser.add_argument("--rounds", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.every is not None and args.every < LIVE_MIN_MINUTES:
@@ -3493,8 +3717,19 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
               f"repository — use a path such as data/dashboard.html.", file=sys.stderr)
         return 2
     env = env_from(environ, env_file or stats.ENV_FILE)
+    if args.auto:
+        return _auto_build(env, now, args, collectors, git)
     if args.every is None:
-        out = _build(env, now, args, collectors)
+        # With the background updater installed, a build by hand writes the
+        # page the updater writes (it reloads itself), never a snapshot that
+        # would stop the open tab reloading.
+        import run.dashboard_auto as auto
+        if auto.installed(agent_dir) and args.out.resolve() == DEFAULT_OUT.resolve():
+            out = _build(env, now, args, collectors, live_minutes=auto.AUTO_MINUTES,
+                         updater="agent", git=git)
+            print("The background updater is on, so this page keeps itself fresh.", file=sys.stderr)
+        else:
+            out = _build(env, now, args, collectors, git=git)
         if not args.no_open:
             (opener or _open)(out)
         return 0
@@ -3506,7 +3741,8 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
         while True:
             now = (stats._when(args.now) if args.now else None) or datetime.now(timezone.utc)
             try:
-                out = _build(env, now, args, collectors, live_minutes=args.every, quiet=rounds > 0)
+                out = _build(env, now, args, collectors, live_minutes=args.every, quiet=rounds > 0,
+                             git=git)
                 print(f"{now.astimezone(ET):%-I:%M %p} ET  updated; next in {args.every} min "
                       f"(Ctrl-C stops)", file=sys.stderr)
                 if rounds == 0 and not args.no_open:
@@ -3527,20 +3763,49 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
 
 def _build(env: Mapping[str, str], now: datetime, args: argparse.Namespace,
            collectors: Mapping[str, Callable[[Context], Source]] | None,
-           live_minutes: int | None = None, quiet: bool = False) -> Path:
-    ctx = Context(env=env, now=now, registry=args.registry)
+           live_minutes: int | None = None, quiet: bool = False, updater: str = "terminal",
+           git: GitRun | None = None) -> Path:
     if not quiet:
         print("Reading your sources (read-only)…", file=sys.stderr)
-    sources = collect_all(ctx, collectors)
+    with cron_copy(REPO_ROOT, now, git) as cron:
+        ctx = Context(env=env, now=now, registry=args.registry, cron=cron)
+        sources = collect_all(ctx, collectors)
     if not quiet:
+        print("  ✓ Crons' files: GitHub's copy" if cron.source == "github" else
+              "  – Crons' files: " + ("GitHub couldn't be reached" if cron.reason == "unreachable"
+                                      else "GitHub's copy couldn't be read") + ", so this Mac's copy",
+              file=sys.stderr)
         for src in sources.values():
             mark = {"ok": "✓", "off": "–", "error": "✗"}[src.status]
             print(f"  {mark} {src.label}" + (f": {scrub(src.note, env)}" if src.note else ""),
                   file=sys.stderr)
-    out = write_dashboard(sources, args.out, now, env=env, live_minutes=live_minutes)
+    out = write_dashboard(sources, args.out, now, env=env, live_minutes=live_minutes,
+                          updater=updater, cron=cron.view())
     if not quiet:
         print(f"Written to {out}", file=sys.stderr)
     return out
+
+
+def _auto_build(env: Mapping[str, str], now: datetime, args: argparse.Namespace,
+                collectors: Mapping[str, Callable[[Context], Source]] | None,
+                git: GitRun | None = None) -> int:
+    """One build for launchd (make dashboard-auto). Its output is the
+    updater's log, so it prints one line a build: the time and whether it
+    worked, never a count or a note. A failure exits 1, which
+    make dashboard-auto-status reads back as the last exit code."""
+    import run.dashboard_auto as auto
+    auto.rotate_log()
+    minutes = args.every or auto.AUTO_MINUTES
+    when = f"{now.astimezone(ET):%a %-I:%M %p} ET"
+    try:
+        out = _build(env, now, args, collectors, live_minutes=minutes, quiet=True,
+                     updater="agent", git=git)
+    except Exception as exc:  # noqa: BLE001 — the last page stays up; say why, scrubbed
+        print(f"{when}  this update failed ({scrub(type(exc).__name__ + ': ' + str(exc), env)}); "
+              f"the last page stays up", file=sys.stderr)
+        return 1
+    print(f"{when}  updated {out.name}", file=sys.stderr)
+    return 0
 
 
 def _open(path: Path) -> None:
