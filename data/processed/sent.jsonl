@@ -4,3 +4,4 @@
 {"key":"run-daily-2026-11-04","provider":"marker","message_id":"","sent_at":"2026-11-04T14:17:34+00:00"}
 {"key":"2026-w09-a148b7484e","provider":"resend","message_id":"01a1a8a3-c1d6-7781-8644-65aa90c6a05b","sent_at":"2026-11-04T22:17:46+00:00"}
 {"key":"run-tuesday-2026-w09","provider":"marker","message_id":"sent 1, already sent 0, send failed 0, not built 0","sent_at":"2026-11-04T22:17:46+00:00"}
+{"key":"run-daily-2026-11-05","provider":"marker","message_id":"","sent_at":"2026-11-05T14:17:30+00:00"}
