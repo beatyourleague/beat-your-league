@@ -456,17 +456,17 @@ def test_neither_bye_draft_carries_a_number_to_grade() -> None:
     assert posts[1]["card"] == "Your Game Plan" and "when" not in posts[1]
 
 
-def test_the_bye_check_reply_opens_the_planner_on_the_sample_roster() -> None:
-    """Contract C7: the planner is /byes/. Draft B's link carries the sample
-    roster as the same v4 roster code a signup carries."""
-    from run.refs import decode_roster
+def test_both_bye_replies_open_the_plain_planner() -> None:
+    """Contract C7: the planner is /byes/, and both bye drafts' first replies
+    link it, tagged for the post. Draft B's once carried the sample roster
+    (site review, Nov 2026): its reply said "check your own roster", and the
+    planner restored OURS, then carried it into its free-report and checkout
+    links. A visitor's own roster starts from an empty planner."""
     [table, check] = drops.bye_drafts(_bye_report(), BYES_2026)
-    assert table["reply"].endswith(" https://beatyourleague.com/byes/")
-    url = check["reply"].rsplit(" ", 1)[1]
-    assert url.startswith("https://beatyourleague.com/byes/?ref=")
-    roster = decode_roster(url.split("?ref=", 1)[1])
-    assert tuple(roster.player_ids) == live.LIVE_ROSTER
-    assert roster.league_size == 12 and roster.scoring == "ppr"
+    assert table["reply"].endswith(" https://beatyourleague.com/byes/?via=x-w07-byes")
+    assert check["reply"].endswith(" https://beatyourleague.com/byes/?via=x-w07-byecheck")
+    for post in (table, check):
+        assert "ref=" not in post["reply"] and "try=" not in post["reply"]
 
 
 def test_the_bye_drafts_sit_after_the_reports_own_posts() -> None:
@@ -483,8 +483,8 @@ def test_the_bye_drafts_sit_after_the_reports_own_posts() -> None:
     report = {"meta": {"week": 7, "season": "2026"}, "regret": {}, "pivots": [],
               "rising": [{"name": "A B", "team": "SEA", "position": "RB", "recent": 9.0,
                           "earlier": 2.0}]}
-    [rising] = drops.drafts(report)
-    assert rising["reply"].endswith("https://beatyourleague.com/this-week.html?w=7")
+    [rising] = drops.drafts(report, live_page=True)
+    assert rising["reply"].endswith("https://beatyourleague.com/this-week.html?w=7&via=x-w07-rising")
 
 
 def test_the_drafts_file_says_where_the_planner_card_is(tmp_path) -> None:

@@ -744,11 +744,14 @@ def test_the_drafted_posts_carry_no_link_and_name_the_card_to_attach() -> None:
     by the heading the report itself prints over it."""
     from run import drops
     from test_drops import _report
-    posts = drops.drafts(_report())
+    posts = drops.drafts(_report(), live_page=True)
     assert posts
     for post in posts:
         assert "http" not in post["text"] and "this-week.html" in post["reply"]
         assert post["card"] in drops.CARDS.values()
+    # A week the site keeps this week's page unlinked: still a link, the home page's.
+    for post in drops.drafts(_report()):
+        assert "http" not in post["text"] and "https://beatyourleague.com/?via=" in post["reply"]
     # The report's card titles live in one place now (render.anatomy.TITLES,
     # contract C1), the one every surface prints.
     from render.anatomy import TITLES

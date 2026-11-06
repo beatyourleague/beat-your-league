@@ -27,6 +27,8 @@ Commands (each has a make target):
     make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly   [DATE=2026-08-01]
     make hours H=1.5                                    [NOTE="replied to emails"]
     make link TAG=reddit-oct28 WHERE="r/fantasyfootball" [PAGE=byes/]
+    make link TAG=league-nov10 WHERE="my league chat" PAGE='join/?try=1'
+                                   (the free report; keep the quotes in zsh)
     make books                                          (show what's recorded)
 """
 
@@ -53,6 +55,10 @@ ET = ZoneInfo("America/New_York")
 REPEATS = ("once", "monthly", "yearly")
 TAG_RE = re.compile(r"^[a-z0-9-]{1,24}$")          # run.refs.VIA_RE, count.js, carryVia
 PAGE_RE = re.compile(r"^(?:[a-z0-9-]+/|[a-z0-9-]+\.html)?$")
+# The pages a link may name WITH a query, and only these: the free report
+# (join's try mode). Any other "?" stays refused, so a post's link can never
+# carry a roster, a seat or somebody's settings.
+PAGE_QUERIES = frozenset({"join/?try=1"})
 HEADERS = {COSTS.name: ("date", "item", "amount", "repeats"),
            HOURS.name: ("date", "hours", "note"),
            POSTS.name: ("date", "tag", "where", "note")}
@@ -246,7 +252,10 @@ def append(path: Path, row: tuple[str, ...]) -> None:
 
 
 def tagged_link(tag: str, page: str = "") -> str:
-    return f"{SITE}{page}?via={tag}"
+    """The post's link: ``page`` with ``?via=<tag>``, or ``&via=`` when the
+    page already has a query ("join/?try=1?via=x" reads try as "1?via=x" and
+    opens the buy page, untagged)."""
+    return f"{SITE}{page}{'&' if '?' in page else '?'}via={tag}"
 
 
 def today_et() -> date:
@@ -322,9 +331,10 @@ def cli(argv: list[str] | None = None, root: Path = REPO_ROOT) -> int:
         page = args.page.strip().lstrip("/")
         if not PAGE_RE.fullmatch(page) and PAGE_RE.fullmatch(page + "/"):
             page += "/"                 # "byes" is the planner's folder, byes/
-        if not PAGE_RE.fullmatch(page):
+        if not (PAGE_RE.fullmatch(page) or page in PAGE_QUERIES):
             print("PAGE must be a page of the site such as byes/ or sample-report.html "
-                  "(empty for the home page).", file=sys.stderr)
+                  "(empty for the home page), or 'join/?try=1' for the free report.",
+                  file=sys.stderr)
             return 2
         existing = {p.tag for p in load(root).posts}
         if tag in existing:
