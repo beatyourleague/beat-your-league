@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from render.report import (FAVICON_LINK, PAGE_META, SITE_BAR_CSS, SITE_FOOTER_CSS, SITE_ORIGIN,
-                           SOCIAL_IMAGE_TAGS, TRIAL_LINK_LABEL, esc, font_preloads, sample_cta,
+                           SOCIAL_IMAGE_TAGS, esc, font_preloads, free_try_html, sample_cta,
                            site_bar, site_footer, trial_link_open, with_counter)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -349,10 +349,7 @@ def _try(platform: Platform) -> str:
     site/footer.js hides it once the season closes (the page has no clock)."""
     if not trial_link_open():
         return ""
-    href = join_href(platform)
-    href += ("&" if "?" in href else "?") + "try=1"
-    return (f'\n    <p class="free" data-free-try><a href="{esc(href)}">'
-            f'{esc(TRIAL_LINK_LABEL)}</a></p>')
+    return "\n    " + free_try_html(join_href(platform))
 
 
 def _step(platform: Platform, i: int, step: str) -> str:

@@ -131,6 +131,10 @@
      text link, as on the landing's cta-row, so the block reads as one ask
      rather than a list of choices (LOOK-9). */
   .cta .textlink{align-self:center;padding:10px 2px;font-size:15px;font-weight:700;}
+  /* The free report under the ask, as the league-app pages draw it: a quiet
+     text link, never a button (render.report.free_try_html). */
+  .free{font-size:15px;font-weight:700;}
+  main .free a{display:inline-block;padding:6px 0;}
   [hidden]{display:none!important;}
   @media (max-width:600px){
     .wrap{padding:0 16px;}
@@ -548,6 +552,13 @@
       <a class="btn ghost" href="this-week.html" data-live-week hidden>See this week's report</a>
       <a class="textlink" href="index.html#pricing">Pricing</a>
     </div>
+    <!-- The free report, under the ask, while it is open: render.report's
+         words and markup (free_try_html) by the app pages' rule
+         (trial_link_open), pinned by tests/test_free_link_pages.py. Take it
+         out when the landing's TRIAL_OPEN, CHECKOUT_OPEN or
+         CHECKOUT_CAN_COMPLETE goes off; site/footer.js hides it once the
+         season closes. -->
+    <p class="free" data-free-try><a href="join/index.html?try=1">Try it free on your roster</a></p>
   </div>
 </main>
 <footer><div class="wrap"><nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a><a href="rookie-report.html">Rookie report</a></div><div><p>Your league</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a><a href="dynasty/">Dynasty</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=66a684b07d" defer></script>
