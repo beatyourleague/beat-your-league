@@ -1,7 +1,7 @@
 """Tuesday's public posts, drafted from the live sample report.
 
 Usage:
-    python -m run.drops [--out content/this-week.md]
+    python -m run.drops [--out content/this-week.md] [--week-json site/week.json]
 
 The graded public record (run/posts.py) is the honest long game, and it stays
 thin until October. What exists EVERY Tuesday is the sample roster's real
@@ -63,9 +63,29 @@ Rules, each because a post is the one place we speak without a report around it:
   team still to have one, by week, off the published schedule) and "Bye
   check" (what the sample roster's own report found, ``byes_ahead``). Their
   first reply is the free bye-week planner, which sells nothing — the link
-  Discords and no-links-in-replies rules tolerate best.
-- **Each week's link is its own URL** (``this-week.html?w=<week>``), so X
-  fetches a fresh preview card every week instead of last week's.
+  Discords and no-links-in-replies rules tolerate best. It is the PLAIN
+  planner (site review, Nov 2026): the reply says "check your own roster",
+  and a planner opened on our sample roster carried that roster into its
+  free-report and checkout links.
+- **A reply links this week's page only when the site does** (site review,
+  Nov 2026). The landing, footer.js and How it works reveal a link to
+  this-week.html only in a current week with 3+ odds, a closest call, the
+  card layout and a projected total (site/week.json). Week 9 of 2026 had no
+  total, the site hid the page, and the drafts still sent X readers to it.
+  ``this_week_hidden`` is the landing's rule, read from the clock this run's
+  page build wrote; when it fails, every reply links the home page instead,
+  and the file says why. A clock it cannot read fails the same way.
+- **Every draft says when it goes stale** ("Good until", the first kickoff
+  it is about): both players' for the call, the player and his cover for an
+  if/then, the named players' for rising roles and workloads, his for the
+  Thursday post. The bye drafts are about the week's schedule, so they hold
+  until its last game kicks off. A kickoff it cannot place makes it the
+  week's first, never later than the truth, and a draft already past its
+  time is left out of the file.
+- **Every link carries its own ?via= tag** (``x-wNN-<draft>``), so
+  ``make stats`` counts what each post brought. Each week's this-week link
+  is still its own URL (``this-week.html?w=<week>``), so X fetches a fresh
+  preview card every week instead of last week's.
 """
 
 from __future__ import annotations
@@ -73,13 +93,19 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
+from zoneinfo import ZoneInfo
 
-from render.report import SITE_ORIGIN, regret_tossup
+from render.report import SITE_ORIGIN, eastern, regret_tossup
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT = REPO_ROOT / "content" / "this-week.md"
+# The season clock the landing reads, written beside this-week.html by the
+# same run's page build (render.live_sample.write_week_json).
+WEEK_JSON = REPO_ROOT / "site" / "week.json"
+ET = ZoneInfo("America/New_York")
 LIMIT = 280
 BANNED = ("calibrated", "tested", "proven", "accurate", "guarantee", "lock ",
           "bet ", "wager", "spread", "parlay")
@@ -231,11 +257,12 @@ def _pivot_post(report: Mapping[str, Any]) -> str | None:
 _THURSDAY = re.compile(r"^(vs|@) ([A-Z]{2,3}) · Thu(?: (\d{1,2}:\d\d [AP]M) ET)?$")
 
 
-def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str] | None:
-    """(post, card) for the first starter whose game is Thursday night, or
-    None. His if/then — a printed plan ABOUT him that moves somebody, and not
-    the one Tuesday's if/then post already quotes — when it fits, else the
-    report's own early-kickoff instruction for him (``_early_ask``)."""
+def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str, list[str | None]] | None:
+    """(post, card, the players it is about) for the first starter whose game
+    is Thursday night, or None. His if/then — a printed plan ABOUT him that
+    moves somebody, and not the one Tuesday's if/then post already quotes —
+    when it fits, else the report's own early-kickoff instruction for him
+    (``_early_ask``)."""
     for row in report.get("lineup") or []:
         found = _THURSDAY.match(str(row.get("game") or ""))
         if not (found and row.get("player_name")):
@@ -255,10 +282,11 @@ def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str] | None:
             action = action[:1].lower() + action[1:]
             tries.append((f"{head} The if/then we set on Wednesday for our sample "
                           f"roster: if {plan['condition']}, {action}.",
-                          "If/Then for Gameday"))
+                          "If/Then for Gameday", _plan_ids(report, plan)))
         tries.append((f"{head} Our sample roster's Wednesday report flags it: "
-                      f"{_early_ask(report, name)}.", CARDS["Thursday night"]))
-        return next(((t, c) for t, c in tries if len(t) <= LIMIT), None)
+                      f"{_early_ask(report, name)}.", CARDS["Thursday night"], []))
+        return next(((t, c, [row.get("player_id"), *ids]) for t, c, ids in tries
+                     if len(t) <= LIMIT), None)
     return None
 
 
@@ -321,6 +349,147 @@ def _workload_post(report: Mapping[str, Any], week: int) -> str | None:
             return text
         rows = rows[:-1]
     return None
+
+
+# --------------------------------------------------------------------- #
+# where a reply points, its tag, and when a draft goes stale
+# --------------------------------------------------------------------- #
+
+# Each draft's part of its ?via= tag, ``x-wNN-<slug>`` (run.refs.VIA_RE).
+SLUGS = {"The closest call": "closest", "The if/then": "ifthen", "Rising roles": "rising",
+         "Workloads": "workloads", "Thursday night": "thursday", "NFL byes left": "byes",
+         "Bye check": "byecheck"}
+_DAY = re.compile(r"^\d{4}-\d\d-\d\d$")
+
+
+def via_tag(week: int | str, name: str) -> str:
+    """The draft's ?via= tag: x (the channel these are drafted for), the
+    week and the draft, so ``make stats`` counts each post on its own."""
+    return f"x-w{int(week):02d}-{SLUGS[name]}"
+
+
+def _tagged(url: str, tag: str) -> str:
+    return f"{url}{'&' if '?' in url else '?'}via={tag}"
+
+
+def _when(value: Any) -> datetime | None:
+    try:
+        at = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
+def this_week_hidden(clock: Mapping[str, Any], meta: Mapping[str, Any],
+                     now: datetime) -> str | None:
+    """None when the landing itself would link this week's page; else why
+    not, in the owner's words. The landing's rule (site/index.html, and
+    footer.js, How it works and the 404 page with it), read from the clock
+    the same run wrote: a season week that is still current in Eastern time,
+    at least three odds, a closest call, the report's card layout and a
+    projected total. A clock that is missing, unreadable or about another
+    week fails, like everything the landing cannot vouch for."""
+    if not isinstance(clock, Mapping) or not clock:
+        return "the season clock, site/week.json, can't be read"
+    if (str(clock.get("season")), str(clock.get("week"))) != (
+            str(meta.get("season")), str(meta.get("week"))):
+        return "the season clock, site/week.json, is for another week"
+    phase = clock.get("phase") or "season"
+    if phase != "season":
+        return f"the season clock says the season is {phase}"
+    today = now.astimezone(ET).date().isoformat()
+    lands, ends = clock.get("lands_on"), clock.get("week_ends")
+    lands_ok = isinstance(lands, str) and bool(_DAY.match(lands))
+    fresh = lands_ok and today <= lands
+    week, last_week = clock.get("week"), clock.get("last_week")
+    last = (isinstance(week, int) and isinstance(last_week, int) and week >= last_week)
+    kick = _when(clock.get("first_kickoff")) if clock.get("first_kickoff") else None
+    if last and ((lands_ok and not fresh) or (kick is not None and now >= kick)):
+        return "the season's last week has kicked off"
+    if not (lands_ok and isinstance(ends, str) and _DAY.match(ends)):
+        return "the season clock has no dates for this week"
+    if not (fresh and today <= ends):
+        return "this week's games are over"
+    odds = clock.get("odds")
+    if not (isinstance(odds, int) and odds >= 3):
+        return "it shows fewer than 3 odds"
+    if not clock.get("closest_call"):
+        return "it has no closest call with odds"
+    if clock.get("cards") is not True:
+        return "it isn't in the report's card layout"
+    if clock.get("total") is False:
+        return "its lineup has no projected total"
+    return None
+
+
+# A row's game as render prints it ("vs NE · Thu 8:15 PM ET"): the opponent's
+# code finds the game in the week's kickoffs, which list both of its teams.
+_OPPONENT = re.compile(r"^(?:vs|@) ([A-Z]{2,3})(?: ·|$)")
+# The player a plan moves: "Move X into …" or "Start X at …".
+_MOVER = re.compile(r"^(?:Move|Start) (.+?) (?:into|at) ")
+
+
+def _ids_by_name(report: Mapping[str, Any]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for row in report.get("lineup") or []:
+        for pid, name in ((row.get("player_id"), row.get("player_name")),
+                          (row.get("alternative_id"), row.get("alternative_name"))):
+            if pid and name:
+                out.setdefault(str(name), str(pid))
+    for row in report.get("bench") or []:
+        if row.get("player_id") and row.get("name"):
+            out.setdefault(str(row["name"]), str(row["player_id"]))
+    return out
+
+
+def _plan_ids(report: Mapping[str, Any], plan: Mapping[str, Any]) -> list[str | None]:
+    """The players an if/then is about: the one it watches and the one it
+    moves (None for either it cannot name, which ``_until`` reads as unknown)."""
+    found = _MOVER.match(str(plan.get("action") or ""))
+    mover = _ids_by_name(report).get(found.group(1)) if found else None
+    return [plan.get("about"), mover]
+
+
+def _kickoff(report: Mapping[str, Any], starts: Mapping[str, datetime],
+             player_id: str | None) -> datetime | None:
+    found = _OPPONENT.match(str(_row(report, player_id).get("game") or ""))
+    return starts.get(found.group(1)) if found else None
+
+
+def _stamp(at: datetime) -> str:
+    return at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _until(kicks: list[datetime | None], starts: Mapping[str, datetime]) -> str | None:
+    """The first of ``kicks``, or the week's first kickoff when any of them
+    is unknown (never later than the truth); None with no schedule at all."""
+    if kicks and all(kicks):
+        return _stamp(min(kicks))      # type: ignore[type-var]
+    return _stamp(min(starts.values())) if starts else None
+
+
+def still_good(posts: list[dict[str, str]], now: datetime
+               ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """(drafts still good at ``now``, drafts past their time). A draft with no
+    time stays: the run that writes the file refuses after the week's first
+    kickoff anyway."""
+    kept, gone = [], []
+    for post in posts:
+        until = _when(post["until"]) if post.get("until") else None
+        (gone if until is not None and now >= until else kept).append(post)
+    return kept, gone
+
+
+def _week_kickoffs(season: str, week: int) -> dict[str, datetime]:
+    """team -> kickoff (UTC) this week off the cached schedule, or {} when it
+    cannot be read (each draft is then good until "this week's first
+    kickoff", the earliest it could be)."""
+    try:
+        from run.saturday import kickoffs
+        from run.solo import CACHE_DIR
+        return dict(kickoffs(CACHE_DIR, str(season), int(week)))
+    except Exception:  # noqa: BLE001 — no schedule, no time to give
+        return {}
 
 
 # --------------------------------------------------------------------- #
@@ -412,19 +581,8 @@ def _bye_check_post(report: Mapping[str, Any],
 
 def planner_reply(url: str) -> str:
     """The first reply under a bye draft: the free planner, which sells
-    nothing."""
+    nothing, opened empty for the reader's own roster."""
     return f"Check your own roster's byes through Week {PLANNER_LAST_WEEK}, free, no login: {url}"
-
-
-def sample_planner_url(site: str = SITE_ORIGIN) -> str:
-    """The planner opened on the sample roster (the same v4 roster code a
-    signup carries), so "check it yourself" starts from the roster the post
-    is about."""
-    from render.live_sample import LIVE_ROSTER
-    from render.sample import SLOTS
-    from run.refs import encode_roster
-    ref = encode_roster("season", "ppr", SLOTS, LIVE_ROSTER, 12)
-    return f"{site}/{PLANNER_PATH}?ref={ref}"
 
 
 # The card on this-week.html each post describes, by the heading the report
@@ -445,8 +603,15 @@ WHEN = {"Thursday night": "Thursday, before his kickoff",
 
 
 def reply_text(url: str) -> str:
-    """The first reply under every post: where the whole report is."""
+    """The first reply under every post, in a week the site links this
+    week's page: where the whole report is."""
     return f"The whole report, rebuilt every Wednesday for our sample roster: {url}"
+
+
+def landing_reply(url: str) -> str:
+    """The first reply in a week the site does not link this week's page:
+    the home page, which every week can show."""
+    return f"What it is, with a full sample report: {url}"
 
 
 def _fits(draft: Mapping[str, str]) -> bool:
@@ -454,51 +619,82 @@ def _fits(draft: Mapping[str, str]) -> bool:
             and not any(w in draft["text"].lower() for w in BANNED))
 
 
-def drafts(report: Mapping[str, Any], site: str = SITE_ORIGIN) -> list[dict[str, str]]:
+def drafts(report: Mapping[str, Any], site: str = SITE_ORIGIN, *,
+           live_page: bool = False,
+           starts: Mapping[str, datetime] | None = None) -> list[dict[str, str]]:
     """The week's candidate posts from the report, in the order worth posting
     them. Each is the post itself (``text``, no link), its first reply
-    (``reply``, the link) and the card to screenshot and attach (``card``); a
-    draft meant for another day says which (``when``). The schedule's bye
-    drafts join them through ``with_bye_drafts``."""
+    (``reply``, the link, tagged ``via``), the card to screenshot and attach
+    (``card``) and the moment it goes stale (``until``, ISO UTC, None with no
+    schedule); a draft meant for another day says which (``when``). The
+    schedule's bye drafts join them through ``with_bye_drafts``.
+
+    ``live_page``: the landing links this week's page (``this_week_hidden``
+    found nothing against it), so the replies may too; otherwise they link
+    the home page. ``starts``: team -> kickoff this week
+    (run.saturday.kickoffs)."""
     week = report["meta"]["week"]
+    starts = dict(starts or {})
     # Its own URL each week, so X fetches this week's card, not last week's.
-    url = f"{site}/this-week.html?w={week}"
+    page = f"{site}/this-week.html?w={week}"
+
+    def draft(name: str, text: str, card: str, kicks: list[datetime | None]) -> dict:
+        tag = via_tag(week, name)
+        reply = (reply_text(_tagged(page, tag)) if live_page
+                 else landing_reply(_tagged(f"{site}/", tag)))
+        return {"name": name, "text": text, "reply": reply, "card": card, "via": tag,
+                "until": _until(kicks, starts)}
+
+    def kicks(ids: list[str | None]) -> list[datetime | None]:
+        return [_kickoff(report, starts, pid) for pid in ids]
+
+    regret = report.get("regret") or {}
+    plan = next((p for p in report.get("pivots") or [] if _changes_a_seat(p)), None)
     call = _call_post(report)
     rising = _rising_post(report, week)
+    # Only when the week has neither a call nor a riser: a facts-only post
+    # rather than an empty file.
+    workloads = None if (call or rising) else _workload_post(report, week)
     thursday = _thursday_post(report)
-    out = [{"name": name, "text": text, "reply": reply_text(url), "card": CARDS[name]}
-           for name, text in (
-        ("The closest call", call),
-        ("The if/then", _pivot_post(report)),
-        ("Rising roles", rising),
-        # Only when the week has neither a call nor a riser: a facts-only
-        # post rather than an empty file.
-        ("Workloads", None if (call or rising)
-         else _workload_post(report, week)),
+    out = [draft(name, text, CARDS[name], at) for name, text, at in (
+        ("The closest call", call, kicks([regret.get("start_id"), regret.get("over_id")])),
+        ("The if/then", _pivot_post(report), kicks(_plan_ids(report, plan)) if plan else []),
+        # Each riser the post names, by his team's game.
+        ("Rising roles", rising,
+         [starts.get(str(r.get("team") or "")) for r in report.get("rising") or []
+          if rising and _short_rising(r) in rising]),
+        ("Workloads", workloads,
+         kicks([r.get("player_id") for r in report.get("lineup") or []
+                if workloads and r.get("usage") and r.get("player_name")
+                and f"{_surname(r['player_name'])}, {r['usage']}" in workloads])),
     ) if text]
     if thursday:
-        out.append({"name": "Thursday night", "text": thursday[0], "reply": reply_text(url),
-                    "card": thursday[1], "when": WHEN["Thursday night"]})
+        text, card, ids = thursday
+        out.append({**draft("Thursday night", text, card, kicks(ids)),
+                    "when": WHEN["Thursday night"]})
     return [d for d in out if _fits(d)]
 
 
 def bye_drafts(report: Mapping[str, Any], byes: Mapping[str, int] | None,
-               site: str = SITE_ORIGIN) -> list[dict[str, str]]:
+               site: str = SITE_ORIGIN, *,
+               starts: Mapping[str, datetime] | None = None) -> list[dict[str, str]]:
     """The two schedule drafts (G3): "NFL byes left" from the season's bye
     table (team -> week, engine.preseason.bye_by_team) and "Bye check" from
-    the report's own ``byes_ahead``. Their first reply is the free planner;
-    neither carries a number to grade. No table, no "NFL byes left" and no
-    "every bye covered"."""
+    the report's own ``byes_ahead``. Their first reply is the free planner,
+    plain and tagged; neither carries a number to grade. No table, no "NFL
+    byes left" and no "every bye covered". Both are about the week's
+    schedule, so both are good until its last game kicks off."""
     meta = report["meta"]
+    starts = dict(starts or {})
+    last = _stamp(max(starts.values())) if starts else None
     out = []
-    for name, text, link in (
-            ("NFL byes left", _byes_left_post(byes, meta["week"]),
-             lambda: f"{site}/{PLANNER_PATH}"),
-            ("Bye check", _bye_check_post(report, byes),
-             lambda: sample_planner_url(site))):
+    for name, text in (("NFL byes left", _byes_left_post(byes, meta["week"])),
+                       ("Bye check", _bye_check_post(report, byes))):
         if not text:
             continue
-        draft = {"name": name, "text": text, "reply": planner_reply(link())}
+        tag = via_tag(meta["week"], name)
+        draft = {"name": name, "text": text, "via": tag, "until": last,
+                 "reply": planner_reply(_tagged(f"{site}/{PLANNER_PATH}", tag))}
         if name in PAGE_CARDS:
             card, page = PAGE_CARDS[name]
             draft.update(card=card.format(season=meta.get("season", "")), card_page=page)
@@ -512,17 +708,27 @@ def bye_drafts(report: Mapping[str, Any], byes: Mapping[str, int] | None,
 
 def with_bye_drafts(posts: list[dict[str, str]], report: Mapping[str, Any],
                     byes: Mapping[str, int] | None,
-                    site: str = SITE_ORIGIN) -> list[dict[str, str]]:
+                    site: str = SITE_ORIGIN, *,
+                    starts: Mapping[str, datetime] | None = None) -> list[dict[str, str]]:
     """``posts`` with the bye drafts placed after the report's own call,
     if/then and rising roles — before the facts-only fallback and the
     Thursday post."""
     lead = ("The closest call", "The if/then", "Rising roles")
     at = max((i + 1 for i, post in enumerate(posts) if post["name"] in lead), default=0)
-    return posts[:at] + bye_drafts(report, byes, site) + posts[at:]
+    return posts[:at] + bye_drafts(report, byes, site, starts=starts) + posts[at:]
 
 
-def render(report: Mapping[str, Any], posts: list[dict[str, str]]) -> str:
+def _good_until(post: Mapping[str, Any]) -> str:
+    until = _when(post["until"]) if post.get("until") else None
+    return f"Good until {eastern(until)}." if until else "Good until this week's first kickoff."
+
+
+def render(report: Mapping[str, Any], posts: list[dict[str, str]], *,
+           hidden: str | None = None, gone: Sequence[Mapping[str, Any]] = ()) -> str:
+    """The drafts file. ``hidden``: why the replies link the home page
+    (``this_week_hidden``); ``gone``: drafts left out, past their time."""
     meta = report["meta"]
+    week = int(meta["week"])
     lines = [f"# Week {meta['week']} posts — drafts, not posted",
              "",
              "Built from the live sample roster's report "
@@ -534,15 +740,26 @@ def render(report: Mapping[str, Any], posts: list[dict[str, str]]) -> str:
              "phone screenshot of the card named under it, from this week's "
              "page unless it names another — the real page, never a mock-up. "
              "Then put the first reply under your own post: that is where the "
-             "link goes.", ""]
-    if not posts:
+             "link goes.", "",
+             "Each draft says how long it's good for. Don't post one after that. "
+             f"Each link carries its own tag (x-w{week:02d}-…), so `make stats` "
+             "counts what each post brought. Posting one somewhere other than X? "
+             f"Change the x at the front, like discord-w{week:02d}-byes.", ""]
+    if hidden:
+        lines += ["This week's page isn't linked. The site doesn't show it this week "
+                  f"({hidden}), so each reply links the home page.", ""]
+    if gone:
+        lines += [f"Left out, past their time: {', '.join(p['name'] for p in gone)}.", ""]
+    if not posts and gone:
+        lines.append("_Nothing left to post this week: every draft is past its time._")
+    elif not posts:
         lines.append("_Nothing to draft this week: the sample report had no "
                      "closest call, if/then, rising role, bye, workload or "
                      "Thursday starter to quote._")
     for i, post in enumerate(posts, 1):
         lines += [f"## {i}. {post['name']} ({len(post['text'])}/{LIMIT})", ""]
-        if post.get("when"):
-            lines += [f"Post it: {post['when']}.", ""]
+        when = f"Post it: {post['when']}. " if post.get("when") else ""
+        lines += [when + _good_until(post), ""]
         page = f", from {post['card_page']}" if post.get("card_page") else ""
         lines += [post["text"], "",
                   f"Attach: a screenshot of the \"{post['card']}\" card{page}.", "",
@@ -566,10 +783,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument("--processed-dir", type=Path, default=None,
                         help="where the public ledger lives (default: data/processed)")
+    parser.add_argument("--week-json", type=Path, default=WEEK_JSON,
+                        help="the season clock the landing reads (default: site/week.json)")
     args = parser.parse_args(argv)
     try:
         from render.live_sample import (CACHE_DIR, PROCESSED_DIR, published_report,
-                                        recorded_only)
+                                        read_week_json, recorded_only)
         from run.solo import week_has_kicked_off
         processed = args.processed_dir or PROCESSED_DIR
         # Drafted from the report THIS run's page was published from, never a
@@ -597,11 +816,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"this week's drafts were not rebuilt ({exc}); the previous file "
               f"stays.")
         return 0
-    posts = with_bye_drafts(drafts(report), report,
-                            _season_byes(str(report["meta"]["season"])))
+    now = datetime.now(timezone.utc)
+    meta = report["meta"]
+    # The landing's own rule, on the clock the page build of this run wrote
+    # beside the page: link this week's page only when the site does.
+    hidden = this_week_hidden(read_week_json(args.week_json), meta, now)
+    starts = _week_kickoffs(str(meta["season"]), int(meta["week"]))
+    posts = with_bye_drafts(drafts(report, live_page=hidden is None, starts=starts),
+                            report, _season_byes(str(meta["season"])), starts=starts)
+    posts, gone = still_good(posts, now)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(render(report, posts), encoding="utf-8")
-    print(f"{len(posts)} draft(s) -> {args.out}")
+    args.out.write_text(render(report, posts, hidden=hidden, gone=gone), encoding="utf-8")
+    print(f"{len(posts)} draft(s) -> {args.out}"
+          + (f"; the replies link the home page ({hidden})" if hidden else ""))
     return 0
 
 

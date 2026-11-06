@@ -839,8 +839,8 @@ search volume — those competitors have essentially no third-party review footp
 
 ### Detail — X (ranked 7th; see §5.1 for the order)
 - **Setup, once, before checkout opens:** one pseudonymous "Beat Your League" handle (the same on
-  Reddit and Discord), a bio saying the owner makes it, the link in the bio, and this week's live
-  sample pinned (LAUNCH 7.1). Build a list of 25–30 fantasy accounts: 2–3 giants (e.g., Matthew
+  Reddit and Discord), a bio saying the owner makes it, the link in the bio, and the bye-planner
+  post pinned (content/launch-posts.md; LAUNCH 7.1). Build a list of 25–30 fantasy accounts: 2–3 giants (e.g., Matthew
   Berry, FantasyPros) for reach-surfing, the rest mid-size grinders (5–50K followers) because
   they actually engage back. Turn on notifications for the 10 most active.
 - **Data-replies — the core growth mechanic (20 min/day):** 15–20 replies daily to real start/sit
