@@ -489,7 +489,14 @@ def test_the_page_is_an_indexed_site_page_with_its_own_head() -> None:
     assert "https://beatyourleague.com/byes/" in (SITE / "sitemap.xml").read_text()
     assert "noindex" not in PAGE and "ld+json" not in PAGE
     assert rr.site_bar("../", current="byes/") in PAGE and rr.SITE_BAR_CSS in PAGE
-    assert rr.SOCIAL_IMAGE_TAGS in PAGE and rr.FAVICON_LINK in PAGE
+    # The shared social tags, with the planner's own card in place of the
+    # lineup card (render.og --byes, tests/test_og_byes.py).
+    from render import og
+    planner_card = re.search(r'og:image" content="(https://beatyourleague\.com/og/'
+                             r'byes-\d{4}-w\d{2}\.png)"', PAGE).group(1)
+    alt = re.search(r'og:image:alt" content="([^"]*)"', PAGE).group(1)
+    assert og._point_tags(rr.SOCIAL_IMAGE_TAGS, planner_card, alt, twitter=True) in PAGE
+    assert rr.FAVICON_LINK in PAGE
     for needle in ('property="og:title" content="Free bye week planner — your roster, '
                    'through Week 17"', 'name="twitter:description"', 'property="og:description"'):
         assert needle in PAGE
@@ -958,7 +965,11 @@ def test_the_season_in_the_title_and_noscript_line_follows_the_data() -> None:
     page = bye_index.with_season(PAGE, "2027")
     assert "<title>Fantasy football bye week planner (2027):" in page
     assert "Every 2027 bye, by week." in page and "Every 2027 bye week is listed below." in page
-    assert "2026" not in page.split("<!-- byes:start -->")[0].replace("2026-", "")
+    # The preview tags name the share card's own season: render.og --byes
+    # redraws that card from the same byes.json in the same weekly run.
+    head = re.sub(r'<meta (?:property|name)="(?:og|twitter):image(?::alt)?" content="[^"]*">',
+                  "", page.split("<!-- byes:start -->")[0])
+    assert "2026" not in head.replace("2026-", "")
     assert bye_index.with_season(PAGE, "2026") == PAGE
     with pytest.raises(bye_index.ByeIndexError):
         bye_index.with_season(PAGE.replace("bye week is listed below", "byes are below"), "2027")
