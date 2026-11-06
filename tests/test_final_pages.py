@@ -476,7 +476,8 @@ def test_the_pricing_band_is_not_half_empty_at_1440() -> None:
 # the season clock and the open-state buttons, run under node
 # --------------------------------------------------------------------- #
 
-def _clock(week: dict, now: str, open_: bool, can: bool = True) -> dict:
+def _clock(week: dict, now: str, open_: bool, can: bool = True,
+           tz: str = "America/New_York") -> dict:
     iife = LANDING.split("// The season clock.")[1]
     iife = iife[iife.index("(function () {"):iife.index("})();") + 5]
     script = """
@@ -509,18 +510,27 @@ function showPlayoffPass() {}
 %(iife)s
 setTimeout(() => console.log(JSON.stringify({ closed,
   clock: els["season-clock"].textContent, open: els["open-line"] ? els["open-line"].textContent : null,
-  hero: els["hero-open"].textContent, closer: els["closer-cta"].textContent })), 50);
+  hero: els["hero-open"].textContent, closer: els["closer-cta"].textContent,
+  closer_head: els["closer-head"].textContent, first: els["first-lands"].textContent,
+  faq: els["faq-first-lands"].textContent })), 50);
 """
     start = {"season-clock": "Checkout is open." if open_ else "A new report every Wednesday of the season.",
              "hero-open": "Get my lineups" if open_ else "Check my team free",
              "closer-cta": "Get my lineups" if open_ else "Check my team free",
              "sticky-cta": "Get my lineups" if open_ else "Check my team free",
-             "this-week-label": ""}
+             "this-week-label": "",
+             # The closer's static heading, and the two sentences the
+             # Monday-night window rewrites (as the page's markup has them).
+             "closer-head": "Your lineup, decided every Wednesday.",
+             "first-lands": "Your first report usually lands within the hour.",
+             "faq-first-lands": "Your first report usually lands within the hour."}
     if open_ and can:
+        # What the CHECKOUT_CAN_COMPLETE block writes before the clock runs.
         start["open-line"] = " Set up now and your first report lands today."
+        start["closer-head"] = "Your first report lands today."
     return _node(script % {"now": json.dumps(now), "start": json.dumps(start),
                            "week": json.dumps(week), "open": "true" if open_ else "false",
-                           "iife": iife})
+                           "iife": iife}, tz=tz)
 
 
 WEEK7 = {"season": "2026", "week": 7, "last_week": 18, "lands_on": "2026-10-28",
@@ -557,8 +567,9 @@ def test_after_kickoff_the_open_line_names_only_what_the_clock_cannot() -> None:
     Set up your team: your roster report lands today, and Week 8's report on
     Tuesday." The second clause repeated the clock. Since the sales review
     the open line never names a week or "roster report" (an email a buyer
-    has never heard of): it says the one thing true at every hour — "Set up
-    now and your first report lands today." — and the clock names the week."""
+    has never heard of): it says the one thing true at every hour but Monday
+    night's (the test below) — "Set up now and your first report lands
+    today." — and the clock names the week."""
     got = _clock(WEEK7, "2026-10-24T16:00:00Z", open_=True)
     assert got["clock"] == "Week 8's report lands Wednesday."
     assert got["open"] == " Set up now and your first report lands today."
@@ -566,6 +577,56 @@ def test_after_kickoff_the_open_line_names_only_what_the_clock_cannot() -> None:
     tuesday = _clock(WEEK7, "2026-10-28T11:00:00Z", open_=True)
     assert tuesday["clock"].startswith("Week 8's report lands today.")
     assert tuesday["open"] == " Set up now."
+
+
+WEEK9 = {"season": "2026", "week": 9, "last_week": 18, "lands_on": "2026-11-11",
+         "week_ends": "2026-11-09", "first_kickoff": "2026-11-06T01:15:00Z", "phase": "season",
+         "odds": 4, "closest_call": True, "cards": True, "recorded": True}
+MONDAY_WAIT = ("Your first report lands once Monday night's game is scored, "
+               "usually by Tuesday morning.")
+
+
+@needs_node
+@pytest.mark.parametrize("now,tz", [
+    ("2026-11-10T00:00:00Z", "America/New_York"),     # Mon 7:00 PM ET, the window opens
+    ("2026-11-10T01:30:00Z", "America/New_York"),     # Mon 8:30 PM ET, Monday night's kickoff
+    ("2026-11-10T04:59:00Z", "America/New_York"),     # Mon 11:59 PM ET
+    ("2026-11-10T10:00:00Z", "America/New_York"),     # Tue 5:00 AM ET
+    ("2026-11-10T00:30:00Z", "America/Los_Angeles"),  # Mon 4:30 PM PT
+])
+def test_on_monday_night_no_line_says_today(now: str, tz: str) -> None:
+    """Site review #7, reproduced under node with the live week.json at Mon
+    Nov 9 8:30 PM ET: the price line read "Week 10's report lands Wednesday.
+    Set up now and your first report lands today." over the card's "...usually
+    by Tuesday morning", and the closer said "Your first report lands today."
+    From 00:00 UTC the day before the next report the intake serves next week,
+    whose report waits for Monday night's box score (join's "overnight",
+    thanks.html's mondayNight()). In that window no line says today: the open
+    line keeps " Set up now." (the card under it says when) and the closer
+    says the wait in join's words. Mutation: drop either rewrite from the
+    mondayNight branch and this fails."""
+    got = _clock(WEEK9, now, open_=True, tz=tz)
+    assert got["clock"] == "Week 10's report lands Wednesday."
+    assert got["open"] == " Set up now."
+    assert got["closer_head"] == got["first"] == got["faq"] == MONDAY_WAIT
+    for words in (got["clock"], got["open"], got["closer_head"]):
+        assert "today" not in words, words
+
+
+@needs_node
+def test_monday_night_leaves_today_where_it_is_true_and_a_closed_closer_alone() -> None:
+    """The window is thanks.html's to the minute: at 6:59 PM ET Monday the week
+    is still underway and the roster report lands today; from 16:00 UTC
+    Tuesday the box score is in. Closed, or open with no link that can
+    complete, the closer never said today, so the window leaves it alone."""
+    for now in ("2026-11-09T23:59:00Z", "2026-11-10T16:00:00Z"):
+        got = _clock(WEEK9, now, open_=True)
+        assert got["open"] == " Set up now and your first report lands today.", now
+        assert got["closer_head"] == "Your first report lands today.", now
+    for open_, can in ((False, True), (True, False)):
+        got = _clock(WEEK9, "2026-11-10T01:30:00Z", open_=open_, can=can)
+        assert got["open"] is None, (open_, can)
+        assert got["closer_head"] == "Your lineup, decided every Wednesday.", (open_, can)
 
 
 @needs_node
