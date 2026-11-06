@@ -1015,6 +1015,9 @@ def restamp_last(page: str, *, season_over: bool = True) -> str:
     if season_over:
         # No bye is left to plan once the season is over (G6).
         page = with_planner_line(page, False)
+    # Over, the asks go to the email capture and the free report goes with
+    # them; preseason, it follows the landing's flags like the asks.
+    page = with_free_try(page, show_free_try() and not season_over)
     return _with_share(page, title, desc)
 
 
@@ -1072,6 +1075,45 @@ def with_planner_line(page: str, show: bool) -> str:
     if not show:
         return page
     return _CTACARD.sub(lambda m: m.group(1) + planner_line_html() + m.group(2),
+                        page, count=1)
+
+
+# --------------------------------------------------------------------- #
+# the free report, offered under the paid ask (owner, Nov 6 2026)
+# --------------------------------------------------------------------- #
+
+_FREE_TRY = re.compile(r'<p class="free" data-free-try[^>]*>.*?</p>', re.S)
+
+
+def free_try_line_html() -> str:
+    """The app pages' free-report link (render.report.free_try_html), spaced
+    for the closing card as the planner line is: its own top margin, since the
+    card's paragraphs are spaced for a line ABOVE a button, and a 24px target.
+    The card's link style (.ctacard a:not(.btn)) draws it: off-white on navy,
+    never gold."""
+    from render.report import free_try_html
+    return free_try_html(p_style="margin:14px auto 0;",
+                         a_style="display:inline-block;padding:3px 0;")
+
+
+def show_free_try(phase: str | None = None) -> bool:
+    """The app pages' rule (render.report.trial_link_open, the landing's
+    TRIAL_OPEN beside a checkout that can finish), read when the page is
+    written, and never once the clock says the season is over: its asks go to
+    the email capture then. site/footer.js hides the link in the browser once
+    the season closes."""
+    from render import report as report_module
+    return report_module.trial_link_open() and phase != "over"
+
+
+def with_free_try(page: str, show: bool) -> str:
+    """``page`` with the free-report line inside its closing card, after the
+    button, exactly once — or with none. Idempotent; a page with no closing
+    card is returned without one."""
+    page = _FREE_TRY.sub("", page)
+    if not show:
+        return page
+    return _CTACARD.sub(lambda m: m.group(1) + free_try_line_html() + m.group(2),
                         page, count=1)
 
 
@@ -1135,7 +1177,8 @@ def restamp_chrome(page: str, *, byes_left: bool | None = None,
     (render.report.stop_route — while the site sells one-time passes, the
     one-payment stop route), the free planner's line under the closing
     card's button while checkout is closed (G6; ``byes_left`` and ``phase``
-    are today's clock, ``clock_hints``), and the ?via= carry script as
+    are today's clock, ``clock_hints``), the free report's link there while
+    it is open (show_free_try, the app pages' rule), and the ?via= carry script as
     VIA_SCRIPT holds it today. No number, banner, stamp or row is touched.
 
     Why it exists: the cron builds this page from whatever origin/main holds,
@@ -1177,6 +1220,7 @@ def restamp_chrome(page: str, *, byes_left: bool | None = None,
     page = re.sub(r"the lineup we(?:&#x27;|')d set, with odds on \d+ of its \d+ slots",
                   "every slot decided", page)
     page = with_planner_line(page, show_planner_line(byes_left, phase) and not over)
+    page = with_free_try(page, show_free_try(phase) and not over)
     page = with_current_via(page)
     # The page counter is chrome too (contract C1): a page built before it
     # existed is counted from its next restamp, not its next rebuild.
@@ -1366,6 +1410,7 @@ def main(argv: list[str] | None = None) -> int:
                           report["meta"].get("thin_week_note"))
     byes_left = byes_left_from(CACHE_DIR, str(meta["season"]), int(meta["week"]))
     page = with_planner_line(page, show_planner_line(byes_left))
+    page = with_free_try(page, show_free_try())
     if kicked_off or already:
         # Stamped with the moment the report says it was built (the banner's
         # own clock), so the page states one build time, not two.

@@ -1235,6 +1235,26 @@ def trial_link_open(landing: Path | None = None) -> bool:
 TRIAL_LINK_LABEL = "Try it free on your roster"
 
 
+def free_try_href(join: str = "join/index.html") -> str:
+    """The free report's address from a page's own way into join/ (an app
+    page's lineup or league kept): the same page with ``try=1``."""
+    return join + ("&" if "?" in join else "?") + "try=1"
+
+
+def free_try_html(join: str = "join/index.html", *, p_style: str = "",
+                  a_style: str = "") -> str:
+    """The free report as the quiet text link a page carries under its paid
+    ask: the league-app pages (render.platforms._try), the samples' closing
+    card (render.live_sample.with_free_try) and How it works (pinned to this by
+    tests/test_free_link_pages.py). Never a button, never gold. It carries
+    ``data-free-try`` so site/footer.js hides it once the season closes.
+    Not gated: each writer asks trial_link_open() itself, when it writes."""
+    p_attr = f' style="{p_style}"' if p_style else ""
+    a_attr = f' style="{a_style}"' if a_style else ""
+    return (f'<p class="free" data-free-try{p_attr}><a href="{esc(free_try_href(join))}"'
+            f'{a_attr}>{esc(TRIAL_LINK_LABEL)}</a></p>')
+
+
 def sample_cta() -> str:
     return f'<a class="btn gold" href="join/index.html">{esc(ask_label())}</a>'
 
