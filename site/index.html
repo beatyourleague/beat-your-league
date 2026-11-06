@@ -2412,6 +2412,17 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
             if (el) el.textContent = "Your first report lands once Monday night's game is " +
               "scored, usually by Tuesday morning.";
           });
+          // The open line and the closer say "today" where the checkout block
+          // wrote it (the open line exists only then), and today isn't true
+          // here (site review #7). The open line drops it, since the card
+          // under it says when; the closer says the wait in join's words.
+          const openNow = document.getElementById("open-line");
+          const closerNow = document.getElementById("closer-head");
+          if (openNow) {
+            openNow.textContent = " Set up now.";
+            if (closerNow) closerNow.textContent = "Your first report lands once Monday " +
+              "night's game is scored, usually by Tuesday morning.";
+          }
         }
         if (phase !== "season" && phase !== "preseason") return;
         const landsDay = landsOk ? new Date(w.lands_on + "T12:00:00Z").toLocaleDateString(
