@@ -349,7 +349,8 @@ def test_the_share_card_job_holds_no_secret_and_commits_only_the_card() -> None:
     assert ".venv/bin/python -m render.og --week" in runs
     assert "git push" not in runs and "GH_TOKEN" not in str(job)
     hand_off = next(s for s in job["steps"] if s.get("id") == "handoff")
-    assert hand_off["env"] == {"RECORD_PATHS": "site/og site/this-week.html"}
+    # The planner's card and page ride beside it (tests/test_og_byes.py).
+    assert hand_off["env"] == {"RECORD_PATHS": "site/og site/this-week.html site/byes/index.html"}
     upload = next(s for s in job["steps"] if "upload-artifact" in str(s.get("uses", "")))
     assert upload["with"]["name"] == "share-card"
     assert upload["with"]["path"] == "${{ runner.temp }}/record/"
@@ -363,7 +364,7 @@ def test_the_share_card_job_holds_no_secret_and_commits_only_the_card() -> None:
     assert commit["permissions"] == {"contents": "write"}
     commit_runs = "\n".join(str(s.get("run", "")) for s in commit["steps"])
     adds = [line.strip() for line in re.findall(r"^\s*git add .*$", commit_runs, re.M)]
-    assert adds == ["git add -A site/og site/this-week.html"]
+    assert adds == ["git add -A site/og site/this-week.html site/byes/index.html"]
 
 
 # --------------------------------------------------------------------- #

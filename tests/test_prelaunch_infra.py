@@ -450,6 +450,8 @@ def test_no_hook_an_earlier_step_left_runs_beside_the_push_token(tmp_path) -> No
     subprocess.run(["git", "init", "-q", str(work)], check=True, env=env)
     (work / "site").mkdir()
     (work / "site" / "this-week.html").write_text("page", encoding="utf-8")
+    (work / "site" / "byes").mkdir()
+    (work / "site" / "byes" / "index.html").write_text("planner", encoding="utf-8")
     leak = tmp_path / "leak.txt"
     hook = work / ".git" / "hooks" / "pre-commit"
     hook.write_text(f'#!/bin/sh\necho "hook: $GH_TOKEN" >> "{leak}"\n', encoding="utf-8")
@@ -626,6 +628,7 @@ _RECORD = {"data/processed/ledger/typed-ppr-12-2026/calls.jsonl": '{"call_id": "
            "site/join/players.json": "[]\n", "site/join/byes.json": "{}\n",
            "site/byes/index.html": "<p>byes</p>\n", "site/ledger/index.html": "<p>ledger</p>\n",
            "site/ledger/data.json": "{}\n", "site/og/this-week-2026-w07.png": "png 7",
+           "site/og/byes-2026-w07.png": "byes png 7",
            # Beside the records, and never theirs to change.
            "README.md": "readme\n", "site/index.html": "<p>landing</p>\n",
            "site/join/index.html": "<p>join</p>\n",
@@ -714,6 +717,9 @@ def _build(repo: Path, paths: list[str]) -> dict[str, str]:
         elif path == "site/og":
             wrote["site/og/this-week-2026-w08.png"] = "png 8"
             wrote["site/og/this-week-2026-w07.png"] = None
+            # The bye planner's card moves on a week the same way.
+            wrote["site/og/byes-2026-w08.png"] = "byes png 8"
+            wrote["site/og/byes-2026-w07.png"] = None
         elif path == "data/processed/sent.jsonl":
             wrote[path] = _RECORD[path] + '{"key": "this-run"}\n'
         else:

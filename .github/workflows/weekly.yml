@@ -659,13 +659,20 @@ jobs:
   # runs a browser — the runner image's preinstalled Chrome
   # (render.og.find_chrome lists google-chrome) — on a page built from
   # third-party data. And no token that can push: it uploads the card folder
-  # and the page, and commit-card pushes them.
+  # and the pages, and commit-card pushes them.
   #
   # It checks out the branch tip, so it starts from commit-record's push.
   # A refusal (no recorded closest call, a toss-up, a figure the page does not
   # print) or a missing browser is a ::notice:: and exit 0: the page simply
   # keeps the site's own card, and an older week's card is deleted. pages.yml
   # redeploys when this workflow completes, commit-card included.
+  #
+  # The bye planner's card (render/og.py --byes) is drawn beside it, from the
+  # site/join/byes.json the week job just pushed: the NFL byes from the week
+  # being played through Week 17, with site/byes/'s preview tags pointed at
+  # it. It changes only when byes.json does. A card it cannot draw is a
+  # ::notice:: too, and the planner keeps its last card (never og.png, the
+  # lineup card with odds).
   share-card:
     needs: [week, commit-record]
     if: always() && needs.week.result != 'skipped' && needs.week.result != 'cancelled' && needs.commit-record.result != 'cancelled'
@@ -693,13 +700,16 @@ jobs:
           .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
       - name: Draw this week's share card
         run: .venv/bin/python -m render.og --week
-      # The card folder as the draw left it (an older week's card deleted, at
-      # most this week's in it) and the page whose preview tags point at it.
-      # Only those: nothing else this job touches is ever committed.
+      - name: Draw the bye planner's share card
+        run: .venv/bin/python -m render.og --byes
+      # The card folder as the draws left it (an older week's card deleted, at
+      # most this week's card and one planner card in it) and the two pages
+      # whose preview tags point at them. Only those: nothing else this job
+      # touches is ever committed.
       - name: Hand the record to its commit job
         id: handoff
         env:
-          RECORD_PATHS: site/og site/this-week.html
+          RECORD_PATHS: site/og site/this-week.html site/byes/index.html
         run: |
           set -euo pipefail
           set -f
@@ -730,11 +740,11 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-  # The card, pushed the way commit-record pushes the record: from a runner
+  # The cards, pushed the way commit-record pushes the record: from a runner
   # that installs and runs nothing, once the artifact is shown to hold only
-  # the page and this week's card, laid on the commit share-card started from
-  # and rebased. The card folder is REPLACED by the artifact's, which is how
-  # an older week's card leaves the site (`git add -A site/og` in the job
+  # the two pages, this week's card and the planner's card, laid on the
+  # commit share-card started from and rebased. The card folder is REPLACED
+  # by the artifact's, which is how an older week's card leaves the site (`git add -A site/og` in the job
   # that drew it did the same).
   commit-card:
     needs: share-card
@@ -742,7 +752,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write   # push the card and the page's preview tags; nothing else
+      contents: write   # push the cards and the pages' preview tags; nothing else
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -757,7 +767,9 @@ jobs:
       - name: Check the record and lay it on the share-card job's commit
         env:
           BASE: ${{ needs.share-card.outputs.base }}
-          RECORD_ALLOWED: /site/this-week.html /site/og/this-week-[0-9][0-9][0-9][0-9]-w[0-9][0-9].png
+          RECORD_ALLOWED: >-
+            /site/this-week.html /site/og/this-week-[0-9][0-9][0-9][0-9]-w[0-9][0-9].png
+            /site/byes/index.html /site/og/byes-[0-9][0-9][0-9][0-9]-w[0-9][0-9].png
           # The card folder is REPLACED by the artifact's: an older week's
           # card leaves the site that way.
           RECORD_REPLACES: site/og
@@ -819,9 +831,9 @@ jobs:
           # An empty folder still matches the pathspec; a missing one would
           # fail the add on a week with no card.
           mkdir -p site/og
-          git add -A site/og site/this-week.html
+          git add -A site/og site/this-week.html site/byes/index.html
           git diff --cached --quiet && echo "nothing to persist" && exit 0
-          git commit -m "Weekly run: this week's share card"
+          git commit -m "Weekly run: share cards"
           git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
 

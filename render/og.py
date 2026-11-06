@@ -32,6 +32,19 @@ finished, using the runner image's own Chrome. It refuses (exit 0, nothing
 drawn, the page keeps og.png) unless the call is recorded at both levels, is
 not a toss-up, and the page's own closest-call card prints the same verdict,
 percentage and projection — so the card can only ever repeat the page.
+
+**A third is the free bye planner's (Nov 2026).** Every launch post links
+site/byes/, and its preview was og.png: a lineup with odds over "Know who to
+start." A free tool with no odds read as an ad for picks. ``python -m render.og
+--byes`` draws site/og/byes-<season>-wNN.png from site/join/byes.json alone
+(the brand, what the tool is, the apps, "No login", and the NFL byes from the
+week being played through Week 17) and points the planner page's preview tags
+at it, in the same share-card job. Schedule facts only: no %, no projection,
+no price. The week being played comes from the file's own stamp
+(render.bye_index.played_before), so the card is a function of the committed
+file and changes when the Wednesday run rewrites it. A card that cannot be
+drawn leaves the last one standing, never og.png: every line on it names its
+own weeks, so it is still true a week later.
 """
 
 from __future__ import annotations
@@ -706,13 +719,29 @@ def week_card_html(closest: dict, meta: dict) -> str:
 """
 
 
-def week_digest(card_html: str) -> str:
+def card_digest(card_html: str) -> str:
+    """The fingerprint stamped into a generated card: its source, hashed."""
     return hashlib.sha256(card_html.encode("utf-8")).hexdigest()
+
+
+week_digest = card_digest
 
 
 _TAG = {"og:image": re.compile(r'<meta property="og:image" content="[^"]*">'),
         "og:image:alt": re.compile(r'<meta property="og:image:alt" content="[^"]*">'),
         "twitter:image": re.compile(r'<meta name="twitter:image" content="[^"]*">\n?')}
+
+
+def _point_tags(page: str, image: str, alt: str, twitter: bool) -> str:
+    """A page's preview tags pointed at ``image`` (``alt`` already escaped),
+    with a twitter:image beside them when ``twitter``. One writer for both
+    generated cards, so the two pages cannot point at theirs two ways."""
+    page = _TAG["twitter:image"].sub("", page)
+    page = _TAG["og:image"].sub(lambda _m: f'<meta property="og:image" content="{image}">',
+                                page, count=1)
+    alt_tag = f'<meta property="og:image:alt" content="{alt}">'
+    beside = f'\n<meta name="twitter:image" content="{image}">' if twitter else ""
+    return _TAG["og:image:alt"].sub(lambda _m: alt_tag + beside, page, count=1)
 
 
 def with_week_card(page: str, closest: dict | None) -> str:
@@ -723,12 +752,7 @@ def with_week_card(page: str, closest: dict | None) -> str:
     generic_alt = re.search(r'og:image:alt" content="([^"]*)"', SOCIAL_IMAGE_TAGS).group(1)
     image = week_card_url(closest) if closest else OG_IMAGE
     alt = html.escape(week_card_alt(closest), quote=True) if closest else generic_alt
-    page = _TAG["twitter:image"].sub("", page)
-    page = _TAG["og:image"].sub(lambda _m: f'<meta property="og:image" content="{image}">',
-                                page, count=1)
-    alt_tag = f'<meta property="og:image:alt" content="{alt}">'
-    twitter = f'\n<meta name="twitter:image" content="{image}">' if closest else ""
-    return _TAG["og:image:alt"].sub(lambda _m: alt_tag + twitter, page, count=1)
+    return _point_tags(page, image, alt, twitter=bool(closest))
 
 
 def build_week_card(site: Path = SITE, chrome: str | None = None) -> tuple[str, str]:
@@ -789,6 +813,237 @@ def _clear_week_cards(folder: Path, keep: str | None) -> None:
             old.unlink()
 
 
+# --------------------------------------------------------------------- #
+# the bye planner's card: the NFL byes from the week being played
+# --------------------------------------------------------------------- #
+
+_BYES_CARD = re.compile(r"^byes-\d{4}-w\d{2}\.png$")
+_TEAM_CODE = re.compile(r"^[A-Z]{2,3}$")
+_SEASON = re.compile(r"^\d{4}$")
+
+
+def byes_card_facts(payload: dict) -> dict:
+    """What the planner's card says, from site/join/byes.json alone: the
+    season, the week being played (render.bye_index.played_before, on the
+    file's own stamp, the rule the page's table marks played weeks by), the
+    last week the planner checks (Week 17, or the season's last if earlier),
+    each week in that span with byes and its teams as the apps spell them,
+    and the weeks in it with none. Raises OgError for anything it cannot
+    state as a fact: a bye list missing a team, a code that is not one, no
+    week left to plan. A wrong bye is worse than none."""
+    from render.bye_index import TEAMS, played_before
+    from run.drops import PLANNER_LAST_WEEK, _app_code
+    if not isinstance(payload, dict):
+        raise OgError("site/join/byes.json is not an object")
+    season = str(payload.get("season"))
+    if not _SEASON.fullmatch(season):
+        raise OgError(f"byes.json names no season ({season!r})")
+    try:
+        weeks = [(int(w["week"]), list(w.get("bye") or [])) for w in payload["weeks"]]
+        last = int(payload["last_week"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise OgError(f"byes.json is not the planner's shape ({exc})") from exc
+    teams = [str(t) for _w, bye in weeks for t in bye]
+    if not all(_TEAM_CODE.fullmatch(t) for t in teams):
+        raise OgError("byes.json carries a team code that is not one")
+    if len(set(teams)) < TEAMS:
+        raise OgError(f"only {len(set(teams))} teams have a {season} bye, not {TEAMS}")
+    current = played_before(payload)
+    through = min(PLANNER_LAST_WEEK, last)
+    if current is None or current > through:
+        raise OgError(f"the {season} season's bye weeks are behind us")
+    rows, empty = [], []
+    for week, bye in sorted(weeks):
+        if current <= week <= through:
+            codes = sorted({_app_code(str(t)) for t in bye})
+            if codes:
+                rows.append({"week": week, "teams": codes})
+            else:
+                empty.append(week)
+    return {"season": season, "from": current, "through": through, "rows": rows,
+            "empty": empty}
+
+
+def byes_card_name(facts: dict) -> str:
+    return f"byes-{facts['season']}-w{int(facts['from']):02d}.png"
+
+
+def byes_card_url(facts: dict) -> str:
+    from render.report import SITE_ORIGIN
+    return f"{SITE_ORIGIN}/{WEEK_DIR_NAME}/{byes_card_name(facts)}"
+
+
+def _byes_none(facts: dict) -> str:
+    """The card's last line: the weeks in its span with no byes, in the
+    page table's words, or the planner's own sentence when no week has one."""
+    from render.bye_index import _ranges
+    start, end = int(facts["from"]), int(facts["through"])
+    if not facts["rows"]:
+        return (f"No NFL team has a bye in Week {end}." if start == end else
+                f"No NFL team has a bye from Week {start} through Week {end}.")
+    if not facts["empty"]:
+        return ""
+    noun = "Week" if len(facts["empty"]) == 1 else "Weeks"
+    return f"No byes in {noun} {_ranges(facts['empty'])}."
+
+
+def byes_card_alt(facts: dict) -> str:
+    """The card's alt text, said as the card says it."""
+    from run.drops import _listed
+    start, end = int(facts["from"]), int(facts["through"])
+    span = f"Week {start}" if start == end else f"Week {start} to Week {end}"
+    parts = [f"Free bye week planner: your fantasy roster, through Week {end}.",
+             f"{facts['season']} NFL byes, {span}."]
+    parts += [f"Week {row['week']}: {_listed(row['teams'])}." for row in facts["rows"]]
+    parts.append(_byes_none(facts))
+    return " ".join(p for p in parts if p)
+
+
+def byes_card_html(facts: dict) -> str:
+    """The planner's card: the logo lockup and the apps, the tool's name on
+    the landing's slab, the roster line and "No login", and a paper card of
+    the byes by week. Text only, every value escaped. Rows share the card's
+    height, so a list from Week 1 (nine bye weeks) fits as a list from Week 14
+    does."""
+    from render.bye_index import SOURCE_LINE
+    from render.report import mark_svg
+    esc = html.escape
+    start, end = int(facts["from"]), int(facts["through"])
+    span = f"Week {start}" if start == end else f"Week {start} to {end}"
+    count = max(1, len(facts["rows"]))
+    row_height = min(60, 340 // count)
+    code_size = min(27, int(row_height * 0.5))
+    rows = "\n        ".join(
+        f'<div class="row"><span class="wk">Week {int(row["week"])}</span><span class="teams">'
+        + "".join(f"<b>{esc(code)}</b>" for code in row["teams"]) + "</span></div>"
+        for row in facts["rows"])
+    none = _byes_none(facts)
+    none_html = (f'<div class="none{" only" if not facts["rows"] else ""}">{esc(none)}</div>'
+                 if none else "")
+    mark = mark_svg("ogb", "ogmark")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<style>{embedded_fonts()}</style>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box;}}
+  html,body{{width:{WIDTH}px;height:{HEIGHT}px;overflow:hidden;}}
+  body{{background:#05090F;color:#F6F4EE;font-family:'Barlow',Arial,sans-serif;
+    padding:40px 60px 34px;position:relative;display:flex;flex-direction:column;}}
+  body::before{{content:"";position:absolute;inset:0;
+    background:radial-gradient(1000px 560px at 80% 30%,rgba(242,194,48,.14),transparent 62%),
+               radial-gradient(760px 520px at 4% 100%,rgba(30,122,70,.18),transparent 68%);}}
+  .top,.main,.foot{{position:relative;}}
+  .top{{display:flex;align-items:center;justify-content:space-between;gap:24px;}}
+  .mark{{display:flex;align-items:center;gap:12px;}}
+  .mark svg.ogmark{{display:block;width:40px;height:40px;flex:none;margin:0;}}
+  .mark span{{font-family:'Barlow Condensed';font-weight:900;font-size:24px;
+    font-style:italic;letter-spacing:.01em;text-transform:uppercase;color:#F6F4EE;}}
+  .mark span .lg{{color:#F0B62A;}}
+  .kicker{{font-family:'Barlow Condensed';font-weight:800;font-size:19px;letter-spacing:.14em;
+    text-transform:uppercase;color:#F2C230;border:1.5px solid rgba(242,194,48,.55);
+    padding:8px 16px 7px;}}
+  .main{{flex:1;display:flex;align-items:center;gap:40px;}}
+  .left{{width:470px;flex:none;}}
+  h1{{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:78px;
+    line-height:.94;text-transform:uppercase;}}
+  h1 em{{font-style:italic;color:#101E33;display:inline-block;margin-top:10px;
+    background:#F2C230;padding:0 16px 5px;transform:rotate(-1.5deg);}}
+  .sub{{margin-top:26px;font-size:30px;line-height:1.3;color:#F6F4EE;font-weight:700;}}
+  .note{{margin-top:12px;font-size:24px;line-height:1.35;color:#BCC9DB;font-weight:500;}}
+  .card{{flex:1;background:#FFFFFF;color:#101E33;border:1px solid #E2DDD0;
+    border-radius:16px;overflow:hidden;box-shadow:0 40px 90px -28px rgba(0,0,0,.9);}}
+  .head{{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:#101E33;color:#F6F4EE;padding:15px 24px;
+    font-family:'Barlow Condensed';font-weight:800;font-size:19px;letter-spacing:.1em;
+    text-transform:uppercase;}}
+  .head span{{color:#F2C230;font-size:16px;letter-spacing:.08em;}}
+  .body{{padding:4px 24px 6px;}}
+  .row{{display:grid;grid-template-columns:104px minmax(0,1fr);align-items:center;
+    height:{row_height}px;border-bottom:1px solid #EEEAE1;}}
+  .wk{{font-family:'Barlow Condensed';font-weight:800;font-size:{max(15, code_size - 7)}px;
+    color:#5A6B80;letter-spacing:.08em;text-transform:uppercase;}}
+  .teams{{display:flex;flex-wrap:wrap;gap:4px 16px;}}
+  .teams b{{font-family:'Barlow Condensed';font-weight:800;font-size:{code_size}px;
+    letter-spacing:.03em;color:#101E33;}}
+  .none{{padding:13px 0 12px;font-size:19px;font-weight:700;color:#33445C;}}
+  .none.only{{padding:34px 0;font-size:26px;line-height:1.3;color:#101E33;}}
+  .foot{{margin-top:18px;display:flex;justify-content:space-between;align-items:baseline;
+    gap:24px;font-size:16px;color:#8D9AAD;font-weight:500;}}
+  .foot b{{font-family:'Barlow Condensed';font-weight:800;font-size:24px;letter-spacing:.06em;
+    color:#F2C230;}}
+</style></head>
+<body>
+  <div class="top">
+    <div class="mark">{mark}<span>Beat Your <span class="lg">League</span></span></div>
+    <div class="kicker">ESPN · Yahoo · Sleeper · CBS</div>
+  </div>
+  <div class="main">
+    <div class="left">
+      <h1>Free bye week <em>planner</em></h1>
+      <div class="sub">Your roster, through Week {end}.</div>
+      <div class="note">Paste it and see every week a bye leaves a starting spot empty. No login.</div>
+    </div>
+    <div class="card">
+      <div class="head">{esc(facts['season'])} NFL byes <span>{esc(span)}</span></div>
+      <div class="body">
+        {rows}
+        {none_html}
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>{esc(SOURCE_LINE)}</span><b>beatyourleague.com</b></div>
+</body></html>
+"""
+
+
+def with_byes_card(page: str, facts: dict) -> str:
+    """The planner page's preview tags pointed at its card: the absolute URL,
+    the alt, and a twitter:image beside them."""
+    return _point_tags(page, byes_card_url(facts),
+                       html.escape(byes_card_alt(facts), quote=True), twitter=True)
+
+
+def build_byes_card(site: Path = SITE, chrome: str | None = None) -> tuple[str, str]:
+    """Draw the planner's card and point site/byes/index.html at it ->
+    (outcome, detail): "written", "current" (already drawn from the same
+    source), "refused" (byes.json states no card) or "skipped" (no Chrome, or
+    the render failed). Only "written" and "current" move anything; the
+    others leave the page and its last card exactly as they were. Never back
+    to og.png: that is the lineup card with odds, and the last planner card
+    names its own weeks, so it stays true."""
+    import json
+    site = Path(site)
+    page_path = site / "byes" / "index.html"
+    folder = site / WEEK_DIR_NAME
+    try:
+        payload = json.loads((site / "join" / "byes.json").read_text(encoding="utf-8"))
+        page = page_path.read_text(encoding="utf-8")
+        facts = byes_card_facts(payload)
+    except (OSError, ValueError, OgError) as exc:
+        return "refused", str(exc)
+    card = byes_card_html(facts)
+    digest = card_digest(card)
+    out = folder / byes_card_name(facts)
+    outcome = "current"
+    if not (out.is_file() and source_digest(out.read_bytes()) == digest):
+        # render_png writes only a complete, right-sized image, so a failure
+        # leaves whatever card was there.
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            render_png(card, out, WIDTH, HEIGHT, chrome=chrome)
+        except (OgError, OSError) as exc:
+            return "skipped", str(exc)
+        out.write_bytes(stamp_source(out.read_bytes(), digest))
+        outcome = "written"
+    pointed = with_byes_card(page, facts)
+    if pointed != page:
+        page_path.write_text(pointed, encoding="utf-8")
+    for old in folder.iterdir():
+        if _BYES_CARD.match(old.name) and old.name != out.name:
+            old.unlink()
+    return outcome, f"{_shown(out)} · {byes_card_alt(facts)}"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=str(OUT))
@@ -796,8 +1051,20 @@ def main(argv: list[str] | None = None) -> int:
                         help="verify the committed card without rendering")
     parser.add_argument("--week", action="store_true",
                         help="draw this week's card for this-week.html from site/week.json")
+    parser.add_argument("--byes", action="store_true",
+                        help="draw the bye planner's card for site/byes/ from site/join/byes.json")
     parser.add_argument("--site", default=str(SITE), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+
+    if args.byes:
+        # Never fails the run either: a card not drawn leaves the last one up.
+        outcome, detail = build_byes_card(Path(args.site))
+        if outcome in ("written", "current"):
+            print(f"the bye planner's card: {outcome} — {detail}")
+        else:
+            print(f"::notice::the bye planner's card was not drawn ({outcome}): {detail}. "
+                  f"site/byes/ keeps the card it has.")
+        return 0
 
     if args.week:
         # Never fails the run: a missing card means the page keeps og.png.
