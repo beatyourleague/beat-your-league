@@ -967,8 +967,8 @@ costs, and shows which post sold once each post has its own link.
   a repeating cost makes its own line each time it's charged, and each line can carry its
   receipt. HQ writes a feed on this Mac that this dashboard reads, so the Money section shows
   profit, how many monthly charges until you break even, what's due in the next 30 days and
-  what you earn per hour. This page already takes Stripe's fees out of net revenue, so it
-  leaves out the Stripe lines HQ books from its own Stripe connection. Once HQ's
+  what you earn per hour. Stripe's fees are already taken out of net revenue here, so this
+  page leaves out the Stripe lines HQ books from its own Stripe connection. Once HQ's
   feed exists, `make cost` and `make hours` refuse and point to HQ. Before that, they still
   write `data/costs.csv` and `data/hours.csv`, which HQ can bring in on its first launch.
 - `make link TAG=reddit-oct28 WHERE="r/fantasyfootball"` prints the link to use in a post (add
