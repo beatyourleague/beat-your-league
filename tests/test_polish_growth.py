@@ -452,7 +452,7 @@ def test_neither_bye_draft_carries_a_number_to_grade() -> None:
         assert not any(w in low for w in NO_NUMBERS + drops.BANNED), post
         assert "http" not in post["text"], "the link goes in the first reply"
         assert post["reply"].startswith("Check your own roster's byes through Week 17, free, no login: ")
-    assert posts[0]["when"] == "Wednesday" and posts[0]["card"] == "Every 2026 NFL bye week"
+    assert posts[0]["when"] == "Best posted on Wednesday." and posts[0]["card"] == "Every 2026 NFL bye week"
     assert posts[1]["card"] == "Your Game Plan" and "when" not in posts[1]
 
 
@@ -491,7 +491,7 @@ def test_the_drafts_file_says_where_the_planner_card_is(tmp_path) -> None:
     text = drops.render(_bye_report(), drops.bye_drafts(_bye_report(), BYES_2026))
     assert ('Attach: a screenshot of the "Every 2026 NFL bye week" card, from the bye-week '
             'planner (https://beatyourleague.com/byes/).') in text
-    assert "Post it: Wednesday." in text
+    assert "Best posted on Wednesday." in text
 
 
 # --------------------------------------------------------------------- #

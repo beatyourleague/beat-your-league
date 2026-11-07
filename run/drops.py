@@ -597,9 +597,10 @@ CARDS = {"The closest call": "The Week's Closest Call",
 # page: "NFL byes left" is the planner's own bye table (contract C7).
 PAGE_CARDS = {"NFL byes left": ("Every {season} NFL bye week",
                                 f"the bye-week planner ({SITE_ORIGIN}/{PLANNER_PATH})")}
-# When a draft is meant to go up, if not Tuesday with the rest.
-WHEN = {"Thursday night": "Thursday, before his kickoff",
-        "NFL byes left": "Wednesday"}
+# When a draft is best posted, if not as soon as it's drafted.
+# A full sentence, printed before the draft's "Good until".
+WHEN = {"Thursday night": "Post it: Thursday, before his kickoff.",
+        "NFL byes left": "Best posted on Wednesday."}
 
 
 def reply_text(url: str) -> str:
@@ -747,7 +748,8 @@ def render(report: Mapping[str, Any], posts: list[dict[str, str]], *,
              f"Change the x at the front, like discord-w{week:02d}-byes.", ""]
     if hidden:
         lines += ["This week's page isn't linked. The site doesn't show it this week "
-                  f"({hidden}), so each reply links the home page.", ""]
+                  f"({hidden}), so the replies that would link it link the home page "
+                  "instead. The bye drafts link the planner.", ""]
     if gone:
         lines += [f"Left out, past their time: {', '.join(p['name'] for p in gone)}.", ""]
     if not posts and gone:
@@ -758,7 +760,7 @@ def render(report: Mapping[str, Any], posts: list[dict[str, str]], *,
                      "Thursday starter to quote._")
     for i, post in enumerate(posts, 1):
         lines += [f"## {i}. {post['name']} ({len(post['text'])}/{LIMIT})", ""]
-        when = f"Post it: {post['when']}. " if post.get("when") else ""
+        when = f"{post['when']} " if post.get("when") else ""
         lines += [when + _good_until(post), ""]
         page = f", from {post['card_page']}" if post.get("card_page") else ""
         lines += [post["text"], "",

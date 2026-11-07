@@ -6,26 +6,32 @@ day decides which one works.
 
 ## When to post (ET)
 
-- **The bye planner: any day.** It answers the moment someone pastes a roster. It has byes to find
-  through Week 14.
-- **The free report and the plan: Tuesday morning to Thursday afternoon.** In that window, someone
-  who asks gets this week's lineup, usually within the hour. Tuesday morning means once Monday
-  night's game is scored.
-- **Not the free report on Wednesday daytime.** Paid reports go out first that day, so a free
-  request waits for the evening run.
-- **Why not Thursday night to Monday.** This week's games have started. A free request waits until
-  Tuesday morning. A buyer gets a roster report when they pay and their first lineup Wednesday
-  evening. Both are honest, but nobody gets a lineup the day they read your post.
+- **The bye planner: through Week 14.** It answers the moment someone pastes a roster, any day.
+  After Week 14 no team has a bye left, so there's nothing for it to find.
+- **The free report and the plan: Tuesday to Thursday afternoon.** In that window, someone who
+  asks gets this week's lineup, usually within the hour. It opens on Tuesday once Monday night's
+  game is scored, and closes about 75 minutes before Thursday night's game.
+- **Except Wednesday daytime for the free report.** Paid reports go out first that day, so a free
+  request waits for the evening run (about 5:17 PM).
+- **Week 12 (Thanksgiving week) is different.** Its first game is Wednesday, Nov 25 at 8 PM, so
+  that Wednesday's report goes out in the morning and the window closes about 6:45 PM Wednesday.
+  Don't post the free report on Thanksgiving.
+- **Thursday night to Tuesday morning: the planner only.** This week's games have started. A free
+  request waits until Tuesday and gets next week's report. A buyer gets a roster report when they
+  pay and their first lineup on Wednesday (Week 12's goes out Wednesday morning). Both are honest,
+  but nobody gets a lineup the day they read your post.
+- **The free report closes for the season at Week 18's first game** (early January). Unpin its
+  post then.
 - At most 40 free reports go out a day. If a post brings more, the rest go the next day.
 
 ## The post to pin on X
 
-Pin the bye planner post (section 4). It's true any day, and it never needs editing. PLAN §5 used
-to say to pin this week's sample report instead. That page changes every Wednesday, and some weeks
-the site doesn't link it at all (Weeks 8 and 9 of 2026, when its lineup had no projected total).
-After Week 14's byes, the planner has nothing left to find. Pin the free report post (section 5)
-then. Its words are true any day: a request from Thursday night to Monday
-gets next week's report.
+Pin the bye planner post (section 4) through Week 14. It needs no editing. PLAN §5 used to say to
+pin this week's sample report instead. That page changes every Wednesday, and some weeks the site
+doesn't link it at all (Weeks 8 and 9 of 2026, when its lineup had no projected total).
+After Week 14, pin the free report post (section 5). Its words stay true Thursday to Monday too: a
+request then gets next week's report. Unpin it at Week 18's first game, when the free report
+closes for the season.
 
 ## Make a link for each post
 
@@ -63,14 +69,14 @@ it. Never post a win-loss record, and no results or promises.
 
 ## 1. Your own league chat (start here)
 
-Any day:
+Through Week 14:
 
 > I built a free bye week checker. Paste your roster and it shows every week you'd have an empty
 > starting spot from here to Week 17. No email, no signup, takes a minute.
 >
 > [planner link]
 
-Tuesday morning to Thursday afternoon, add:
+Tuesday to Thursday afternoon (see "When to post"), add:
 
 > I also built the paid version: one email every Wednesday that decides your lineup for your roster.
 > Get a free report on your own roster: [free report link]
@@ -101,7 +107,7 @@ First reply:
 
 > [planner link]
 
-## 5. X: the free report, Tuesday morning to Thursday afternoon
+## 5. X: the free report, Tuesday to Thursday afternoon
 
 > Paste your fantasy roster and get a free lineup report on it. Every slot decided, every close
 > call explained. One per person, no card.

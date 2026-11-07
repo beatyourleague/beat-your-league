@@ -345,7 +345,7 @@ def test_a_thursday_starter_gets_a_thursday_post_with_his_if_then() -> None:
                             "ET. The if/then we set on Wednesday for our sample roster: if "
                             "Rome Odunze (FLEX) is ruled out before game day, start Rashid "
                             "Shaheed at FLEX (projects 8.1).")
-    assert post["when"].startswith("Thursday") and post["card"] == "If/Then for Gameday"
+    assert post["when"].startswith("Post it: Thursday") and post["card"] == "If/Then for Gameday"
     assert "%" not in post["text"] and URL not in post["text"] and URL in post["reply"]
     plain = drops.drafts(_report(lineup=lineup, pivots=[tuesday]))
     [post] = [p for p in plain if p["name"] == "Thursday night"]
@@ -521,7 +521,8 @@ def test_a_reply_links_this_weeks_page_only_when_the_landing_does() -> None:
                                  f"sample roster: {URL}?w=5&via={post['via']}"), post
     text = drops.render(_report(), hidden, hidden="its lineup has no projected total")
     assert ("This week's page isn't linked. The site doesn't show it this week (its "
-            "lineup has no projected total), so each reply links the home page.") in text
+            "lineup has no projected total), so the replies that would link it link the home page "
+            "instead. The bye drafts link the planner.") in text
     assert "isn't linked" not in drops.render(_report(), shown)
 
 
@@ -565,7 +566,7 @@ def test_every_draft_says_when_it_goes_stale() -> None:
     text = drops.render(_timed(), list(posts.values()))
     assert "Good until Sun Oct 11 · 4:25 PM ET." in text
     assert "Post it: Thursday, before his kickoff. Good until Thu Oct 8 · 8:15 PM ET." in text
-    assert "Post it: Wednesday. Good until Mon Oct 12 · 8:15 PM ET." in text
+    assert "Best posted on Wednesday. Good until Mon Oct 12 · 8:15 PM ET." in text
     assert text.count("\nGood until ") + text.count(". Good until ") == len(posts)
     # An if/then is about its cover too: one who plays first sets the time.
     lineup = [{**row, "game": "@ GB · Sun 4:25 PM ET"} if row["player_id"] == "00-0035261"

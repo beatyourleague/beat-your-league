@@ -6,7 +6,7 @@ How to post one: the post goes up with no link in it. Attach a phone screenshot 
 
 Each draft says how long it's good for. Don't post one after that. Each link carries its own tag (x-w09-…), so `make stats` counts what each post brought. Posting one somewhere other than X? Change the x at the front, like discord-w09-byes.
 
-This week's page isn't linked. The site doesn't show it this week (its lineup has no projected total), so each reply links the home page.
+This week's page isn't linked. The site doesn't show it this week (its lineup has no projected total), so the replies that would link it link the home page instead. The bye drafts link the planner.
 
 Left out, past their time: Thursday night.
 
@@ -32,7 +32,7 @@ First reply: What it is, with a full sample report: https://beatyourleague.com/?
 
 ## 3. NFL byes left (251/280)
 
-Post it: Wednesday. Good until Mon Nov 9 · 8:15 PM ET.
+Best posted on Wednesday. Good until Mon Nov 9 · 8:15 PM ET.
 
 NFL byes left this season. Week 9: PIT, TEN · Week 10: CHI, DEN, PHI, TB · Week 11: ATL, CLE, GB, LAR, NE, SEA · Week 13: BAL, IND, LV, NYJ · Week 14: ARI, DAL. No byes in Weeks 15–17, the fantasy playoffs under ESPN's, Yahoo's and Sleeper's defaults.
 
