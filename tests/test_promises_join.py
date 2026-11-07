@@ -192,6 +192,10 @@ def test_the_landing_waits_for_monday_night_with_join_and_thanks() -> None:
     handler = code.split('mondayNight(w, Date.now(), Date.parse(w.first_kickoff || ""))) {')[1]
     handler = handler.split("\n        }\n")[0]
     assert '["first-lands", "faq-first-lands"]' in handler and f'"{wait}"' in handler
+    # Site review #7: the open line and the closer said "today" in the same
+    # window. Both are rewritten there too (test_final_pages runs it).
+    assert 'getElementById("open-line")' in handler and '" Set up now."' in handler
+    assert 'getElementById("closer-head")' in handler and handler.count(f'"{wait}"') == 2
     assert wait in re.sub(r'"\s*\+\s*"', "", _js_code(THANKS))
     for anchor in ('<li id="first-lands">Your first report usually lands within the hour.</li>',
                    '<span id="faq-first-lands">Your first report usually lands within the '

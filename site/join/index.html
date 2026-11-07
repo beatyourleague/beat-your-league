@@ -416,6 +416,13 @@
   .sugrow:focus-visible{outline:2px solid var(--navy);outline-offset:-2px;}
   /* Room for the field's focus ring: the note's last line sat on its border. */
   #step-roster > .note{margin-bottom:10px;}
+  .how-phone{display:none;}
+  /* A phone held sideways is wider than 600px: a touch screen with no hover
+     gets the phone words too. */
+  @media (max-width:600px), (hover:none) and (pointer:coarse){
+    .how-wide{display:none;}
+    .how-phone{display:inline;}
+  }
   #step-league{margin:14px 0;}
   #step-league > .note:first-child{margin-top:0;}
   #settings-intro{margin:6px 0 0;font-size:14px;}
@@ -595,8 +602,14 @@
 <main id="main">
   <section id="step-roster">
     <div class="eyebrow">1 · Your roster</div>
-    <div class="note">Paste it from ESPN, Yahoo, Sleeper or CBS, extra text and all. Or type a
-    name to add one player.</div>
+    <!-- The league apps' phone versions mostly can't copy a roster, so a phone
+         is told to type (the app pages' own words); a wider screen keeps the
+         paste. Swapped by CSS at the page's 600px phone width, never by script. -->
+    <div class="note" id="roster-how"><span class="how-wide">Paste it from ESPN, Yahoo,
+    Sleeper or CBS, extra text and all. Or type a name to add one player.</span>
+    <span class="how-phone">On a phone, type each name into “Add a player” and tap him.
+    Any part of his name finds him. Copied a roster page? Paste it into the roster box,
+    extra text and all.</span></div>
     <form id="form-roster" novalidate>
       <div class="addwrap">
         <input type="text" id="player-search" autocomplete="off"
@@ -851,7 +864,7 @@ Baltimore Ravens
     analysis, not betting picks. Must be 18+. NFL data: nflverse (nflverse-data), CC-BY-4.0.
   </div>
 </footer>
-<script src="roster.js?v=0aa69a7874"></script>
+<script src="roster.js?v=baf0f0ef89"></script>
 <!-- The bye rule, the planner's own copy (held equal to the Python by
      tests/test_polish_tool.py): the panel after a check reuses it, and a page
      where it failed to load simply leaves the byes out. -->

@@ -153,7 +153,11 @@ function stripDecoration(line, teams, keepLead) {
   let text = raw.replace(DECORATION, " ").replace(/\s+/g, " ").trim();
   // A NON-LEADING bare K is the kicker position tag ("Jake Bates K DET");
   // a leading K is an initial ("K. Walker", "K Walker") and stays.
-  text = text.replace(/(?<=[^\s.]) K(?= |$)/gi, "").trim();
+  // No lookbehind: Safari before 16.4 cannot parse one, and then this whole
+  // file fails on older iPhones. The character before is captured and put
+  // back, and a run of tags goes at once ("Butker K K"). It removes the same
+  // text as engine/roster.py, which keeps its lookbehind (Python has one).
+  text = text.replace(/([^\s.])(?: K(?= |$))+/gi, "$1").trim();
   // Single-letter injury tags (Q, O, D, P) trail a name or stand alone; a lone
   // "K" is a kicker slot header. An initial leads a name and carries its dot.
   const before = text ? text.split(" ") : [];

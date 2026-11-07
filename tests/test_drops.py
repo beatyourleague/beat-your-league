@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import json
+import re
+from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
 
 from run import drops
 
 ROOT = Path(__file__).resolve().parent.parent
+SITE = "https://beatyourleague.com"
 URL = "https://beatyourleague.com/this-week.html"
 
 
@@ -41,20 +48,34 @@ def _report(**over) -> dict:
     return report
 
 
+@pytest.fixture(autouse=True)
+def _no_schedule(monkeypatch):
+    """No test reads, or downloads, the real schedule through main(): its
+    kickoffs are none, so no draft here goes stale against today's date."""
+    monkeypatch.setattr(drops, "_week_kickoffs", lambda season, week: {})
+
+
 def _named(posts: list[dict], name: str) -> str:
     [text] = [p["text"] for p in posts if p["name"] == name]
     return text
 
 
 def test_every_post_fits_says_sample_and_links_the_live_report() -> None:
-    posts = drops.drafts(_report())
+    """In a week the site links this week's page (``live_page``), every first
+    reply links it; the post itself never carries a link. Told nothing, the
+    replies link the home page, which every week can show (site review, Nov
+    2026: the drafts linked a page the site itself was hiding)."""
+    posts = drops.drafts(_report(), live_page=True)
     assert [p["name"] for p in posts] == ["The closest call", "The if/then", "Rising roles"]
     for post in posts:
         assert len(post["text"]) <= drops.LIMIT, post["name"]
         # The link rides the first reply, never the post (launch review M8).
         assert URL not in post["text"] and URL in post["reply"]
+        assert "http" not in post["text"]
     assert "sample roster" in posts[0]["text"] and "sample roster" in posts[1]["text"]
     assert "55%" in posts[0]["text"]
+    for post in drops.drafts(_report()):
+        assert URL not in post["reply"] and f"{SITE}/?via=" in post["reply"], post
 
 
 def test_the_call_leads_with_the_question_then_a_fact_then_the_number() -> None:
@@ -298,7 +319,7 @@ def test_the_drafter_withholds_before_it_drafts() -> None:
     body = src.split("def main", 1)[1]
     assert "report = recorded_only(published, processed)" in body
     assert "build(" not in body
-    assert body.index("recorded_only(") < body.index("drafts(report)")
+    assert body.index("recorded_only(") < body.index("drafts(report")
 
 
 def test_a_thursday_starter_gets_a_thursday_post_with_his_if_then() -> None:
@@ -318,13 +339,13 @@ def test_a_thursday_starter_gets_a_thursday_post_with_his_if_then() -> None:
            "action": "Start Rashid Shaheed at FLEX (projects 8.1).", "about": "00-0039919"}
     keep = {"condition": "Rome Odunze (FLEX) is cleared", "action": "Keep him.",
             "about": "00-0039919"}
-    posts = drops.drafts(_report(lineup=lineup, pivots=[tuesday, keep, his]))
+    posts = drops.drafts(_report(lineup=lineup, pivots=[tuesday, keep, his]), live_page=True)
     [post] = [p for p in posts if p["name"] == "Thursday night"]
     assert post["text"] == ("Thursday night: Rome Odunze (FLEX, vs NE) kicks off at 8:15 PM "
                             "ET. The if/then we set on Wednesday for our sample roster: if "
                             "Rome Odunze (FLEX) is ruled out before game day, start Rashid "
                             "Shaheed at FLEX (projects 8.1).")
-    assert post["when"].startswith("Thursday") and post["card"] == "If/Then for Gameday"
+    assert post["when"].startswith("Post it: Thursday") and post["card"] == "If/Then for Gameday"
     assert "%" not in post["text"] and URL not in post["text"] and URL in post["reply"]
     plain = drops.drafts(_report(lineup=lineup, pivots=[tuesday]))
     [post] = [p for p in plain if p["name"] == "Thursday night"]
@@ -382,3 +403,327 @@ def test_a_toss_up_is_never_drafted_as_a_pick() -> None:
         posts = drops.drafts(_report(regret=regret))
         assert "The closest call" not in [d["name"] for d in posts], regret
         assert not any("to outscore" in d["text"] for d in posts)
+
+
+# --------------------------------------------------------------------- #
+# Site review, Nov 6 2026: the drafts follow the site's own rules
+# --------------------------------------------------------------------- #
+
+UTC = timezone.utc
+# A made-up Week 5 of 2026, in UTC (Eastern daylight time is UTC-4).
+THU = datetime(2026, 10, 9, 0, 15, tzinfo=UTC)     # Thu 8:15 PM ET
+SUN1 = datetime(2026, 10, 11, 17, 0, tzinfo=UTC)   # Sun 1:00 PM ET
+SUN4 = datetime(2026, 10, 11, 20, 25, tzinfo=UTC)  # Sun 4:25 PM ET
+SNF = datetime(2026, 10, 12, 0, 20, tzinfo=UTC)    # Sun 8:20 PM ET
+MNF = datetime(2026, 10, 13, 0, 15, tzinfo=UTC)    # Mon 8:15 PM ET
+STARTS = {"NE": THU, "BAL": THU, "SEA": SUN1, "ARI": SUN1, "GB": SUN4, "DET": SUN4,
+          "MIN": SUN4, "CLE": SUN4, "TB": SNF, "ATL": SNF, "DAL": MNF, "CIN": MNF}
+# The clock render.live_sample writes for that week, in a week the landing
+# links this week's page; the build runs Wednesday evening.
+CLOCK = {"season": "2026", "week": 5, "last_week": 18, "lands_on": "2026-10-14",
+         "week_ends": "2026-10-12", "first_kickoff": "2026-10-09T00:15:00Z", "odds": 4,
+         "closest_call": True, "phase": "season", "cards": True}
+BUILD = datetime(2026, 10, 7, 22, 30, tzinfo=UTC)
+BYES = {"PIT": 9, "TEN": 9, "CHI": 10, "DEN": 10}
+
+
+def _timed(**over) -> dict:
+    """The fixture report with every row's game, as render prints it."""
+    report = _report()
+    report["meta"]["box_scores_as_of"] = "Box scores through Week 4."
+    report["lineup"] = [
+        {**report["lineup"][0], "game": "@ GB · Sun 4:25 PM ET"},
+        {"slot": "RB", "player_id": "00-0035261", "player_name": "Tony Pollard",
+         "confidence": None, "game": "vs SEA · Sun 1:00 PM ET",
+         "usage": "last 4 games: 9 targets (2.3 a game), 70 carries"},
+        {"slot": "WR", "player_id": "00-7", "player_name": "Zay Flowers",
+         "confidence": None, "game": "vs NE · Thu 8:15 PM ET"}]
+    report["bench"] = [{**report["bench"][0], "game": "vs TB · Sun 8:20 PM ET"},
+                       {"player_id": "00-0038597", "name": "Chase Brown",
+                        "game": "@ DAL · Mon 8:15 PM ET"}]
+    report["pivots"] = [{"condition": "Tony Pollard (RB) is ruled out",
+                         "action": "Move Chase Brown into RB (projects 10.3)",
+                         "about": "00-0035261"}]
+    report["rising"] = [{"name": "Aaron Jones", "team": "MIN", "position": "RB",
+                         "recent": 23.0, "earlier": 13.0},
+                        {"name": "Bijan Robinson", "team": "ATL", "position": "RB",
+                         "recent": 25.0, "earlier": 18.0}]
+    report["byes_ahead"] = []
+    report.update(over)
+    return report
+
+
+def _all(report: dict, starts=STARTS, live_page: bool = False) -> dict[str, dict]:
+    posts = drops.with_bye_drafts(drops.drafts(report, live_page=live_page, starts=starts),
+                                  report, BYES, starts=starts)
+    return {p["name"]: p for p in posts}
+
+
+def _until(post: dict) -> datetime | None:
+    return datetime.fromisoformat(post["until"]) if post.get("until") else None
+
+
+def test_a_reply_links_this_weeks_page_only_when_the_landing_does() -> None:
+    """Site review, reproduced on Week 9 of 2026: site/week.json said
+    "total": false (the sample's kicker was on bye), so the landing, the
+    footer and How it works all kept this-week.html unlinked, and the drafts
+    still sent every X reader there, to a page opening on "no projected
+    total". The rule is the landing's own, read from the clock this run
+    wrote; when it fails, each reply links the home page and says what it is."""
+    meta = _report()["meta"]
+    assert drops.this_week_hidden(CLOCK, meta, BUILD) is None
+    week9 = {"season": "2026", "week": 9, "last_week": 18, "lands_on": "2026-11-11",
+             "week_ends": "2026-11-09", "built_at": "2026-11-04T22:17:50+00:00",
+             "odds": 4, "closest_call": True, "first_kickoff": "2026-11-06T01:15:00Z",
+             "recorded": True, "phase": "season", "byes_left": True, "cards": True,
+             "total": False}
+    reason = drops.this_week_hidden(week9, {"season": "2026", "week": 9},
+                                    datetime(2026, 11, 4, 22, 30, tzinfo=UTC))
+    assert reason == "its lineup has no projected total"
+    for change, words in (({"total": False}, "no projected total"),
+                          ({"odds": 2}, "fewer than 3 odds"),
+                          ({"odds": True}, "fewer than 3 odds"),
+                          ({"odds": "4"}, "fewer than 3 odds"),
+                          ({"closest_call": False}, "no closest call"),
+                          ({"cards": None}, "card layout"),
+                          ({"cards": "true"}, "card layout"),
+                          ({"phase": "over"}, "over"),
+                          ({"phase": "preseason"}, "preseason"),
+                          ({"week": 6}, "another week"),
+                          ({"season": "2025"}, "another week"),
+                          ({"week_ends": None}, "no dates"),
+                          ({"lands_on": "soon"}, "no dates"),
+                          ({"week_ends": "2026-10-06"}, "games are over"),
+                          ({"lands_on": "2026-10-06"}, "games are over"),
+                          ({"last_week": 5, "first_kickoff": "2026-10-07T00:00:00Z"},
+                           "last week")):
+        got = drops.this_week_hidden({**CLOCK, **change}, meta, BUILD)
+        assert got and words in got, (change, got)
+    assert "can't be read" in drops.this_week_hidden({}, meta, BUILD)
+    # The last week before its kickoff is still linked.
+    assert drops.this_week_hidden({**CLOCK, "last_week": 5}, meta, BUILD) is None
+    # No phase is the season (every reader's rule).
+    clock = {k: v for k, v in CLOCK.items() if k != "phase"}
+    assert drops.this_week_hidden(clock, meta, BUILD) is None
+    # "Today" is Eastern: 11:30 PM ET on the week's Monday is still the week.
+    late = datetime(2026, 10, 13, 3, 30, tzinfo=UTC)
+    assert drops.this_week_hidden(CLOCK, meta, late) is None
+    assert "games are over" in drops.this_week_hidden(
+        CLOCK, meta, datetime(2026, 10, 13, 4, 30, tzinfo=UTC))
+
+    hidden = drops.drafts(_report())
+    shown = drops.drafts(_report(), live_page=True)
+    for post in hidden:
+        assert post["reply"] == ("What it is, with a full sample report: "
+                                 f"{SITE}/?via={post['via']}"), post
+    for post in shown:
+        assert post["reply"] == ("The whole report, rebuilt every Wednesday for our "
+                                 f"sample roster: {URL}?w=5&via={post['via']}"), post
+    text = drops.render(_report(), hidden, hidden="its lineup has no projected total")
+    assert ("This week's page isn't linked. The site doesn't show it this week (its "
+            "lineup has no projected total), so the replies that would link it link the home page "
+            "instead. The bye drafts link the planner.") in text
+    assert "isn't linked" not in drops.render(_report(), shown)
+
+
+def test_the_rule_is_the_landings_own() -> None:
+    """``this_week_hidden`` is a Python twin of the rule every page applies
+    before it reveals a link to this-week.html. Held to the landing's and
+    footer.js's own condition, so a change there fails here first."""
+    def flat(path: Path) -> str:
+        return " ".join(path.read_text(encoding="utf-8").split())
+    landing = flat(ROOT / "site" / "index.html")
+    [cond] = re.findall(r'if \(phase === "season" && current && (.*?)\) \{', landing)
+    assert cond == ("Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call && "
+                    "w.cards === true && w.total !== false")
+    assert ("const fresh = landsOk && etToday <= w.lands_on;" in landing
+            and "etToday <= w.week_ends;" in landing
+            and 'const phase = w.phase || "season";' in landing
+            and "const last = w.week >= w.last_week;" in landing)
+    footer = flat(ROOT / "site" / "footer.js")
+    assert ("if (Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call && "
+            "w.cards === true && w.total !== false) {") in footer
+    # The clock it reads is the one the same run wrote beside the page.
+    assert drops.WEEK_JSON == ROOT / "site" / "week.json"
+    weekly = (ROOT / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
+    assert weekly.index("-m render.live_sample") < weekly.index("-m run.drops")
+
+
+def test_every_draft_says_when_it_goes_stale() -> None:
+    """Site review: on the Friday of Week 9 the file still offered "Thursday
+    night: Zay Flowers … kicks off at 8:15 PM ET", a game already played, and
+    the closest call carried no time at all. Each draft is now good until the
+    first kickoff it is about: both players' for the call, the player and his
+    cover for an if/then, the named players' for rising roles and workloads,
+    his for Thursday's. The bye drafts hold until the week's last game."""
+    posts = _all(_timed())
+    assert _until(posts["The closest call"]) == SUN4         # LaPorta @ GB, before Odunze
+    assert _until(posts["The if/then"]) == SUN1              # Pollard, before Brown on Monday
+    assert _until(posts["Rising roles"]) == SUN4             # Jones (MIN), before Robinson
+    assert _until(posts["Thursday night"]) == THU
+    assert _until(posts["NFL byes left"]) == MNF
+    assert _until(posts["Bye check"]) == MNF
+    text = drops.render(_timed(), list(posts.values()))
+    assert "Good until Sun Oct 11 · 4:25 PM ET." in text
+    assert "Post it: Thursday, before his kickoff. Good until Thu Oct 8 · 8:15 PM ET." in text
+    assert "Best posted on Wednesday. Good until Mon Oct 12 · 8:15 PM ET." in text
+    assert text.count("\nGood until ") + text.count(". Good until ") == len(posts)
+    # An if/then is about its cover too: one who plays first sets the time.
+    lineup = [{**row, "game": "@ GB · Sun 4:25 PM ET"} if row["player_id"] == "00-0035261"
+              else row for row in _timed()["lineup"]]
+    bench = [{**row, "game": "vs SEA · Sun 1:00 PM ET"} if row["name"] == "Chase Brown"
+             else row for row in _timed()["bench"]]
+    assert _until(_all(_timed(lineup=lineup, bench=bench))["The if/then"]) == SUN1
+    # Rising roles: only the players the post names, not the ones cut to fit.
+    long = [{"name": f"A Very Long Rising Player Name {i}", "team": "TB", "position": "RB",
+             "recent": 15.5, "earlier": 2.0} for i in range(5)]
+    cut = {"name": "Cut Last", "team": "NE", "position": "WR", "recent": 9.0, "earlier": 1.0}
+    rising = _all(_timed(rising=[*long, cut]))["Rising roles"]
+    assert "Cut Last" not in rising["text"] and _until(rising) == SNF
+    # Thursday's post is his game, even in a week that opens earlier.
+    wednesday = {**STARTS, "KC": datetime(2026, 10, 8, 0, 15, tzinfo=UTC)}
+    early = _all(_timed(), starts=wednesday)
+    assert _until(early["Thursday night"]) == THU
+    # A kickoff it can't place makes it the week's first, never later.
+    assert _until(_all(_timed(bench=[]), starts=wednesday)["The closest call"]) == \
+        wednesday["KC"]
+    bench = [{k: v for k, v in row.items() if k != "game"} for row in _timed()["bench"]]
+    unplaced = _all(_timed(bench=bench))
+    assert _until(unplaced["The closest call"]) == THU
+    assert _until(unplaced["The if/then"]) == THU
+    nowhere = {"name": "Kaleb Johnson", "team": "XYZ", "position": "RB", "recent": 9.0,
+               "earlier": 1.0}
+    assert _until(_all(_timed(rising=[nowhere]))["Rising roles"]) == THU
+    # Workloads: the players the post names.
+    gated = {"gate": "no coin-flip call this week"}
+    work = _all(_timed(regret=gated, rising=[], pivots=[]))["Workloads"]
+    assert "Pollard" in work["text"] and "Flowers" not in work["text"]
+    assert _until(work) == SUN1
+    # No schedule at all: no time to give, and the file says what to go by.
+    blind = _all(_timed(), starts={})
+    assert all(p["until"] is None for p in blind.values())
+    assert "Good until this week's first kickoff." in drops.render(_timed(), list(blind.values()))
+
+
+def test_a_draft_past_its_time_is_left_out() -> None:
+    """The Thursday draft read on Friday is about a game already played; a
+    file written after a draft's time leaves it out and says so."""
+    posts = list(_all(_timed()).values())
+    kept, gone = drops.still_good(posts, datetime(2026, 10, 10, 12, 0, tzinfo=UTC))
+    assert [p["name"] for p in gone] == ["Thursday night"]
+    assert "Thursday night" not in [p["name"] for p in kept] and len(kept) == len(posts) - 1
+    text = drops.render(_timed(), kept, gone=gone)
+    assert "Left out, past their time: Thursday night." in text
+    assert f"## {len(kept) + 1}." not in text
+    kept, gone = drops.still_good(posts, BUILD)
+    assert not gone and kept == posts
+    # Exactly at the kickoff it is gone; with no time it stays.
+    kept, gone = drops.still_good(posts, THU)
+    assert [p["name"] for p in gone] == ["Thursday night"]
+    blind = list(_all(_timed(), starts={}).values())
+    assert drops.still_good(blind, MNF) == (blind, [])
+
+
+def test_every_link_carries_its_own_via_tag() -> None:
+    """Site review: the weekly replies were bare links, so a sale from an X
+    post counted as untagged while posts were the channel being tried. Each
+    reply's link carries ``x-wNN-<draft>``, by the site's own tag rule, one
+    tag per draft, and the week's own ?w= stays first."""
+    from run.refs import VIA_RE
+    gated = {"gate": "no coin-flip call this week"}
+    reports = (_timed(), _timed(regret=gated, rising=[], pivots=[]))
+    seen: dict[str, str] = {}
+    for live_page in (False, True):
+        for report in reports:
+            for name, post in _all(report, live_page=live_page).items():
+                link = post["reply"].rsplit(" ", 1)[1]
+                query = parse_qs(urlsplit(link).query)
+                assert query["via"] == [post["via"]] and VIA_RE.fullmatch(post["via"]), post
+                assert post["via"] == f"x-w05-{drops.SLUGS[name]}"
+                assert link.count("?") == 1, link
+                if "this-week.html" in link:
+                    assert link == f"{URL}?w=5&via={post['via']}"
+                seen.setdefault(post["via"], name)
+                assert seen[post["via"]] == name, "two drafts share a tag"
+    assert set(seen.values()) == set(drops.SLUGS)
+    text = drops.render(_timed(), list(_all(_timed()).values()))
+    assert "x-w05-" in text and "discord-w05-byes" in text
+
+
+def test_the_bye_check_links_the_plain_planner() -> None:
+    """Site review: "Check your own roster's byes" opened the planner on OUR
+    sample roster, whose links then carried that roster into a free report and
+    checkout. Both bye drafts link the bare planner (contract C7: /byes/)."""
+    posts = _all(_timed())
+    for name in ("NFL byes left", "Bye check"):
+        link = posts[name]["reply"].rsplit(" ", 1)[1]
+        assert link == f"{SITE}/byes/?via={posts[name]['via']}", link
+        assert "ref=" not in posts[name]["reply"]
+        assert posts[name]["reply"].startswith("Check your own roster's byes through Week 17")
+
+
+def test_main_links_by_the_clock_this_run_wrote(tmp_path, monkeypatch) -> None:
+    """The drafter reads site/week.json as render.live_sample left it: a clock
+    the landing would not link sends each reply to the home page, and a
+    missing or unreadable clock does the same (fail closed)."""
+    import render.live_sample as live
+    from engine.ledger import extract_published_calls, ledger_path, record_calls
+
+    monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: False)
+    monkeypatch.setattr(drops, "_week_kickoffs", lambda season, week: {})
+    processed = tmp_path / "processed"
+    record_calls(ledger_path(processed, "typed-ppr-12-2026"), extract_published_calls(_report()))
+    out, clock = tmp_path / "this-week.md", tmp_path / "week.json"
+    future = {**CLOCK, "lands_on": "2099-12-30", "week_ends": "2099-12-29",
+              "first_kickoff": "2099-12-28T00:00:00Z"}
+
+    def drafted(clock_text: str | None) -> str:
+        if clock_text is None:
+            clock.unlink(missing_ok=True)
+        else:
+            clock.write_text(clock_text, encoding="utf-8")
+        live.write_published_report(_report(), processed)
+        assert drops.main(["--out", str(out), "--processed-dir", str(processed),
+                           "--week-json", str(clock)]) == 0
+        return out.read_text(encoding="utf-8")
+
+    linked = drafted(json.dumps(future))
+    assert f"{URL}?w=5&via=x-w05-closest" in linked and "isn't linked" not in linked
+    assert "55% to outscore Odunze" in linked
+    for text in (drafted(json.dumps({**future, "total": False})), drafted(None),
+                 drafted("{not json")):
+        assert URL + "?" not in text and f"{SITE}/?via=x-w05-closest" in text
+        assert "This week's page isn't linked." in text
+    # A week already played (here, Oct 2026 read in a later month): every
+    # draft is past its time, and the file says so rather than "nothing to say".
+    monkeypatch.setattr(drops, "_week_kickoffs", lambda season, week: dict(STARTS))
+    stale = drafted(json.dumps(future))
+    assert "## 1." not in stale and "Left out, past their time: The closest call" in stale
+    assert "Nothing left to post this week" in stale and "had no closest call" not in stale
+
+
+def test_a_riser_traded_since_his_last_game_is_on_todays_team() -> None:
+    """Promotion review (Nov 6 2026), reproduced: a back who rose with CLE and
+    was traded to a Thursday team printed "(CLE RB)" and his Wednesday draft
+    read "Good until Sun · 1:00 PM ET", after he had already played. For the
+    week being played now a riser is on TODAY's team, as lineup rows are
+    (launch audit R5); a replayed week keeps the stat-row team."""
+    from types import SimpleNamespace
+    from run.solo import live_rising
+    pool = [{"player_id": "00-1", "position": "RB", "team": "CLE", "recent": 12.0},
+            {"player_id": "00-2", "position": "WR", "team": "DEN", "recent": 9.0},
+            {"player_id": "00-3", "position": "TE", "team": "GB", "recent": 7.0}]
+    directory = SimpleNamespace(players=[SimpleNamespace(player_id="00-1", team="NYJ"),
+                                         SimpleNamespace(player_id="00-2", team="DEN"),
+                                         SimpleNamespace(player_id="00-3", team="")])
+    live = SimpleNamespace(rising=pool, is_live_week=True, directory=directory)
+    teams = [c["team"] for c in live_rising(live)]
+    # Traded: today's team. Same team: unchanged. No team today: the last known.
+    assert teams == ["NYJ", "DEN", "GB"]
+    assert [c["team"] for c in pool] == ["CLE", "DEN", "GB"]       # the pool isn't changed
+    replay = SimpleNamespace(rising=pool, is_live_week=False, directory=directory)
+    assert [c["team"] for c in live_rising(replay)] == ["CLE", "DEN", "GB"]
+    # The report hands rising_for the re-teamed pool, never data.rising itself.
+    import inspect
+    import run.solo as solo
+    assert "rising_for(live_rising(data)," in inspect.getsource(solo)

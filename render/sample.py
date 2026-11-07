@@ -97,14 +97,18 @@ def page(report: dict) -> str:
 
     While checkout is closed it also carries the free bye-week planner's line
     in its closing card (G6), by the live sample's own rule and from today's
-    season clock — so `make sample` keeps what `--restamp` adds."""
-    from render.live_sample import (clock_hints, show_planner_line, with_planner_line,
-                                    with_via_carry)
+    season clock — so `make sample` keeps what `--restamp` adds. Once the
+    free report is open it carries that instead, by the app pages' rule
+    (render.live_sample.show_free_try)."""
+    from render.live_sample import (clock_hints, show_free_try, show_planner_line,
+                                    with_free_try, with_planner_line, with_via_carry)
     page = with_via_carry(render(report, TEMPLATE_PATH.read_text(encoding="utf-8")))
     if (report.get("meta") or {}).get("week") != 1:   # the first-week page links this one
         page = page.replace(site_bar(uid="bylm"),
                             site_bar(uid="bylm", current="sample-report.html"))
-    return with_planner_line(page, show_planner_line(*clock_hints()))
+    byes_left, phase = clock_hints()
+    page = with_planner_line(page, show_planner_line(byes_left, phase))
+    return with_free_try(page, show_free_try(phase))
 
 
 def main(argv: list[str] | None = None) -> int:

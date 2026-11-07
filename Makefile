@@ -351,6 +351,14 @@ og:
 og-week:
 	$(PY) -m render.og --week
 
+# The free bye planner's share card (site/og/byes-SSSS-wNN.png): the NFL byes
+# from the week being played through Week 17, read from site/join/byes.json,
+# and site/byes/'s preview tags pointed at it. weekly.yml's share-card job
+# runs it beside og-week, after the Wednesday run rewrites byes.json. A card
+# it cannot draw leaves the last one up (exit 0), never og.png.
+og-byes:
+	$(PY) -m render.og --byes
+
 # The two PNGs Stripe's branding settings take. Same mark as every page, so
 # there is no second drawing of the logo to drift from the first. Committed;
 # CI never renders one.

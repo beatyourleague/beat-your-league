@@ -1649,6 +1649,18 @@ The join page relabels its own Menu item with the same two words
 is over to footer.js: relabelling after it had made a "Get my lineups" item that opened the
 waitlist (found at integration, Nov 4 2026).
 
+**The samples and How it works carry it too (owner, Nov 6 2026, `tests/test_free_link_pages.py`).**
+The sample report, the first-week sample, this week's report and How it works ended on the paid
+button only. Each now carries the app pages' link once, under its last gold button: one markup,
+`render.report.free_try_html` (`_try` uses it too), the words typed only as `TRIAL_LINK_LABEL`.
+On a sample it is the last line of the closing card (`render.live_sample.with_free_try`, spaced
+like the planner line, the card's off-white link style), written by `make sample`, the Wednesday
+build and `--restamp` by `show_free_try`: `trial_link_open()`, and never once the clock says over
+(`restamp_last` takes it for an over season). How it works is hand-written: its link and `.free`
+rules are pinned to the same markup and rule, so the suite fails until it is taken out by hand
+when the landing's flags close. Each page's own ?via= pass tags it; footer.js hides it at the
+season's close.
+
 **The free report asks for the sale (Nov 4 2026, `tests/test_free_report_ask.py`).** Its buy
 links (the price line and the button, "Start my plan") go to `SITE/join/?ref=<ref>` and nothing
 else: `run.trials` re-encodes the request's roster as a Monthly ref tagged with the row's own

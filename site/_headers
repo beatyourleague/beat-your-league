@@ -65,10 +65,10 @@
   Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-rWcAUu8flBMJW1/RISgUqXjmnWidfKbK6v0r+OmZUJQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://forms.beatyourleague.com; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; upgrade-insecure-requests
 
 /
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-KtbPanYLmMPDX9xhcgqL6ssZ60toxCAiEdOB8tVB06k='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://forms.beatyourleague.com; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-WYhFW8qNe7sMgvbT8xLwkJTYdF2GZgPZjlnCPQgJ1H4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://forms.beatyourleague.com; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; upgrade-insecure-requests
 
 /index.html
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-KtbPanYLmMPDX9xhcgqL6ssZ60toxCAiEdOB8tVB06k='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://forms.beatyourleague.com; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-WYhFW8qNe7sMgvbT8xLwkJTYdF2GZgPZjlnCPQgJ1H4='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://forms.beatyourleague.com; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; upgrade-insecure-requests
 
 /join/confirm
   Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-SXLGI55DM0m61y/5uZ2hh4YSdAG/qEXE/dK1DAkqkpQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://forms.beatyourleague.com; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'; upgrade-insecure-requests

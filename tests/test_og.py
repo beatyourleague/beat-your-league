@@ -74,8 +74,15 @@ def test_every_public_page_carries_the_card(page: Path) -> None:
     # drawn by weekly.yml's share-card job): then that card must exist.
     week = re.search(r'<meta property="og:image" content="https://beatyourleague\.com/og/'
                      r'(this-week-\d{4}-w\d{2}\.png)">', text)
+    # The bye planner carries its own card, always (render.og --byes,
+    # tests/test_og_byes.py): the lineup card's odds on a free tool's
+    # preview read as an ad for picks.
+    planner = re.search(r'<meta property="og:image" content="https://beatyourleague\.com/og/'
+                        r'(byes-\d{4}-w\d{2}\.png)">', text)
     if page.name == "this-week.html" and week:
         assert (SITE / "og" / week.group(1)).is_file(), week.group(1)
+    elif page.relative_to(SITE).as_posix() == "byes/index.html":
+        assert planner and (SITE / "og" / planner.group(1)).is_file(), "run `make og-byes`"
     else:
         assert f'<meta property="og:image" content="{OG_IMAGE}">' in text
     assert '<meta name="twitter:card" content="summary_large_image">' in text, (

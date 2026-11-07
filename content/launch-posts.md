@@ -1,22 +1,67 @@
 # Launch posts: drafts for you to edit and send
 
-**Nothing here has been posted.** Everything leads with the free bye planner, because it works
-today with checkout closed. Swap in the buy line only once checkout is open.
+**Nothing here has been posted.** Checkout is open. Each post leads with something free: the bye
+planner or the free report. The plan is one line under it. Read "When to post" first, because the
+day decides which one works.
 
-**Make a link for each post, once, right before you post it.** Each tag counts on its own row in
-the dashboard, and a reused tag is refused:
+## When to post (ET)
+
+- **The bye planner: through Week 14.** It answers the moment someone pastes a roster, any day.
+  After Week 14 no team has a bye left, so there's nothing for it to find.
+- **The free report and the plan: Tuesday to Thursday afternoon.** In that window, someone who
+  asks gets this week's lineup, usually within the hour. It opens on Tuesday once Monday night's
+  game is scored, and closes about 75 minutes before Thursday night's game.
+- **Except Wednesday daytime for the free report.** Paid reports go out first that day, so a free
+  request waits for the evening run (about 5:17 PM).
+- **Week 12 (Thanksgiving week) is different.** Its first game is Wednesday, Nov 25 at 8 PM, so
+  that Wednesday's report goes out in the morning and the window closes about 6:45 PM Wednesday.
+  Don't post the free report on Thanksgiving.
+- **Thursday night to Tuesday morning: no free-report or plan post.** This week's games have
+  started. A free request waits until Tuesday and gets next week's report. A buyer until Monday
+  afternoon gets a roster report when they pay. From Monday evening, their first lineup comes once
+  Monday's game is scored, usually by Tuesday morning. Then Wednesday's report (Week 12's goes out
+  Wednesday morning). Through Week 14, post the planner instead. This week's drafts stay usable
+  until their own "Good until".
+- **Week 18 may have no Thursday game.** Its window runs until its first game, whenever that is,
+  and then the free report closes for the season (early January). Unpin its post then.
+- At most 40 free reports go out a day. If a post brings more, the rest go the next day.
+
+## The post to pin on X
+
+Pin the bye planner post (section 4) through Week 14. It needs no editing. PLAN §5 used to say to
+pin this week's sample report instead. That page changes every Wednesday, and some weeks the site
+doesn't link it at all (Weeks 8 and 9 of 2026, when its lineup had no projected total).
+After Week 14, pin the free report post (section 5). Its words stay true Thursday to Monday too: a
+request then gets next week's report. Unpin it at Week 18's first game, when the free report
+closes for the season.
+
+## Make a link for each post
+
+Make it once, right before you post. Each tag counts on its own row in the dashboard, and a reused
+tag is refused:
 
 ```bash
-make link TAG=league-nov2 WHERE="my league chat" PAGE=byes/
+make link TAG=league-nov10 WHERE="my league chat" PAGE=byes/
 ```
 
 ```bash
-make link TAG=discord-nov2 WHERE="server name" PAGE=byes/
+make link TAG=league-nov10-free WHERE="my league chat" PAGE='join/?try=1'
 ```
 
 ```bash
-make link TAG=x-nov2 WHERE="pinned post" PAGE=byes/
+make link TAG=discord-nov10 WHERE="server name" PAGE=byes/
 ```
+
+```bash
+make link TAG=x-pin WHERE="pinned post" PAGE=byes/
+```
+
+```bash
+make link TAG=x-nov10-free WHERE="X post" PAGE='join/?try=1'
+```
+
+`PAGE='join/?try=1'` is the free report. Keep the quotes: without them zsh reads the `?` as a
+wildcard and stops.
 
 **Ground rules (PLAN §5).** Reddit: no links in posts or comments, read each sub's rules, ask the
 mods first. Discord: ask a mod before posting. X: the link goes in the first reply. Say you built
@@ -26,15 +71,17 @@ it. Never post a win-loss record, and no results or promises.
 
 ## 1. Your own league chat (start here)
 
+Through Week 14:
+
 > I built a free bye week checker. Paste your roster and it shows every week you'd have an empty
 > starting spot from here to Week 17. No email, no signup, takes a minute.
 >
-> [link]
+> [planner link]
 
-Once checkout is open, add:
+Tuesday to Thursday afternoon (see "When to post"), add:
 
 > I also built the paid version: one email every Wednesday that decides your lineup for your roster.
-> Happy to run you a free one this week if you want to see it first.
+> Get a free report on your own roster: [free report link]
 
 ## 2. Discord: the message to the mod
 
@@ -47,7 +94,9 @@ Once checkout is open, add:
 > Free bye week check for anyone heading into the playoff push. Paste your roster, see the weeks
 > you'd have an empty spot, in time to do something about it. I built it, no signup.
 >
-> [link]
+> [planner link]
+
+If the mod is fine with the paid report too, add section 1's second line, Tuesday to Thursday.
 
 ## 4. X: the post to pin
 
@@ -58,14 +107,29 @@ Once checkout is open, add:
 
 First reply:
 
-> [link]
+> [planner link]
 
-## 5. X: Wednesday, from this week's real report
+## 5. X: the free report, Tuesday to Thursday afternoon
 
-`content/this-week.md` is rewritten every Wednesday with up to three posts from the live sample.
-Use those. They're the real report, and they fit a post.
+> Paste your fantasy roster and get a free lineup report on it. Every slot decided, every close
+> call explained. One per person, no card.
+>
+> Link in the reply.
 
-## 6. A commissioner, once the League Pass is open
+First reply:
+
+> Get a free report on your own roster: [free report link]
+
+## 6. X: Wednesday, from this week's real report
+
+`content/this-week.md` is rewritten every Wednesday from the live sample. Use those posts. They're
+the real report, and they fit a post. Each one says how long it's good for. Each link already
+carries its own tag (like `x-w09-closest`), so `make stats` counts it with no `make link`. To see
+one on the dashboard's post list too, log its tag, `make link TAG=x-w09-closest WHERE="X"`, and
+post the draft's own link. In a week the site doesn't link this week's sample page, the replies
+link the home page instead, and the file says why.
+
+## 7. A commissioner, once the League Pass is open
 
 > Running a league? The League Pass gives every manager their own lineup report every Wednesday
 > through the title game. $34.99 a month for the league, and it stops on its own.

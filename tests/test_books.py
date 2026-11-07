@@ -90,9 +90,39 @@ def test_link_refuses_a_tag_the_site_would_drop(tag, tmp_path) -> None:
     assert not (tmp_path / "data" / "posts.csv").exists()
 
 
-@pytest.mark.parametrize("page", ["https://evil.example/", "../x", "join/?a=1"])
+@pytest.mark.parametrize("page", ["https://evil.example/", "../x", "join/?a=1",
+                                  # Only the free report's own query is a page.
+                                  "join/?try=2", "join/?try=1&via=x", "join/?try=1#x",
+                                  "byes/?try=1", "join/?ref=s4-abc", "join/?try=1&ref=s4-abc",
+                                  "?try=1", "join?try=1x"])
 def test_link_refuses_a_page_outside_the_site(page, tmp_path) -> None:
     assert books.cli(["link", "x-1", "--page", page], root=tmp_path) == 2
+    assert not (tmp_path / "data" / "posts.csv").exists()
+
+
+def test_link_tags_the_free_report_link_with_an_ampersand(tmp_path, capsys) -> None:
+    """Site review, Nov 6 2026: `make link PAGE=join/?try=1` was refused, so a
+    post offering the free report could carry no ?via= tag, and the one way to
+    see which post brought a free request (and the sale after it) was lost.
+    It is the one query a page may carry; the tag joins it with "&", because
+    a second "?" ("join/?try=1?via=…") would make try read "1?via=…" and the
+    page would open as the buy page with no tag at all."""
+    assert books.cli(["link", "league-nov10", "--where", "my league chat",
+                      "--page", "join/?try=1"], root=tmp_path) == 0
+    out = capsys.readouterr().out
+    link = "https://beatyourleague.com/join/?try=1&via=league-nov10"
+    assert f"  {link}\n" in out and out.count("?") == 1
+    # The link opens join's free report and carries the tag the site reads.
+    from urllib.parse import parse_qs, urlsplit
+    query = parse_qs(urlsplit(link).query)
+    assert query == {"try": ["1"], "via": ["league-nov10"]}
+    join = (books.REPO_ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
+    assert 'QUERY.get("try") === "1"' in join
+    assert books.load(tmp_path).posts[0].tag == "league-nov10"
+    # The same rules as any link: a reused tag is refused.
+    assert books.cli(["link", "league-nov10", "--page", "join/?try=1"], root=tmp_path) == 2
+    assert books.tagged_link("x-1", "byes/") == "https://beatyourleague.com/byes/?via=x-1"
+    assert books.tagged_link("x-1") == "https://beatyourleague.com/?via=x-1"
 
 
 def test_the_books_live_under_the_gitignored_data_folder() -> None:

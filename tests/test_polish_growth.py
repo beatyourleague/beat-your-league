@@ -349,7 +349,8 @@ def test_the_share_card_job_holds_no_secret_and_commits_only_the_card() -> None:
     assert ".venv/bin/python -m render.og --week" in runs
     assert "git push" not in runs and "GH_TOKEN" not in str(job)
     hand_off = next(s for s in job["steps"] if s.get("id") == "handoff")
-    assert hand_off["env"] == {"RECORD_PATHS": "site/og site/this-week.html"}
+    # The planner's card and page ride beside it (tests/test_og_byes.py).
+    assert hand_off["env"] == {"RECORD_PATHS": "site/og site/this-week.html site/byes/index.html"}
     upload = next(s for s in job["steps"] if "upload-artifact" in str(s.get("uses", "")))
     assert upload["with"]["name"] == "share-card"
     assert upload["with"]["path"] == "${{ runner.temp }}/record/"
@@ -363,7 +364,7 @@ def test_the_share_card_job_holds_no_secret_and_commits_only_the_card() -> None:
     assert commit["permissions"] == {"contents": "write"}
     commit_runs = "\n".join(str(s.get("run", "")) for s in commit["steps"])
     adds = [line.strip() for line in re.findall(r"^\s*git add .*$", commit_runs, re.M)]
-    assert adds == ["git add -A site/og site/this-week.html"]
+    assert adds == ["git add -A site/og site/this-week.html site/byes/index.html"]
 
 
 # --------------------------------------------------------------------- #
@@ -451,21 +452,21 @@ def test_neither_bye_draft_carries_a_number_to_grade() -> None:
         assert not any(w in low for w in NO_NUMBERS + drops.BANNED), post
         assert "http" not in post["text"], "the link goes in the first reply"
         assert post["reply"].startswith("Check your own roster's byes through Week 17, free, no login: ")
-    assert posts[0]["when"] == "Wednesday" and posts[0]["card"] == "Every 2026 NFL bye week"
+    assert posts[0]["when"] == "Best posted on Wednesday." and posts[0]["card"] == "Every 2026 NFL bye week"
     assert posts[1]["card"] == "Your Game Plan" and "when" not in posts[1]
 
 
-def test_the_bye_check_reply_opens_the_planner_on_the_sample_roster() -> None:
-    """Contract C7: the planner is /byes/. Draft B's link carries the sample
-    roster as the same v4 roster code a signup carries."""
-    from run.refs import decode_roster
+def test_both_bye_replies_open_the_plain_planner() -> None:
+    """Contract C7: the planner is /byes/, and both bye drafts' first replies
+    link it, tagged for the post. Draft B's once carried the sample roster
+    (site review, Nov 2026): its reply said "check your own roster", and the
+    planner restored OURS, then carried it into its free-report and checkout
+    links. A visitor's own roster starts from an empty planner."""
     [table, check] = drops.bye_drafts(_bye_report(), BYES_2026)
-    assert table["reply"].endswith(" https://beatyourleague.com/byes/")
-    url = check["reply"].rsplit(" ", 1)[1]
-    assert url.startswith("https://beatyourleague.com/byes/?ref=")
-    roster = decode_roster(url.split("?ref=", 1)[1])
-    assert tuple(roster.player_ids) == live.LIVE_ROSTER
-    assert roster.league_size == 12 and roster.scoring == "ppr"
+    assert table["reply"].endswith(" https://beatyourleague.com/byes/?via=x-w07-byes")
+    assert check["reply"].endswith(" https://beatyourleague.com/byes/?via=x-w07-byecheck")
+    for post in (table, check):
+        assert "ref=" not in post["reply"] and "try=" not in post["reply"]
 
 
 def test_the_bye_drafts_sit_after_the_reports_own_posts() -> None:
@@ -482,15 +483,15 @@ def test_the_bye_drafts_sit_after_the_reports_own_posts() -> None:
     report = {"meta": {"week": 7, "season": "2026"}, "regret": {}, "pivots": [],
               "rising": [{"name": "A B", "team": "SEA", "position": "RB", "recent": 9.0,
                           "earlier": 2.0}]}
-    [rising] = drops.drafts(report)
-    assert rising["reply"].endswith("https://beatyourleague.com/this-week.html?w=7")
+    [rising] = drops.drafts(report, live_page=True)
+    assert rising["reply"].endswith("https://beatyourleague.com/this-week.html?w=7&via=x-w07-rising")
 
 
 def test_the_drafts_file_says_where_the_planner_card_is(tmp_path) -> None:
     text = drops.render(_bye_report(), drops.bye_drafts(_bye_report(), BYES_2026))
     assert ('Attach: a screenshot of the "Every 2026 NFL bye week" card, from the bye-week '
             'planner (https://beatyourleague.com/byes/).') in text
-    assert "Post it: Wednesday." in text
+    assert "Best posted on Wednesday." in text
 
 
 # --------------------------------------------------------------------- #

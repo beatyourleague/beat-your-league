@@ -215,6 +215,8 @@ def test_the_day_one_line_is_true_every_day_of_the_week() -> None:
     so that is what the samples' closing card says — usually, because the
     intake runs hourly — and it no longer spells out the either/or."""
     assert "Your first report usually lands within the hour of joining" in rr.JOIN_PROMISE
+    # Monday night waits for Monday's box score, and the line says so.
+    assert "(by Tuesday morning if you join on a Monday night)" in rr.JOIN_PROMISE
     assert "the day you join:" not in rr.JOIN_PROMISE
     assert "full PPR, half PPR or standard" in rr.JOIN_PROMISE
 
@@ -744,11 +746,14 @@ def test_the_drafted_posts_carry_no_link_and_name_the_card_to_attach() -> None:
     by the heading the report itself prints over it."""
     from run import drops
     from test_drops import _report
-    posts = drops.drafts(_report())
+    posts = drops.drafts(_report(), live_page=True)
     assert posts
     for post in posts:
         assert "http" not in post["text"] and "this-week.html" in post["reply"]
         assert post["card"] in drops.CARDS.values()
+    # A week the site keeps this week's page unlinked: still a link, the home page's.
+    for post in drops.drafts(_report()):
+        assert "http" not in post["text"] and "https://beatyourleague.com/?via=" in post["reply"]
     # The report's card titles live in one place now (render.anatomy.TITLES,
     # contract C1), the one every surface prints.
     from render.anatomy import TITLES
