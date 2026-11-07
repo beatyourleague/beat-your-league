@@ -67,7 +67,7 @@ jobs:
     steps:
       # Actions pinned to a full commit, tag in the comment (INFRA-06), and no
       # token left in .git/config (INFRA-07) — this job has none that can push.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         id: checkout
         with:
           ref: ${{ github.ref_name }}
@@ -262,7 +262,7 @@ jobs:
     steps:
       # fetch-depth: 0: the starting commit is checked against this branch's
       # history, and `git pull --rebase` against a shallow history can fail.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
