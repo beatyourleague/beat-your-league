@@ -67,6 +67,15 @@ def _snapshot(root: Path = REGISTRY_DIR) -> dict[str, float]:
 
 
 @pytest.fixture(autouse=True)
+def hq_feed_is_off_limits(tmp_path_factory, monkeypatch):
+    """No test reads the owner's real HQ feed (~/Library/Application
+    Support/HQ/feeds): with it present, the books would come from the owner's
+    own costs. HQ_HOME points every test at an empty folder; a test that wants
+    a feed writes one under its own HQ_HOME."""
+    monkeypatch.setenv("HQ_HOME", str(tmp_path_factory.mktemp("hq-home")))
+
+
+@pytest.fixture(autouse=True)
 def registry_is_off_limits():
     """No test may create, modify or delete anything under data/registry/ or
     data/processed/ledger/.

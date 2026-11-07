@@ -199,8 +199,8 @@ SOURCE_INFO = {
              "How old this week's sample and the player directory are."),
     "plan": ("PLAN.md §6", "PLAN.md §6 — the decision gates",
              "The pre-committed decision gates and where each stands."),
-    "books": ("Your books", 'make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly — costs, hours and '
-                            'post links live in data/ (run/books.py)',
+    "books": ("Your books", "HQ, the Mac app: add costs and time there. Post links live in "
+                            "data/posts.csv (make link)",
               "Profit after your costs, when you break even, what you earn per hour, and which "
               "posts sold."),
 }
@@ -1344,7 +1344,7 @@ def profit_metrics(books: Source, money: dict | None, period: str, now: datetime
     the date you'd write on them."""
     if not books.ok:
         return None
-    from run.books import charges, spent
+    from run.books import charges, counted, spent
     b = books.data
     today = now.astimezone(ET).date()
     days = period_days(period)
@@ -1360,7 +1360,7 @@ def profit_metrics(books: Source, money: dict | None, period: str, now: datetime
     span = max(days or 90, 14)
     spark_days = [(today - timedelta(days=i)) for i in range(span - 1, -1, -1)]
     per_day: Counter = Counter()
-    for c in b.costs:
+    for c in counted(b.costs):
         for d in charges(c, today):
             per_day[d] += c.amount
     net_days = money["spark_net"] if money is not None and len(money["spark_net"]) == span else [0] * span
@@ -2480,7 +2480,7 @@ def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | No
         elif pr is not None:
             cards.append(kpi("Profit", "", "", "", "", missing=st, why="Needs Stripe for revenue"))
         else:
-            cards.append(kpi("Profit", "", "", "", "", missing=S["books"], why="Record costs: make cost"))
+            cards.append(kpi("Profit", "", "", "", "", missing=S["books"], why="Add costs in HQ"))
         cards.append(kpi("Refund rate", pct(mo["refund_rate"]) if mo else "",
                          delta_chip(mo["refund_delta"], good_up=False, points=True,
                                     label="no earlier sales" if p != "all" else "all time") if mo else "",
@@ -3447,8 +3447,8 @@ def profit_block(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetim
     if not books.ok:
         return (f'<div class="card"><div class="cardhead"><div><h3>Profit</h3><p class="muted small">'
                 f'Revenue minus what the business costs you.</p></div></div>{setup_card(books, compact=True)}'
-                f'<p class="muted small">Record a cost: <code>make cost ITEM="Domain" AMOUNT=12 '
-                f'REPEATS=yearly</code> · time spent: <code>make hours H=1.5</code></p></div>')
+                f'<p class="muted small">Add costs and time in HQ, the Mac app. This page reads '
+                f'them from HQ.</p></div>')
     from run.books import monthly_run_rate, next_charges, spent
     b = books.data
     today = now.astimezone(ET).date()
@@ -3483,7 +3483,7 @@ def profit_block(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetim
         th = "".join(f'<div class="mini{c}"><p class="kl">{h(a)}</p><p class="mv">{v}</p></div>'
                      for a, v, c in tiles)
         hrs = (f'{pr["hours"]:g} h logged, {span}' if pr["hours"] else
-               'Log time with <code>make hours H=1.5</code> to see this')
+               'Log time in HQ to see this')
         return f'<div class="minis">{th}</div><p class="muted small">{hrs}</p>'
     due = next_charges(b.costs, today)
     due_html = ("".join(f'<li><span>{h(short_day(d.isoformat()))}</span><b>{h(c.item)}</b>'
@@ -3494,10 +3494,10 @@ def profit_block(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetim
         items[c.item] += spent([c], None, today)
     cost_list = bar_list("Costs by item", "$ so far", [(k, round(v)) for k, v in items.most_common() if v],
                          "No costs recorded yet.",
-                         note=f"Recurring: {money_fmt(monthly_run_rate(b.costs), True)} a month.")
+                         note=f"Recurring: {money_fmt(monthly_run_rate(b.costs, today), True)} a month.")
     return (f'<div class="card profit"><div class="cardhead"><div><h3>Profit</h3>'
             f'<p class="muted small">Net revenue after Stripe, less the costs you record in '
-            f'data/costs.csv.</p></div></div>{by_period(one)}{be}</div>'
+            f'HQ.</p></div></div>{by_period(one)}{be}</div>'
             f'<div class="grid2">{cost_list}<div class="card"><div class="cardhead"><h3>Due in the next '
             f'30 days</h3><span class="unit">Recurring</span></div><ul class="due">{due_html}</ul></div></div>')
 
@@ -4000,10 +4000,10 @@ CONNECT_STEPS = (
                 "Page views start after your own checks, so the traffic is visitors.",
                 "Add TRAFFIC_FROM= to .env with the UTC time your checks ended, such as "
                 "2026-11-03T23:00Z (LAUNCH.md step 5b, item 11)."),
-    ConnectStep(4, "Your costs", "make cost",
+    ConnectStep(4, "Your costs", "HQ",
                 "Profit after costs, when you break even and what you earn per hour.",
-                'Record each cost from its receipt: make cost ITEM="Domain" AMOUNT=<receipt> '
-                "REPEATS=yearly (LAUNCH.md section 8, Profit and posts)."),
+                "Add your costs and time in HQ, the Mac app (its README says how to install it). "
+                "This page reads them from HQ's feed on this Mac (LAUNCH.md section 8, Profit and posts)."),
     ConnectStep(5, "Send log key", "LOG_SECRET",
                 "Free report → paid: each free report mailed, matched to a later purchase.",
                 "Add LOG_SECRET= to .env, the same value as the GitHub secret, from your "

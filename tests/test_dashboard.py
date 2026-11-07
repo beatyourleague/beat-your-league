@@ -783,7 +783,7 @@ def test_without_costs_the_profit_card_says_how_to_add_them() -> None:
     S = rich_sources()
     S["books"] = dash.off("books", "No costs, hours or posts recorded yet.")
     page = dash.render_page(S, NOW, fonts=False)
-    assert "Record costs: make cost" in page and 'make cost ITEM=&quot;Domain&quot;' in page
+    assert "Add costs in HQ" in page and "Add costs and time in HQ, the Mac app" in page
     # Post-shaped tags seen on the site still get their rows without a log.
     assert "reddit-oct20" in page and "No posts tracked yet" not in page
 
@@ -1884,7 +1884,7 @@ def test_the_connect_card_lists_seven_numbered_steps_in_order() -> None:
     page = dash.render_page(empty_sources(), NOW, fonts=False, env={})
     card = _card(page)
     assert "Connect your dashboard" in page and "0 of 7 done" in card
-    names = ["OWNER_EMAILS", "STRIPE_STATS_KEY", "TRAFFIC_FROM", "make cost", "LOG_SECRET",
+    names = ["OWNER_EMAILS", "STRIPE_STATS_KEY", "TRAFFIC_FROM", "HQ", "LOG_SECRET",
              "RESEND_READ_KEY", "make dashboard-registry"]
     assert [s.name for s in dash.CONNECT_STEPS] == names
     at = [card.index(f"<code>{dash.h(n)}</code>") for n in names]

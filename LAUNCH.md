@@ -961,13 +961,16 @@ It only updates while your Mac is awake, and the page turns amber when its numbe
 than two rounds old.
 
 **Profit and posts.** The dashboard turns revenue into profit once you record what the business
-costs, and shows which post sold once each post has its own link. All of it is kept in three
-small files in the `data/` folder, which is never committed:
-- `make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly` records a cost (`once`, `monthly` or
-  `yearly`; add `DATE=2026-08-01` for a past one). A recurring cost counts on each day it's
-  charged. Amounts in US dollars. Stripe's fees are already taken out of net revenue, so
-  don't log them here. The Money section shows profit, how many monthly charges until you break even, what's due
-  in the next 30 days, and, if you log your time with `make hours H=1.5`, what you earn per hour.
+costs, and shows which post sold once each post has its own link.
+- **Costs and time live in HQ**, the Mac app for the books of all your businesses (its own
+  folder, `~/Code/hq`; its README says how to install it). Add each cost and log your time there:
+  a repeating cost makes its own line each time it's charged, and each line can carry its
+  receipt. HQ writes a feed on this Mac that this dashboard reads, so the Money section shows
+  profit, how many monthly charges until you break even, what's due in the next 30 days and
+  what you earn per hour. This page already takes Stripe's fees out of net revenue, so it
+  leaves out the Stripe lines HQ books from its own Stripe connection. Once HQ's
+  feed exists, `make cost` and `make hours` refuse and point to HQ. Before that, they still
+  write `data/costs.csv` and `data/hours.csv`, which HQ can bring in on its first launch.
 - `make link TAG=reddit-oct28 WHERE="r/fantasyfootball"` prints the link to use in a post (add
   `PAGE=byes/` to send people to another page) and logs it. Start the tag with the channel:
   `reddit-…`, `x-…`, `discord-…`. The Funnel section then lists each post with its views, rosters,

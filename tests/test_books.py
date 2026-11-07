@@ -129,3 +129,106 @@ def test_the_books_live_under_the_gitignored_data_folder() -> None:
     import run.stats as stats
     for path in (books.COSTS, books.HOURS, books.POSTS):
         assert path.parent == books.REPO_ROOT / "data" and stats._gitignored(path)
+
+
+# --------------------------------------------------------------------- #
+# HQ's feed (HQ SPEC section 9): costs and hours come from the Mac app
+# --------------------------------------------------------------------- #
+
+import json
+import os
+
+FEED = {
+    "schema": "hq-feed/1", "generated_at": "2026-11-07T12:00:00Z", "rates_as_of": "2026-11-06",
+    "business": {"id": "b1", "name": "Beat Your League", "slug": "beat-your-league", "currency": "CAD"},
+    "costs": [
+        {"id": "c1", "date": "2026-11-07", "item": "Domain", "category": "software", "amount": "10.46",
+         "currency": "USD", "amount_business": "14.45", "amount_usd": "10.46", "refund": False},
+        {"id": "c2", "date": "2026-11-10", "item": "Ad credit back", "category": "advertising",
+         "amount": "5.00", "currency": "USD", "amount_business": "6.90", "amount_usd": "5.00", "refund": True},
+        {"id": "c3", "date": "2026-11-09", "item": "Lawyer", "category": "professional", "amount": "100.00",
+         "currency": "CAD", "amount_business": "100.00", "amount_usd": None, "refund": False},
+    ],
+    "repeating": [{"id": "r1", "item": "Mailbox", "amount": "10.00", "currency": "USD", "amount_usd": "10.00",
+                   "every": "monthly", "first": "2026-11-01", "until": None}],
+    "hours": [{"id": "h1", "date": "2026-11-07", "hours": 2.0, "note": "Launch setup"}],
+    "problems": [],
+}
+
+
+def _feed(tmp_path, feed=FEED, slug="beat-your-league"):
+    feeds = tmp_path / "hq" / "feeds"
+    feeds.mkdir(parents=True)
+    (feeds / "index.json").write_text(json.dumps({slug: "b1"}), encoding="utf-8")
+    (feeds / "b1.json").write_text(json.dumps(feed), encoding="utf-8")
+    return feeds
+
+
+def test_the_tests_never_read_the_owners_real_feed() -> None:
+    assert os.environ["HQ_HOME"] and "Application Support" not in os.environ["HQ_HOME"]
+
+
+def test_with_hq_costs_and_hours_come_from_the_feed_not_the_csvs(tmp_path) -> None:
+    _write(tmp_path, "costs.csv", "date,item,amount,repeats\n2026-11-07,Old,99,once\n")
+    _write(tmp_path, "posts.csv", "date,tag,where,note\n2026-11-07,reddit-nov7,r/x,\n")
+    b = books.load(tmp_path, feeds=_feed(tmp_path))
+    assert b.hq and "hq" in b.found and "costs.csv" not in b.found
+    assert [c.item for c in b.costs if not c.template] == ["Domain", "Ad credit back"]
+    assert [p.tag for p in b.posts] == ["reddit-nov7"]          # posts still live here
+    assert [h.hours for h in b.hours] == [2.0]
+
+
+def test_a_feed_line_with_no_dollar_amount_is_reported_not_guessed(tmp_path) -> None:
+    b = books.load(tmp_path, feeds=_feed(tmp_path))
+    assert any("HQ cost 3 was skipped" in p and "exchange rate" in p for p in b.problems)
+
+
+def test_a_refund_reduces_costs_and_a_template_never_counts_twice(tmp_path) -> None:
+    b = books.load(tmp_path, feeds=_feed(tmp_path))
+    # 10.46 - 5.00; the Mailbox template schedules but HQ's own charge lines count.
+    assert spent(b.costs, None, date(2026, 11, 30)) == 5.46
+    assert monthly_run_rate(b.costs, date(2026, 11, 30)) == 10.0
+    assert [(d, c.item) for d, c in next_charges(b.costs, date(2026, 11, 7))] == [(date(2026, 12, 1), "Mailbox")]
+
+
+def test_a_stale_or_broken_feed_says_so(tmp_path) -> None:
+    old = dict(FEED, generated_at="2026-10-01T00:00:00Z")
+    b = books.Books([], [], [], [], ())
+    path = _feed(tmp_path, old) / "b1.json"
+    books.load_hq_feed(path, b, today=date(2026, 11, 7))
+    assert any("from 2026-10-01" in p for p in b.problems)
+    path.write_text("{not json", encoding="utf-8")
+    b2 = books.Books([], [], [], [], ())
+    books.load_hq_feed(path, b2)
+    assert not b2.hq and any("couldn't be read" in p for p in b2.problems)
+
+
+def test_stripe_lines_from_hq_are_left_out_because_revenue_is_already_net(tmp_path) -> None:
+    fee = {"id": "s1", "date": "2026-11-08", "item": "Stripe fee", "category": "payment-fees",
+           "amount": "1.20", "currency": "CAD", "amount_business": "1.20", "amount_usd": "0.87",
+           "refund": False, "source": "stripe"}
+    b = books.load(tmp_path, feeds=_feed(tmp_path, dict(FEED, costs=FEED["costs"] + [fee])))
+    assert "Stripe fee" not in [c.item for c in b.costs]
+
+
+def test_another_business_feed_is_never_read(tmp_path) -> None:
+    b = books.load(tmp_path, feeds=_feed(tmp_path, slug="other-site"))
+    assert not b.hq and b.costs == []
+
+
+def test_a_stopped_repeating_cost_stops_charging_and_leaves_the_run_rate() -> None:
+    c = Cost(date(2026, 1, 15), "Tool", 20.0, "monthly", until=date(2026, 3, 1))
+    assert charges(c, date(2026, 6, 30)) == [date(2026, 1, 15), date(2026, 2, 15)]
+    assert monthly_run_rate([c], date(2026, 6, 30)) == 0
+    q = Cost(date(2026, 1, 31), "Insurance", 30.0, "quarterly")
+    assert charges(q, date(2026, 8, 1)) == [date(2026, 1, 31), date(2026, 4, 30), date(2026, 7, 31)]
+    assert monthly_run_rate([q], date(2026, 8, 1)) == 10.0
+
+
+def test_make_cost_refuses_once_hq_owns_the_costs(tmp_path, monkeypatch, capsys) -> None:
+    home = tmp_path / "hq"
+    _feed(tmp_path)
+    monkeypatch.setenv("HQ_HOME", str(home))
+    assert books.cli(["cost", "Domain", "12"], root=tmp_path) == 2
+    assert "Add it in HQ" in capsys.readouterr().err
+    assert not (tmp_path / "data" / "costs.csv").exists()

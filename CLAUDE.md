@@ -2120,6 +2120,17 @@ post tag uses the site's own `?via=` rule, counts under its channel (the part be
 hyphen) and on its own row, and is pinned on the traffic chart. A line the books can't read is
 a low issue, never a guess.
 
+**Costs and time moved to HQ (Nov 7 2026).** HQ (`~/Code/hq`, its own repo) is the owner's
+Mac app for the books of every business: costs with receipts and categories, repeating costs,
+hours with a menu-bar timer, Stripe income, profit, and an accountant export. It writes a feed
+per business to `~/Library/Application Support/HQ/feeds/` (`$HQ_HOME/feeds` when set);
+`run/books.py` reads Beat Your League's (found by slug through `index.json`) for costs and
+hours, skips HQ's own Stripe lines (revenue here is already net of Stripe's fees), reports a
+feed over 7 days old, and keeps reading `data/posts.csv` for post tags. With the feed present
+`make cost` and `make hours` refuse and point to HQ; without it they work as before. Every test
+runs with `HQ_HOME` set to an empty temp folder (`tests/conftest.py`), so no test reads the
+owner's real feed.
+
 **The dashboard keeps itself fresh and says what to do (Nov 4 2026).** The owner opened
 `data/dashboard.html`, refreshed, and read Nov 3's numbers as today's: a one-off page never said
 its age. Every page now carries `data-generated`, shows "built N h ago" and turns amber after an

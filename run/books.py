@@ -1,5 +1,13 @@
 """The owner's own books: costs, hours and marketing posts, for the dashboard.
 
+Costs and hours now live in HQ, the owner's Mac app for the books of every
+business (``~/Code/hq``). HQ writes a read-only feed per business; when Beat
+Your League's is present (``load_hq_feed``), costs and hours come from it, the
+CSVs below are not read for them, and ``make cost`` / ``make hours`` refuse.
+Stripe lines HQ booked from its own Stripe connection are skipped, because
+this dashboard's revenue is already net of Stripe's fees. Without the feed
+everything below works as before.
+
 Three small CSV files under the gitignored ``data/`` folder, written by hand
 or by the make targets below, read by ``run/dashboard.py`` to turn revenue
 into profit and traffic into "which post sold":
@@ -37,10 +45,12 @@ from __future__ import annotations
 import argparse
 import calendar
 import csv
+import json
+import os
 import re
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -52,7 +62,16 @@ POSTS = DATA / "posts.csv"
 SITE = "https://beatyourleague.com/"
 ET = ZoneInfo("America/New_York")
 
-REPEATS = ("once", "monthly", "yearly")
+REPEATS = ("once", "monthly", "quarterly", "yearly")
+STEP_MONTHS = {"monthly": 1, "quarterly": 3, "yearly": 12}
+
+# HQ, the owner's Mac app for the books of every business, writes a read-only
+# feed per business (HQ's SPEC section 9). When Beat Your League's feed is
+# there, costs and hours come from it and data/costs.csv / hours.csv are not
+# read: one place to enter them. Posts stay here (they are marketing tags).
+HQ_SLUG = "beat-your-league"
+HQ_FEED_SCHEMA = "hq-feed/1"
+HQ_STALE_DAYS = 7
 TAG_RE = re.compile(r"^[a-z0-9-]{1,24}$")          # run.refs.VIA_RE, count.js, carryVia
 PAGE_RE = re.compile(r"^(?:[a-z0-9-]+/|[a-z0-9-]+\.html)?$")
 # The pages a link may name WITH a query, and only these: the free report
@@ -70,6 +89,8 @@ class Cost:
     item: str
     amount: float
     repeats: str
+    until: date | None = None       # a repeating cost stops after this day
+    template: bool = False          # HQ's repeating template: schedules, never counts
 
 
 @dataclass(frozen=True)
@@ -97,7 +118,8 @@ class Books:
     hours: list[Hours]
     posts: list[Post]
     problems: list[str]
-    found: tuple[str, ...]           # which files exist
+    found: tuple[str, ...]           # which files exist ("hq" when the HQ feed was read)
+    hq: bool = False                 # costs and hours came from HQ's feed
 
 
 def channel_of(tag: str) -> str:
@@ -133,11 +155,99 @@ def _money(value: str) -> float:
     return round(amount, 2)
 
 
-def load(root: Path = REPO_ROOT) -> Books:
+def hq_feeds_dir() -> Path:
+    """Where HQ writes its feeds: ``$HQ_HOME/feeds`` when set (HQ's own
+    override, and what the tests point at an empty folder), else
+    ``~/Library/Application Support/HQ/feeds``."""
+    home = os.environ.get("HQ_HOME")
+    base = Path(home) if home else Path.home() / "Library" / "Application Support" / "HQ"
+    return base / "feeds"
+
+
+def _hq_feed_path(feeds: Path) -> Path | None:
+    """This business's feed, found by slug through HQ's index."""
+    try:
+        index = json.loads((feeds / "index.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    bid = index.get(HQ_SLUG) if isinstance(index, dict) else None
+    if not isinstance(bid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", bid):
+        return None
+    path = feeds / f"{bid}.json"
+    return path if path.exists() else None
+
+
+def _hq_amount(row: dict) -> float:
+    value = row.get("amount_usd")
+    if value is None:
+        raise ValueError("no US-dollar amount yet (HQ has no exchange rate for it)")
+    amount = float(str(value))
+    if amount != amount or not 0 <= amount <= 1_000_000:
+        raise ValueError("amount out of range")
+    return round(amount, 2)
+
+
+def load_hq_feed(path: Path, books: Books, today: date | None = None) -> None:
+    """Fill ``books`` costs and hours from HQ's feed. A line that can't be
+    read is reported, never guessed; an unreadable feed is one problem line
+    and nothing else from it."""
+    try:
+        feed = json.loads(path.read_text(encoding="utf-8"))
+        if feed.get("schema") != HQ_FEED_SCHEMA:
+            raise ValueError(f"unknown schema {feed.get('schema')!r}")
+    except (OSError, ValueError, AttributeError) as exc:
+        books.problems.append(f"HQ's feed couldn't be read ({type(exc).__name__}). Open HQ to rewrite it.")
+        return
+    books.hq = True
+    today = today or today_et()
+    try:
+        made = datetime.fromisoformat(str(feed.get("generated_at", "")).replace("Z", "+00:00")).date()
+        if (today - made).days > HQ_STALE_DAYS:
+            books.problems.append(f"HQ's feed is from {made.isoformat()}. Open HQ on this Mac to refresh it.")
+    except ValueError:
+        books.problems.append("HQ's feed has no date. Open HQ on this Mac to refresh it.")
+    for problem in feed.get("problems") or []:
+        books.problems.append(f"HQ: {str(problem)[:200]}")
+    for n, row in enumerate(feed.get("costs") or [], 1):
+        if row.get("source") == "stripe":
+            continue                    # this dashboard already takes Stripe's fees off revenue
+        try:
+            amount = _hq_amount(row)
+            books.costs.append(Cost(_day(row["date"]), str(row.get("item", ""))[:60] or "Cost",
+                                    -amount if row.get("refund") else amount, "once"))
+        except (ValueError, KeyError, TypeError) as exc:
+            books.problems.append(f"HQ cost {n} was skipped: {exc}.")
+    for n, row in enumerate(feed.get("repeating") or [], 1):
+        try:
+            every = str(row.get("every", ""))
+            if every not in STEP_MONTHS:
+                raise ValueError(f"repeats {every!r}")
+            until = _day(row["until"]) if row.get("until") else None
+            books.costs.append(Cost(_day(row["first"]), str(row.get("item", ""))[:60] or "Cost",
+                                    _hq_amount(row), every, until, template=True))
+        except (ValueError, KeyError, TypeError) as exc:
+            books.problems.append(f"HQ repeating cost {n} was skipped: {exc}.")
+    for n, row in enumerate(feed.get("hours") or [], 1):
+        try:
+            hours = float(row["hours"])
+            if not 0 < hours <= 24:
+                raise ValueError("hours must be between 0 and 24")
+            books.hours.append(Hours(_day(row["date"]), hours, str(row.get("note", ""))[:80]))
+        except (ValueError, KeyError, TypeError) as exc:
+            books.problems.append(f"HQ hours line {n} was skipped: {exc}.")
+
+
+def load(root: Path = REPO_ROOT, feeds: Path | None = None) -> Books:
     data = root / "data"
     books = Books([], [], [], [], ())
     found = []
+    feed = _hq_feed_path(feeds if feeds is not None else hq_feeds_dir())
+    if feed is not None:
+        load_hq_feed(feed, books)
+        found.append("hq")
     for name, parse in ((COSTS.name, _cost), (HOURS.name, _hour), (POSTS.name, _post)):
+        if feed is not None and name != POSTS.name:
+            continue                    # HQ owns costs and hours now
         path = data / name
         if not path.exists():
             continue
@@ -163,7 +273,7 @@ def load(root: Path = REPO_ROOT) -> Books:
 def _cost(row: dict[str, str]) -> Cost:
     repeats = (row.get("repeats") or "once").lower()
     if repeats not in REPEATS:
-        raise ValueError(f"repeats must be once, monthly or yearly, not {repeats!r}")
+        raise ValueError(f"repeats must be once, monthly, quarterly or yearly, not {repeats!r}")
     item = row.get("item", "")
     if not item:
         raise ValueError("no item")
@@ -195,30 +305,37 @@ def _add_months(d: date, months: int) -> date:
 
 
 def charges(cost: Cost, until: date) -> list[date]:
-    """Every day ``cost`` is charged, from its first date up to ``until``."""
-    if cost.day > until:
+    """Every day ``cost`` is charged, from its first date up to ``until``
+    (and never past the cost's own ``until``)."""
+    end = min(until, cost.until) if cost.until else until
+    if cost.day > end:
         return []
     if cost.repeats == "once":
         return [cost.day]
-    step = 1 if cost.repeats == "monthly" else 12
+    step = STEP_MONTHS[cost.repeats]
     out, k = [], 0
     while True:
         d = _add_months(cost.day, k * step)
-        if d > until:
+        if d > end:
             return out
         out.append(d)
         k += 1
 
 
+def counted(costs: list[Cost]) -> list[Cost]:
+    """The costs that count as money spent. HQ's repeating templates only
+    schedule: each charge they made arrives in the feed as its own line."""
+    return [c for c in costs if not c.template]
+
+
 def spent(costs: list[Cost], start: date | None, end: date) -> float:
     """Costs charged in (start, end] — ``start`` None means since the first."""
-    return round(sum(c.amount for c in costs for d in charges(c, end)
+    return round(sum(c.amount for c in counted(costs) for d in charges(c, end)
                      if start is None or d > start), 2)
 
 
 def next_charges(costs: list[Cost], today: date, days: int = 30) -> list[tuple[date, Cost]]:
     """Recurring charges due in the next ``days`` days, soonest first."""
-    from datetime import timedelta
     horizon = today + timedelta(days=days)
     out = []
     for c in costs:
@@ -231,10 +348,11 @@ def next_charges(costs: list[Cost], today: date, days: int = 30) -> list[tuple[d
     return sorted(out, key=lambda dc: (dc[0], dc[1].item))
 
 
-def monthly_run_rate(costs: list[Cost]) -> float:
-    """What the recurring costs come to per month."""
-    return round(sum(c.amount for c in costs if c.repeats == "monthly")
-                 + sum(c.amount / 12 for c in costs if c.repeats == "yearly"), 2)
+def monthly_run_rate(costs: list[Cost], today: date | None = None) -> float:
+    """What the recurring costs still running come to per month."""
+    today = today or today_et()
+    live = [c for c in costs if c.repeats != "once" and not (c.until and c.until < today)]
+    return round(sum(c.amount / STEP_MONTHS[c.repeats] for c in live), 2)
 
 
 # --------------------------------------------------------------------- #
@@ -291,6 +409,10 @@ def cli(argv: list[str] | None = None, root: Path = REPO_ROOT) -> int:
     sub.add_parser("show", help="print what's recorded")
     args = parser.parse_args(argv)
     data = root / "data"
+    if args.cmd in ("cost", "hours") and _hq_feed_path(hq_feeds_dir()) is not None:
+        print("Add it in HQ: costs and time for Beat Your League live there now, and this "
+              "dashboard reads them from HQ.", file=sys.stderr)
+        return 2
 
     def when(value: str) -> str:
         try:
@@ -308,7 +430,8 @@ def cli(argv: list[str] | None = None, root: Path = REPO_ROOT) -> int:
             print("ITEM is empty: name the cost, e.g. ITEM=\"Domain\"", file=sys.stderr)
             return 2
         append(data / COSTS.name, (when(args.date), args.item.strip()[:60], f"{amount:.2f}", args.repeats))
-        every = {"once": "", "monthly": ", every month", "yearly": ", every year"}[args.repeats]
+        every = {"once": "", "monthly": ", every month", "quarterly": ", every 3 months",
+                 "yearly": ", every year"}[args.repeats]
         print(f"Recorded ${amount:.2f} for {args.item.strip()}{every}. It shows on the dashboard's "
               f"Money section.\n{COST_NOTE}")
         return 0
@@ -346,6 +469,8 @@ def cli(argv: list[str] | None = None, root: Path = REPO_ROOT) -> int:
         print(f"  {tagged_link(tag, page)}\n")
         return 0
     books = load(root)
+    if books.hq:
+        print("Costs and hours: from HQ.")
     print(f"Costs: {len(books.costs)} recorded · ${spent(books.costs, None, today_et()):.2f} so far · "
           f"${monthly_run_rate(books.costs):.2f}/month recurring")
     for c in books.costs:
