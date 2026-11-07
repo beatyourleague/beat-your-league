@@ -2144,6 +2144,26 @@ its change reached main (a Tuesday grading slot pushed after its time read as mi
   TRAFFIC_FROM / OWNER_EMAILS are set. PLAN §6 rows show pace from D, freeze at their read-by
   date, and never read Met on a clause the page can't count.
 
+**Before promotion (Nov 6 2026) — six-lens review of the live site, five builders, re-reviewed.**
+Nothing was broken for most visitors; the fixes were for the traffic posts bring. Rules it left:
+- **No shipped script may need Safari 16.4+** (`tests/test_old_iphones.py`, a lexer over every
+  site script): a lookbehind in `site/join/roster.js` stopped the planner and buy page on iOS 15
+  and early 16, in-app browsers included. Safari 16 built-ins are used only behind a check.
+- **The buy page's step 1 says "type each name" on a phone** (≤600px, or a touch screen without
+  hover, so a sideways phone counts); wider screens keep the paste words.
+- **The planner has its own share card** (`render/og.py --byes` → `site/og/byes-<season>-wNN.png`,
+  facts only, no % or price, redrawn by weekly.yml's secretless share-card job). Earlier cards of
+  the season stay, so a planner link already shared keeps its picture.
+- **Monday night says no "today"** on the landing's open line and closer either, and the samples'
+  `JOIN_PROMISE` says a Monday-night joiner waits until Tuesday morning.
+- **Posting:** `make link PAGE='join/?try=1'` tags a free-report link (the only query allowed);
+  `content/launch-posts.md` says when each post works (planner through Week 14; free report and
+  plan Tuesday to Thursday afternoon, not Wednesday daytime; Week 12 closes Wednesday evening;
+  unpin the free-report post at Week 18's first game) and pins the planner post (PLAN §5 moved).
+  The Wednesday drafts (`run/drops.py`) link this-week.html only when the landing would show it,
+  link the plain planner, print "Good until" and tag every link `x-wNN-<draft>`. A riser is on
+  today's team in a live week (`run.solo.live_rising`, the R5 rule).
+
 **The push token never shares a job with installed code (SEC-1, Oct 25–26 2026).**
 Every step of a job shares one runner and one checkout, so a step that runs pip packages or
 Chrome reaches a later step through what it leaves behind: a git hook or config key (filter
