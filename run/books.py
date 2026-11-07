@@ -213,7 +213,7 @@ def load_hq_feed(path: Path, books: Books, today: date | None = None) -> None:
             continue                    # this dashboard already takes Stripe's fees off revenue
         try:
             amount = _hq_amount(row)
-            books.costs.append(Cost(_day(row["date"]), str(row.get("item", ""))[:60] or "Cost",
+            books.costs.append(Cost(_day(row["date"]), str(row.get("item") or "")[:60] or "Cost",
                                     -amount if row.get("refund") else amount, "once"))
         except (ValueError, KeyError, TypeError) as exc:
             books.problems.append(f"HQ cost {n} was skipped: {exc}.")
@@ -223,7 +223,7 @@ def load_hq_feed(path: Path, books: Books, today: date | None = None) -> None:
             if every not in STEP_MONTHS:
                 raise ValueError(f"repeats {every!r}")
             until = _day(row["until"]) if row.get("until") else None
-            books.costs.append(Cost(_day(row["first"]), str(row.get("item", ""))[:60] or "Cost",
+            books.costs.append(Cost(_day(row["first"]), str(row.get("item") or "")[:60] or "Cost",
                                     _hq_amount(row), every, until, template=True))
         except (ValueError, KeyError, TypeError) as exc:
             books.problems.append(f"HQ repeating cost {n} was skipped: {exc}.")
@@ -232,7 +232,7 @@ def load_hq_feed(path: Path, books: Books, today: date | None = None) -> None:
             hours = float(row["hours"])
             if not 0 < hours <= 24:
                 raise ValueError("hours must be between 0 and 24")
-            books.hours.append(Hours(_day(row["date"]), hours, str(row.get("note", ""))[:80]))
+            books.hours.append(Hours(_day(row["date"]), hours, str(row.get("note") or "")[:80]))
         except (ValueError, KeyError, TypeError) as exc:
             books.problems.append(f"HQ hours line {n} was skipped: {exc}.")
 

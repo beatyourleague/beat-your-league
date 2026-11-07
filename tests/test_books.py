@@ -191,6 +191,15 @@ def test_a_refund_reduces_costs_and_a_template_never_counts_twice(tmp_path) -> N
     assert [(d, c.item) for d, c in next_charges(b.costs, date(2026, 11, 7))] == [(date(2026, 12, 1), "Mailbox")]
 
 
+def test_a_blank_note_or_item_in_hq_reads_blank_not_none(tmp_path) -> None:
+    """HQ writes null for a blank note; str(None) printed the word "None"."""
+    feed = dict(FEED, hours=[{"id": "h1", "date": "2026-11-07", "hours": 0.33, "note": None}],
+                costs=[dict(FEED["costs"][0], item=None)])
+    b = books.load(tmp_path, feeds=_feed(tmp_path, feed))
+    assert [h.note for h in b.hours] == [""]
+    assert [c.item for c in b.costs if not c.template] == ["Cost"]
+
+
 def test_a_stale_or_broken_feed_says_so(tmp_path) -> None:
     old = dict(FEED, generated_at="2026-10-01T00:00:00Z")
     b = books.Books([], [], [], [], ())
