@@ -215,6 +215,8 @@ def test_the_day_one_line_is_true_every_day_of_the_week() -> None:
     so that is what the samples' closing card says — usually, because the
     intake runs hourly — and it no longer spells out the either/or."""
     assert "Your first report usually lands within the hour of joining" in rr.JOIN_PROMISE
+    # Monday night waits for Monday's box score, and the line says so.
+    assert "(by Tuesday morning if you join on a Monday night)" in rr.JOIN_PROMISE
     assert "the day you join:" not in rr.JOIN_PROMISE
     assert "full PPR, half PPR or standard" in rr.JOIN_PROMISE
 

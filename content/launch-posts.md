@@ -16,12 +16,14 @@ day decides which one works.
 - **Week 12 (Thanksgiving week) is different.** Its first game is Wednesday, Nov 25 at 8 PM, so
   that Wednesday's report goes out in the morning and the window closes about 6:45 PM Wednesday.
   Don't post the free report on Thanksgiving.
-- **Thursday night to Tuesday morning: the planner only.** This week's games have started. A free
-  request waits until Tuesday and gets next week's report. A buyer gets a roster report when they
-  pay and their first lineup on Wednesday (Week 12's goes out Wednesday morning). Both are honest,
-  but nobody gets a lineup the day they read your post.
-- **The free report closes for the season at Week 18's first game** (early January). Unpin its
-  post then.
+- **Thursday night to Tuesday morning: no free-report or plan post.** This week's games have
+  started. A free request waits until Tuesday and gets next week's report. A buyer until Monday
+  afternoon gets a roster report when they pay. From Monday evening, their first lineup comes once
+  Monday's game is scored, usually by Tuesday morning. Then Wednesday's report (Week 12's goes out
+  Wednesday morning). Through Week 14, post the planner instead. This week's drafts stay usable
+  until their own "Good until".
+- **Week 18 may have no Thursday game.** Its window runs until its first game, whenever that is,
+  and then the free report closes for the season (early January). Unpin its post then.
 - At most 40 free reports go out a day. If a post brings more, the rest go the next day.
 
 ## The post to pin on X

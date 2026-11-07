@@ -2195,10 +2195,13 @@ def receipts_inner(receipts: Mapping[str, Any]) -> str:
 # old either/or sentence was the longest line on it (launch review QA-03).
 # "Usually": the intake runs hourly, and the promise audit's rule for hourly
 # things is "usually within the hour".
+# A Monday-night joiner waits for Monday night's box score (the intake can't
+# build the next week before it), so the hour holds every day but that one,
+# and the line says so (promotion review, Nov 6 2026).
 JOIN_PROMISE = ("Yours is built from your own roster, under the scoring you pick "
                 "(full PPR, half PPR or standard). Your first report usually lands "
-                "within the hour of joining, then a new one every Wednesday of the "
-                "season.")
+                "within the hour of joining (by Tuesday morning if you join on a "
+                "Monday night), then a new one every Wednesday of the season.")
 
 
 def demo_band(meta: Mapping[str, Any]) -> str:

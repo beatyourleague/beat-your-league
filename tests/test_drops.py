@@ -700,3 +700,30 @@ def test_main_links_by_the_clock_this_run_wrote(tmp_path, monkeypatch) -> None:
     stale = drafted(json.dumps(future))
     assert "## 1." not in stale and "Left out, past their time: The closest call" in stale
     assert "Nothing left to post this week" in stale and "had no closest call" not in stale
+
+
+def test_a_riser_traded_since_his_last_game_is_on_todays_team() -> None:
+    """Promotion review (Nov 6 2026), reproduced: a back who rose with CLE and
+    was traded to a Thursday team printed "(CLE RB)" and his Wednesday draft
+    read "Good until Sun · 1:00 PM ET", after he had already played. For the
+    week being played now a riser is on TODAY's team, as lineup rows are
+    (launch audit R5); a replayed week keeps the stat-row team."""
+    from types import SimpleNamespace
+    from run.solo import live_rising
+    pool = [{"player_id": "00-1", "position": "RB", "team": "CLE", "recent": 12.0},
+            {"player_id": "00-2", "position": "WR", "team": "DEN", "recent": 9.0},
+            {"player_id": "00-3", "position": "TE", "team": "GB", "recent": 7.0}]
+    directory = SimpleNamespace(players=[SimpleNamespace(player_id="00-1", team="NYJ"),
+                                         SimpleNamespace(player_id="00-2", team="DEN"),
+                                         SimpleNamespace(player_id="00-3", team="")])
+    live = SimpleNamespace(rising=pool, is_live_week=True, directory=directory)
+    teams = [c["team"] for c in live_rising(live)]
+    # Traded: today's team. Same team: unchanged. No team today: the last known.
+    assert teams == ["NYJ", "DEN", "GB"]
+    assert [c["team"] for c in pool] == ["CLE", "DEN", "GB"]       # the pool isn't changed
+    replay = SimpleNamespace(rising=pool, is_live_week=False, directory=directory)
+    assert [c["team"] for c in live_rising(replay)] == ["CLE", "DEN", "GB"]
+    # The report hands rising_for the re-teamed pool, never data.rising itself.
+    import inspect
+    import run.solo as solo
+    assert "rising_for(live_rising(data)," in inspect.getsource(solo)

@@ -417,7 +417,9 @@
   /* Room for the field's focus ring: the note's last line sat on its border. */
   #step-roster > .note{margin-bottom:10px;}
   .how-phone{display:none;}
-  @media (max-width:600px){
+  /* A phone held sideways is wider than 600px: a touch screen with no hover
+     gets the phone words too. */
+  @media (max-width:600px), (hover:none) and (pointer:coarse){
     .how-wide{display:none;}
     .how-phone{display:inline;}
   }

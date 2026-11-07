@@ -1038,8 +1038,13 @@ def build_byes_card(site: Path = SITE, chrome: str | None = None) -> tuple[str, 
     pointed = with_byes_card(page, facts)
     if pointed != page:
         page_path.write_text(pointed, encoding="utf-8")
+    # Earlier cards of THIS season stay: a planner link already shared in a
+    # chat or a Discord server keeps the image URL it was posted with, and
+    # every one of those cards names its own weeks, so it stays true. Only
+    # another season's go.
+    season = f"byes-{facts['season']}-"
     for old in folder.iterdir():
-        if _BYES_CARD.match(old.name) and old.name != out.name:
+        if _BYES_CARD.match(old.name) and not old.name.startswith(season):
             old.unlink()
     return outcome, f"{_shown(out)} · {byes_card_alt(facts)}"
 

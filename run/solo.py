@@ -1768,7 +1768,7 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     this_season_ranks = positional_ranks(
         {pid: rec for pid, rec in _season_form(data, spec.rule).items()
          if pid.startswith("00-")}, data.directory, min_games=BYE_COVER_MIN_GAMES)
-    report["rising"] = rising_for(data.rising, spec.player_ids,
+    report["rising"] = rising_for(live_rising(data), spec.player_ids,
                                   last_season_ranks, data.players,
                                   teams=_row_teams(spec, data),
                                   this_season=this_season_ranks)
@@ -1821,6 +1821,20 @@ def _next_report_morning(cache_dir: Path, data: WeekData) -> bool:
         and _int(row.get("week")) == data.week + 1
         and (row.get("gameday") or "").strip() == day
         for row in rows)
+
+
+def live_rising(data: WeekData) -> list[dict[str, Any]]:
+    """The week's risers, each on TODAY's team for the week being played now.
+    A riser's team is his last stat row's (engine.rising.candidates), which
+    for a player traded or signed since is a team he no longer plays for: his
+    line named the old team and the Wednesday draft timed its post off the old
+    team's game (launch audit R5's rule, as _row_teams applies it to lineup
+    rows). A replayed week keeps the stat-row team: today's would be invented."""
+    pool = list(getattr(data, "rising", None) or [])
+    if not getattr(data, "is_live_week", False):
+        return pool
+    today = {p.player_id: p.team for p in data.directory.players}
+    return [{**c, "team": today.get(c["player_id"]) or c["team"]} for c in pool]
 
 
 def _row_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:

@@ -51,9 +51,13 @@ def test_only_one_of_the_two_shows_at_any_width() -> None:
     whose script never ran. display:none also keeps the hidden one away from a
     screen reader, so nobody hears both."""
     assert ".how-phone{display:none;}" in CSS
-    phone_rules = re.search(r"@media \(max-width:600px\)\{\s*\.how-wide\{display:none;\}"
+    # Narrow OR a touch screen without hover: a phone held sideways is wider
+    # than 600px (iPhone SE 667, Pro Max 932) and must still read the phone
+    # words (promotion review, Nov 6 2026).
+    phone_rules = re.search(r"@media \(max-width:600px\), \(hover:none\) and \(pointer:coarse\)\{"
+                            r"\s*\.how-wide\{display:none;\}"
                             r"\s*\.how-phone\{display:inline;\}\s*\}", CSS)
-    assert phone_rules, "the phone swap needs its own 600px block"
+    assert phone_rules, "the phone swap needs its own block: 600px, or a touch screen"
     # The page's own phone width: its 600px layout block is the same query.
     assert CSS.count("@media (max-width:600px){") >= 3
     assert "roster-how" not in SCRIPT and "how-phone" not in SCRIPT and "how-wide" not in SCRIPT

@@ -220,8 +220,11 @@ def test_the_planner_page_previews_as_the_planner_not_the_lineup_card() -> None:
     alt = re.search(r'<meta property="og:image:alt" content="([^"]*)"', page).group(1)
     assert alt.startswith("Free bye week planner: your fantasy roster, through Week ")
     assert f"{found.group(2)} NFL byes, Week {int(found.group(3))}" in html.unescape(alt)
-    # Only one planner card stands.
-    assert [p.name for p in (SITE / "og").glob("byes-*.png")] == [found.group(1)]
+    # Every planner card standing is this season's: earlier weeks stay, so a
+    # link shared last week keeps its picture.
+    cards = [p.name for p in (SITE / "og").glob("byes-*.png")]
+    assert found.group(1) in cards
+    assert all(c.startswith(f"byes-{found.group(2)}-") for c in cards)
 
 
 def test_the_committed_card_is_the_one_the_committed_byes_file_draws() -> None:
@@ -294,6 +297,7 @@ def test_the_card_renders_at_the_size_every_platform_crops_to(tmp_path) -> None:
         pytest.skip("no Chrome to render with")
     site = _site(tmp_path)
     (site / "og" / "byes-2026-w08.png").write_bytes(b"last week")
+    (site / "og" / "byes-2025-w14.png").write_bytes(b"last season")
     assert og.build_byes_card(site)[0] == "written"
     card = site / "og" / "byes-2026-w09.png"
     data = card.read_bytes()
@@ -301,7 +305,10 @@ def test_the_card_renders_at_the_size_every_platform_crops_to(tmp_path) -> None:
     facts = og.byes_card_facts(_payload())
     assert og.source_digest(data) == og.card_digest(og.byes_card_html(facts))
     assert og.byes_card_url(facts) in (site / "byes" / "index.html").read_text(encoding="utf-8")
-    assert sorted(p.name for p in (site / "og").iterdir()) == ["byes-2026-w09.png",
+    # Last week's card stays (a link shared with it keeps its picture); last
+    # season's goes.
+    assert sorted(p.name for p in (site / "og").iterdir()) == ["byes-2026-w08.png",
+                                                              "byes-2026-w09.png",
                                                               "this-week-2026-w09.png"]
     assert og.build_byes_card(site)[0] == "current"
 
